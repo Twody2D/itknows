@@ -41,6 +41,7 @@
 | Сектор 03 завершён (18/30 уровней) | 2026-09-03 | 1.46 МБ | `phaser-*.js` — 1.41 МБ | +6 уровней (PISTON ROW/OFFSET/CATWALK/DELAY LINE/PRESSURE VALVE/CORE ACCESS) — INDUSTRIAL CORE, лазеры. Своя часть бандла — ~48 КБ. |
 | Сектор 04 завершён (24/30 уровней) | 2026-09-03 | 1.46 МБ | `phaser-*.js` — 1.41 МБ | +6 уровней (SYNC GATE/RHYTHM/CRUMBLE RUN/FREEFALL/LOCKSTEP/ARCHIVE CORE) — DATA DISTRICT, тайминг-ловушки. Своя часть бандла — ~50 КБ. |
 | Сектор 05 завершён (30/30 уровней — кампания полностью) | 2026-09-03 | 1.47 МБ | `phaser-*.js` — 1.41 МБ | +6 уровней (PATROL/CROSSFIRE/OVERDRIVE/GRIDLOCK/LAST GATE/SYSTEM CORE) — финал, комбинация механик секторов 02-04 плюс первое применение `moving-spike` в контенте. Своя часть бандла — ~53 КБ. |
+| Реплики SYSTEM (91) + прогрессия личности | 2026-09-03 | 1.47 МБ | `phaser-*.js` — 1.41 МБ | Реплики ~40 → 91 (8 категорий × RU/EN), anti-repeat переписан на per-category shuffle bag. `SystemPersonality.personalityTag()` подключён к HUD-префиксу. Своя часть бандла — ~58 КБ. |
 
 Бюджет (3 МБ) проверяется автоматически: `pnpm size` завершается с кодом
 выхода 1, если `dist/` превышает потолок.

@@ -18,6 +18,7 @@ import { SystemMemory } from '@/ai/SystemMemory';
 import { selectVariant } from '@/ai/DifficultyDirector';
 import { Commentator } from '@/ai/Commentator';
 import { SystemVoice } from '@/ai/SystemVoice';
+import { personalityTag } from '@/ai/SystemPersonality';
 
 const SYSTEM_COMMENT_DISPLAY_MS = 2500;
 
@@ -187,6 +188,11 @@ export class GameplayScene extends Phaser.Scene {
     this.touchControls = new TouchControls(this, this.inputState);
   }
 
+  /** master-prompt §70 — the version tag climbs with campaign progress, see SystemPersonality.ts. */
+  private systemLabel(): string {
+    return `SYSTEM ${personalityTag(this.levelDef.id)}`;
+  }
+
   override update(time: number, delta: number): void {
     if (this.player.isAlive() && this.player.y > this.level.worldHeight + 40) {
       this.player.kill('fall');
@@ -203,7 +209,7 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     const voiceText = SystemVoice.current();
-    const rendered = voiceText ? `SYSTEM: ${voiceText}` : '';
+    const rendered = voiceText ? `${this.systemLabel()}: ${voiceText}` : '';
     if (this.hudSystemText.text !== rendered) this.hudSystemText.setText(rendered);
   }
 
@@ -247,7 +253,7 @@ export class GameplayScene extends Phaser.Scene {
 
     const initialVoiceText = SystemVoice.current();
     this.hudSystemText = this.add
-      .text(8, 30, initialVoiceText ? `SYSTEM: ${initialVoiceText}` : '', {
+      .text(8, 30, initialVoiceText ? `${this.systemLabel()}: ${initialVoiceText}` : '', {
         fontFamily: 'monospace',
         fontSize: '8px',
         color: hexToCss(PALETTE.system, 0.9),
