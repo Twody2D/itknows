@@ -52,6 +52,20 @@ describe.each([
     expect(isInAnyGap(level.exitCol + 1, level.gaps)).toBe(false);
   });
 
+  it('places every checkpoint on solid ground, in order, inside the level', () => {
+    const checkpoints = level.checkpoints ?? [];
+    let previous = -1;
+    for (const col of checkpoints) {
+      expect(col).toBeGreaterThan(previous);
+      expect(col).toBeLessThan(level.width);
+      // A checkpoint over a pit would respawn the player into the fall that
+      // just killed them — an unrecoverable loop, not a checkpoint.
+      expect(isInAnyGap(col, level.gaps)).toBe(false);
+      expect(level.spikeColumns).not.toContain(col);
+      previous = col;
+    }
+  });
+
   it('never places a spike inside a gap', () => {
     for (const col of level.spikeColumns) {
       expect(isInAnyGap(col, level.gaps)).toBe(false);

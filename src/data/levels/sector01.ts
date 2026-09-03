@@ -6,187 +6,426 @@ import type { LevelSectionConfig } from '@/gameplay/LevelSections';
  * trap, then progressively combines gaps, spikes and one-way platforms
  * (master-prompt §24: first ten minutes / §66: teach → practice → combine).
  *
- * Platform steps are kept to a 2-row (20px) rise per hop — comfortably under
- * the ~32px jump apex from PHYSICS (config/physics.ts), so every jump in
- * this sector clears with margin rather than relying on frame-perfect input.
+ * LENGTH. These levels used to be 40-70 tiles — six or seven seconds of
+ * running each, which is why the whole sector could be cleared in one sitting
+ * without dying. They now run 120-250 tiles, structured as
+ * intro → challenge → variation → combination → system → final with a
+ * checkpoint between the major blocks. A level is no longer a single idea you
+ * either fluff or nail in eight seconds; it's a stretch you have to hold
+ * together. The difficulty comes from sustaining attention over a longer run,
+ * not from tighter windows — every individual jump here is the same
+ * comfortably-clearable jump it always was.
+ *
+ * CHECKPOINTS. Every level carries 2-5, placed on solid ground right after a
+ * block resolves. That's what makes length fair rather than punishing: a
+ * mistake at tile 190 costs the last block, not the whole level (CLAUDE.md #4
+ * — a longer level must not mean a longer punishment).
+ *
+ * GEOMETRY BUDGET (`jumpPhysics.ts`, unchanged): a full-held jump clears
+ * ~55px horizontally (5.5 tiles) at the same height and rises ~32px (3.2
+ * tiles). Every gap here is 2-3 tiles; the two 6-tile pits (level 04 and 06)
+ * are explicitly bridged by a platform mid-pit, and both are proven by
+ * `LevelValidator` in tests, not by eye. Platform steps stay at a 2-row
+ * (20px) rise per hop.
  */
 export const SECTOR_01_LEVELS: LevelDef[] = [
   {
     id: 'sector-01-level-01',
     name: 'BOOT',
-    width: 40,
+    width: 120,
     groundRow: 22,
-    gaps: [[18, 20]],
+    // Nothing but gaps, widening from 2 to 3 tiles and back. The only lesson
+    // is "move, jump, keep going" — no spike, no trap, no timing anywhere in
+    // the level, so the tutorial hints have room to land.
+    gaps: [
+      [26, 27],
+      [44, 46],
+      [58, 59],
+      [74, 76],
+      [88, 89],
+      [98, 100],
+    ],
     spikeColumns: [],
     platforms: [],
     playerStartCol: 2,
-    exitCol: 36,
+    exitCol: 114,
+    checkpoints: [52, 84],
     sections: [
-      { id: 'intro', type: 'intro', fromCol: 0, toCol: 17, requiredMechanics: ['move'] },
-      { id: 'first-gap', type: 'challenge', fromCol: 18, toCol: 25, requiredMechanics: ['gap-jump'] },
-      { id: 'exit', type: 'final', fromCol: 26, toCol: 39 },
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 25, requiredMechanics: ['move'] },
+      { id: 'first-gap', type: 'challenge', fromCol: 26, toCol: 43, requiredMechanics: ['gap-jump'] },
+      {
+        id: 'wider-gap',
+        type: 'challenge',
+        fromCol: 44,
+        toCol: 51,
+        checkpointAfter: true,
+        requiredMechanics: ['gap-jump'],
+      },
+      {
+        id: 'rhythm',
+        type: 'variation',
+        fromCol: 52,
+        toCol: 83,
+        checkpointAfter: true,
+        requiredMechanics: ['gap-jump'],
+      },
+      { id: 'closing-run', type: 'combination', fromCol: 84, toCol: 101, requiredMechanics: ['gap-jump'] },
+      { id: 'exit', type: 'final', fromCol: 102, toCol: 119 },
     ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-01-level-02',
     name: 'FIRST WARNING',
-    width: 44,
+    width: 140,
     groundRow: 22,
-    gaps: [],
-    spikeColumns: [22, 23, 24],
-    platforms: [],
+    // Gaps only reappear in the last block — the first two thirds are the
+    // spike lesson on its own, uncomplicated.
+    gaps: [
+      [110, 111],
+      [124, 126],
+    ],
+    spikeColumns: [22, 23, 24, 38, 39, 54, 55, 56, 70, 71, 84, 85, 86, 100, 101],
+    // Honest bypass over the third cluster: the ground route under it is
+    // always available, this is just the calmer way across.
+    platforms: [{ col: 83, row: 20, width: 5 }],
     playerStartCol: 2,
-    exitCol: 40,
+    exitCol: 134,
+    checkpoints: [46, 94],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 17, requiredMechanics: ['move'] },
-      { id: 'spikes', type: 'challenge', fromCol: 18, toCol: 29, requiredMechanics: ['spike-jump'] },
-      { id: 'exit', type: 'final', fromCol: 30, toCol: 43 },
+      { id: 'first-spikes', type: 'challenge', fromCol: 18, toCol: 27, requiredMechanics: ['spike-jump'] },
+      {
+        id: 'spike-practice',
+        type: 'challenge',
+        fromCol: 28,
+        toCol: 45,
+        checkpointAfter: true,
+        requiredMechanics: ['spike-jump'],
+      },
+      {
+        id: 'clusters-and-bridge',
+        type: 'variation',
+        fromCol: 46,
+        toCol: 93,
+        checkpointAfter: true,
+        optionalRoute: true,
+        requiredMechanics: ['spike-jump', 'platform'],
+      },
+      {
+        id: 'spikes-and-gaps',
+        type: 'combination',
+        fromCol: 94,
+        toCol: 127,
+        requiredMechanics: ['spike-jump', 'gap-jump'],
+      },
+      { id: 'exit', type: 'final', fromCol: 128, toCol: 139 },
     ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-01-level-03',
     name: 'GAP AND SPIKE',
-    width: 50,
+    width: 165,
     groundRow: 22,
-    gaps: [[14, 16]],
-    spikeColumns: [30, 31],
-    platforms: [{ col: 24, row: 20, width: 4 }],
+    gaps: [
+      [16, 17],
+      [34, 36],
+      [62, 63],
+      [78, 80],
+      [104, 105],
+      [120, 122],
+      [140, 141],
+    ],
+    spikeColumns: [26, 27, 46, 47, 48, 70, 71, 92, 93, 112, 113, 132, 133, 134, 152, 153],
+    // Each bridge sits directly over a spike cluster — an alternate route, not
+    // a trick (CLAUDE.md #4). Jumping the spikes on the ground always works.
+    platforms: [
+      { col: 45, row: 20, width: 5 },
+      { col: 90, row: 20, width: 5 },
+      { col: 131, row: 20, width: 5 },
+    ],
     playerStartCol: 2,
-    exitCol: 46,
+    exitCol: 159,
+    checkpoints: [42, 88, 128],
     sections: [
-      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
-      { id: 'gap', type: 'challenge', fromCol: 14, toCol: 23, requiredMechanics: ['gap-jump'] },
-      { id: 'bridge', type: 'variation', fromCol: 24, toCol: 29, optionalRoute: true, requiredMechanics: ['platform'] },
-      { id: 'spikes', type: 'challenge', fromCol: 30, toCol: 33, requiredMechanics: ['spike-jump'] },
-      { id: 'exit', type: 'final', fromCol: 34, toCol: 49 },
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 15, requiredMechanics: ['move'] },
+      {
+        id: 'gaps',
+        type: 'challenge',
+        fromCol: 16,
+        toCol: 41,
+        checkpointAfter: true,
+        requiredMechanics: ['gap-jump'],
+      },
+      {
+        id: 'gap-and-spike',
+        type: 'combination',
+        fromCol: 42,
+        toCol: 87,
+        checkpointAfter: true,
+        requiredMechanics: ['gap-jump', 'spike-jump'],
+      },
+      {
+        id: 'bridges',
+        type: 'variation',
+        fromCol: 88,
+        toCol: 127,
+        checkpointAfter: true,
+        optionalRoute: true,
+        requiredMechanics: ['platform', 'spike-jump'],
+      },
+      {
+        id: 'closing-run',
+        type: 'combination',
+        fromCol: 128,
+        toCol: 150,
+        requiredMechanics: ['gap-jump', 'spike-jump', 'platform'],
+      },
+      { id: 'exit', type: 'final', fromCol: 151, toCol: 164 },
     ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-01-level-04',
     name: 'RISE',
-    width: 56,
+    width: 190,
     groundRow: 22,
-    gaps: [[16, 17]],
-    spikeColumns: [26, 27],
+    gaps: [
+      [18, 19],
+      [40, 42],
+      [64, 65],
+      // The first pit too wide to clear in one jump (6 tiles / 60px against a
+      // ~55px reach) — the platform mid-pit below is the crossing, and the
+      // level's whole point: a platform can be the route, not a bonus.
+      [84, 89],
+      [110, 112],
+      [134, 135],
+      [156, 158],
+      [176, 177],
+    ],
+    spikeColumns: [28, 29, 50, 51, 52, 72, 73, 96, 97, 118, 119, 144, 145, 146, 166, 167],
     platforms: [
-      { col: 34, row: 20, width: 3 },
-      { col: 40, row: 18, width: 3 },
+      { col: 86, row: 20, width: 2 },
+      // Up two rows, along, back down — the staircase the level is named for.
+      { col: 120, row: 20, width: 3 },
+      { col: 126, row: 18, width: 3 },
+      { col: 132, row: 20, width: 3 },
     ],
     playerStartCol: 2,
-    exitCol: 52,
+    exitCol: 184,
+    checkpoints: [46, 94, 140],
     sections: [
-      { id: 'intro', type: 'intro', fromCol: 0, toCol: 15, requiredMechanics: ['move'] },
-      { id: 'gap', type: 'challenge', fromCol: 16, toCol: 25, requiredMechanics: ['gap-jump'] },
-      { id: 'spikes', type: 'challenge', fromCol: 26, toCol: 29, requiredMechanics: ['spike-jump'] },
-      { id: 'staircase', type: 'variation', fromCol: 30, toCol: 43, requiredMechanics: ['platform', 'platform-chain'] },
-      { id: 'exit', type: 'final', fromCol: 44, toCol: 55 },
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 17, requiredMechanics: ['move'] },
+      {
+        id: 'gaps',
+        type: 'challenge',
+        fromCol: 18,
+        toCol: 45,
+        checkpointAfter: true,
+        requiredMechanics: ['gap-jump'],
+      },
+      {
+        id: 'spikes-and-wide-pit',
+        type: 'combination',
+        fromCol: 46,
+        toCol: 93,
+        checkpointAfter: true,
+        requiredMechanics: ['spike-jump', 'gap-jump', 'platform'],
+      },
+      { id: 'approach', type: 'challenge', fromCol: 94, toCol: 115, requiredMechanics: ['spike-jump', 'gap-jump'] },
+      {
+        id: 'staircase',
+        type: 'variation',
+        fromCol: 116,
+        toCol: 139,
+        checkpointAfter: true,
+        requiredMechanics: ['platform', 'platform-chain'],
+      },
+      {
+        id: 'closing-run',
+        type: 'combination',
+        fromCol: 140,
+        toCol: 175,
+        requiredMechanics: ['spike-jump', 'gap-jump'],
+      },
+      { id: 'exit', type: 'final', fromCol: 176, toCol: 189 },
     ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-01-level-05',
     name: 'PRESSURE',
-    width: 64,
+    width: 215,
     groundRow: 22,
     gaps: [
-      [12, 13],
-      [38, 40],
+      [14, 15],
+      [36, 38],
+      [60, 61],
+      [82, 84],
+      [108, 109],
+      [130, 132],
+      [154, 155],
+      [178, 180],
+      [200, 201],
     ],
-    spikeColumns: [20, 21, 22, 48],
-    // The platform bridges straight over the spike cluster: an honest
-    // alternate route, not a trick (CLAUDE.md #4 — no dishonest difficulty).
-    platforms: [{ col: 19, row: 20, width: 5 }],
+    spikeColumns: [
+      24, 25, 26, 48, 49, 70, 71, 72, 94, 95, 118, 119, 120, 142, 143, 166, 167, 168, 190, 191,
+    ],
+    platforms: [
+      { col: 23, row: 20, width: 5 },
+      { col: 117, row: 20, width: 5 },
+      { col: 165, row: 20, width: 5 },
+    ],
     playerStartCol: 2,
-    exitCol: 60,
+    exitCol: 209,
+    checkpoints: [44, 90, 138, 186],
     traps: [
       // First non-static threat in the campaign: full standing height, can
-      // only be waited out, not jumped or ducked — same honest
-      // patience-not-reflexes pattern sector 02 opens with. Placed on clear
-      // ground with no gap or spike nearby so the only new thing being
-      // taught here is "SYSTEM can put something in your way that isn't a
-      // spike," not a timing check stacked on another obstacle.
-      { type: 'laser', id: 'laser-01', col: 32, topRow: 16, bottomRow: 21 },
+      // only be waited out, not jumped or ducked — the same honest
+      // patience-not-reflexes pattern sector 02 opens with. Each one stands on
+      // clear ground with no gap or spike within several tiles, so the only
+      // new thing being taught is "SYSTEM can put something in your way that
+      // isn't a spike," never a timing check stacked on another obstacle.
+      { type: 'laser', id: 'laser-01', col: 100, topRow: 16, bottomRow: 21 },
+      { type: 'laser', id: 'laser-02', col: 148, topRow: 16, bottomRow: 21 },
+      { type: 'laser', id: 'laser-03', col: 196, topRow: 16, bottomRow: 21 },
     ],
     sections: [
-      { id: 'intro', type: 'intro', fromCol: 0, toCol: 11, requiredMechanics: ['move'] },
-      { id: 'gap', type: 'challenge', fromCol: 12, toCol: 18, requiredMechanics: ['gap-jump'] },
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      {
+        id: 'gaps',
+        type: 'challenge',
+        fromCol: 14,
+        toCol: 43,
+        checkpointAfter: true,
+        requiredMechanics: ['gap-jump'],
+      },
       {
         id: 'spike-bridge',
         type: 'variation',
-        fromCol: 19,
-        toCol: 23,
+        fromCol: 44,
+        toCol: 89,
+        checkpointAfter: true,
         optionalRoute: true,
         requiredMechanics: ['spike-jump', 'platform'],
       },
-      { id: 'laser', type: 'system', fromCol: 24, toCol: 35, requiredMechanics: ['laser'] },
-      { id: 'gap-and-spike', type: 'combination', fromCol: 36, toCol: 51, requiredMechanics: ['gap-jump', 'spike-jump'] },
-      { id: 'exit', type: 'final', fromCol: 52, toCol: 63 },
+      {
+        id: 'first-laser',
+        type: 'system',
+        fromCol: 90,
+        toCol: 137,
+        checkpointAfter: true,
+        requiredMechanics: ['laser', 'gap-jump'],
+      },
+      {
+        id: 'laser-and-spikes',
+        type: 'combination',
+        fromCol: 138,
+        toCol: 185,
+        checkpointAfter: true,
+        requiredMechanics: ['laser', 'spike-jump', 'platform'],
+      },
+      {
+        id: 'closing-run',
+        type: 'combination',
+        fromCol: 186,
+        toCol: 205,
+        requiredMechanics: ['laser', 'gap-jump'],
+      },
+      { id: 'exit', type: 'final', fromCol: 206, toCol: 214 },
     ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-01-level-06',
     name: 'SECTOR EXIT',
-    width: 70,
+    width: 250,
     groundRow: 22,
     gaps: [
-      [14, 15],
-      [44, 46],
+      [16, 17],
+      [38, 40],
+      [62, 63],
+      // Second wide pit — same bridged crossing RISE taught, now with the
+      // rest of the sector's vocabulary around it.
+      [86, 91],
+      [112, 113],
+      [136, 138],
+      [160, 161],
+      [184, 186],
+      [208, 209],
+      [230, 232],
     ],
-    spikeColumns: [24, 25, 56],
+    spikeColumns: [
+      26, 27, 50, 51, 52, 74, 75, 100, 101, 102, 124, 125, 148, 149, 150, 172, 173, 196, 197, 198, 220, 221,
+    ],
     platforms: [
-      { col: 30, row: 20, width: 3 },
-      { col: 34, row: 18, width: 3 },
+      { col: 88, row: 20, width: 2 },
+      { col: 99, row: 20, width: 5 },
+      { col: 147, row: 20, width: 5 },
+      { col: 195, row: 20, width: 5 },
     ],
     playerStartCol: 2,
-    exitCol: 66,
-    // One checkpoint after the opening gap+spike stretch, one after the
-    // second gap — dying to the fake exit or the closing spike no longer
-    // means replaying the whole level (CheckpointSystem pilot; see
-    // gameplay/sectors.ts / Level.ts's `checkpoints` handling).
-    checkpoints: [28, 48],
+    exitCol: 244,
+    checkpoints: [46, 96, 144, 192, 226],
     traps: [
-      // The sector's promised "first serious SYSTEM trick": a fake exit a
-      // few tiles before the real one. Never lethal by construction
+      { type: 'laser', id: 'laser-01', col: 106, topRow: 16, bottomRow: 21 },
+      { type: 'laser', id: 'laser-02', col: 156, topRow: 16, bottomRow: 21 },
+      { type: 'laser', id: 'laser-03', col: 178, topRow: 16, bottomRow: 21 },
+      // The sector's promised "first serious SYSTEM trick": a fake exit a few
+      // tiles before the real one. Never lethal by construction
       // (`FakeExit.reject()` only nudges its own sprite) and visually
       // distinguishable (no glow on the exit core) per CLAUDE.md #4.7 — the
-      // trick is that it looks identical enough at a glance to make a
-      // careless player briefly think they're done, not that it's unfair.
-      { type: 'fake-exit', id: 'fake-exit-01', col: 60, row: 22 },
+      // trick is that it looks identical enough at a glance to make a careless
+      // player briefly think they're done, not that it's unfair.
+      { type: 'fake-exit', id: 'fake-exit-01', col: 238, row: 22 },
     ],
     sections: [
-      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
-      { id: 'gap', type: 'challenge', fromCol: 14, toCol: 19, requiredMechanics: ['gap-jump'] },
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 15, requiredMechanics: ['move'] },
       {
-        id: 'spikes',
-        type: 'combination',
-        fromCol: 20,
-        toCol: 28,
-        checkpointAfter: true,
-        requiredMechanics: ['spike-jump'],
-      },
-      {
-        id: 'staircase-and-laser',
-        type: 'variation',
-        fromCol: 29,
-        toCol: 43,
-        optionalRoute: true,
-        requiredMechanics: ['platform', 'laser'],
-      },
-      {
-        id: 'second-gap',
-        type: 'combination',
-        fromCol: 44,
-        toCol: 48,
+        id: 'gaps',
+        type: 'challenge',
+        fromCol: 16,
+        toCol: 45,
         checkpointAfter: true,
         requiredMechanics: ['gap-jump'],
       },
       {
-        id: 'fake-exit-and-spike',
-        type: 'system',
-        fromCol: 49,
-        toCol: 61,
-        requiredMechanics: ['fake-exit', 'spike-jump'],
+        id: 'spikes-and-wide-pit',
+        type: 'combination',
+        fromCol: 46,
+        toCol: 95,
+        checkpointAfter: true,
+        requiredMechanics: ['spike-jump', 'gap-jump', 'platform'],
       },
-      { id: 'exit', type: 'final', fromCol: 62, toCol: 69 },
+      {
+        id: 'first-laser',
+        type: 'system',
+        fromCol: 96,
+        toCol: 143,
+        checkpointAfter: true,
+        requiredMechanics: ['laser', 'spike-jump'],
+      },
+      {
+        id: 'lasers-and-bridge',
+        type: 'combination',
+        fromCol: 144,
+        toCol: 191,
+        checkpointAfter: true,
+        optionalRoute: true,
+        requiredMechanics: ['laser', 'platform', 'gap-jump'],
+      },
+      {
+        id: 'last-run',
+        type: 'combination',
+        fromCol: 192,
+        toCol: 225,
+        checkpointAfter: true,
+        requiredMechanics: ['spike-jump', 'gap-jump', 'platform'],
+      },
+      {
+        id: 'fake-exit',
+        type: 'system',
+        fromCol: 226,
+        toCol: 243,
+        requiredMechanics: ['fake-exit', 'gap-jump'],
+      },
+      { id: 'exit', type: 'final', fromCol: 244, toCol: 249 },
     ] satisfies LevelSectionConfig[],
   },
 ];

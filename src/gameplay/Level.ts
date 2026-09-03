@@ -70,6 +70,24 @@ function tileCenter(col: number, row: number): { x: number; y: number } {
   return { x: col * TILE_SIZE + TILE_SIZE / 2, y: row * TILE_SIZE + TILE_SIZE / 2 };
 }
 
+/** Contiguous `[fromCol, toCol]` runs of solid ground, split by the level's gaps. */
+function groundRuns(def: LevelDef): Array<[number, number]> {
+  const runs: Array<[number, number]> = [];
+  let start: number | null = null;
+
+  for (let col = 0; col <= def.width; col++) {
+    const blocked = col === def.width || isInAnyGap(col, def.gaps);
+    if (!blocked && start === null) {
+      start = col;
+    } else if (blocked && start !== null) {
+      runs.push([start, col - 1]);
+      start = null;
+    }
+  }
+
+  return runs;
+}
+
 /**
  * Picks a ground-top texture key per column from a level-seeded hash instead
  * of `col % N` — panel seams and lights land at irregular positions so a run
@@ -284,31 +302,38 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
 
   const levelSeed = stringHash(def.id);
 
-  for (let col = 0; col < def.width; col++) {
-    if (isInAnyGap(col, def.gaps)) continue;
-    const isGapEdge = isInAnyGap(col - 1, def.gaps) || isInAnyGap(col + 1, def.gaps);
-
-    const { x: topX, y: topY } = tileCenter(col, def.groundRow);
-    const topKey = isGapEdge ? 'tile-ground-edge' : groundTopKey(levelSeed, col);
-    // Visual only — the whole column's collision lives in one merged body
-    // below, not per-tile. Stacked 10px static bodies (the old approach, one
-    // per row including this one) snag Arcade Physics' corner resolution
-    // when the player slides down a gap wall, occasionally reporting a false
-    // `touching.down` and letting the player climb the wall or chain
-    // air-jumps out of a pit — the fewer seams, the fewer chances to snag,
-    // so this merges the entire column (top tile included) into one body
-    // instead of leaving a seam just below the surface tile.
-    scene.add.image(topX, topY, topKey);
-
-    for (let row = def.groundRow + 1; row < LEVEL_HEIGHT_TILES; row++) {
-      const { x, y } = tileCenter(col, row);
-      scene.add.image(x, y, 'tile-ground-fill');
+  // Ground is built per contiguous run, not per column. Every tile in a run
+  // shares one surface row, so the run's collision is a single body and its
+  // sub-surface fill a single tiled sprite. Both matter now that levels are
+  // hundreds of tiles wide:
+  //
+  // 1. Physics honesty. Side-by-side or stacked static bodies snag Arcade
+  //    Physics' corner resolution — a player sliding down a pit wall can get
+  //    a false `touching.down` on a seam and climb out or chain air-jumps.
+  //    A run with no internal seams cannot produce one.
+  // 2. Cost. A 260-tile level would otherwise mean ~260 static bodies and
+  //    ~1300 images; this is a handful of bodies plus one fill sprite per
+  //    run (the surface row stays per-column, for its texture variety).
+  const fillRows = LEVEL_HEIGHT_TILES - def.groundRow - 1;
+  for (const [fromCol, toCol] of groundRuns(def)) {
+    for (let col = fromCol; col <= toCol; col++) {
+      const isGapEdge = isInAnyGap(col - 1, def.gaps) || isInAnyGap(col + 1, def.gaps);
+      const { x, y } = tileCenter(col, def.groundRow);
+      scene.add.image(x, y, isGapEdge ? 'tile-ground-edge' : groundTopKey(levelSeed, col));
     }
 
-    const columnRows = LEVEL_HEIGHT_TILES - def.groundRow;
-    const columnHeight = columnRows * TILE_SIZE;
-    const columnCenterY = topY - TILE_SIZE / 2 + columnHeight / 2;
-    const collider = scene.add.rectangle(topX, columnCenterY, TILE_SIZE, columnHeight, 0, 0);
+    const runWidth = (toCol - fromCol + 1) * TILE_SIZE;
+    const runLeft = fromCol * TILE_SIZE;
+    const surfaceTop = def.groundRow * TILE_SIZE;
+
+    if (fillRows > 0) {
+      scene.add
+        .tileSprite(runLeft, surfaceTop + TILE_SIZE, runWidth, fillRows * TILE_SIZE, 'tile-ground-fill')
+        .setOrigin(0, 0);
+    }
+
+    const runHeight = (LEVEL_HEIGHT_TILES - def.groundRow) * TILE_SIZE;
+    const collider = scene.add.rectangle(runLeft + runWidth / 2, surfaceTop + runHeight / 2, runWidth, runHeight, 0, 0);
     scene.physics.add.existing(collider, true);
     groundGroup.add(collider);
   }
