@@ -2,6 +2,7 @@ import type { LevelDef } from './LevelDef';
 import { SECTOR_01_LEVELS } from '@/data/levels/sector01';
 import { SECTOR_02_LEVELS } from '@/data/levels/sector02';
 import { SECTOR_03_LEVELS } from '@/data/levels/sector03';
+import { SECTOR_04_LEVELS } from '@/data/levels/sector04';
 import { LEVEL_VARIANTS } from '@/data/levels/variants';
 
 /**
@@ -13,7 +14,7 @@ import { LEVEL_VARIANTS } from '@/data/levels/variants';
  * isn't in `LEVEL_VARIANTS` falls back to. `DifficultyDirector` (Phase 3)
  * is the only caller that ever passes a real `variantId`.
  */
-const ALL_LEVELS: LevelDef[] = [...SECTOR_01_LEVELS, ...SECTOR_02_LEVELS, ...SECTOR_03_LEVELS];
+const ALL_LEVELS: LevelDef[] = [...SECTOR_01_LEVELS, ...SECTOR_02_LEVELS, ...SECTOR_03_LEVELS, ...SECTOR_04_LEVELS];
 
 export function getLevel(id: string, variantId?: string): LevelDef {
   const level = ALL_LEVELS.find((l) => l.id === id);
