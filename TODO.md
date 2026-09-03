@@ -109,16 +109,72 @@
       `DifficultyDirector` — именно то, что должно решать, какой вариант
       показать
 
-## PHASE 3 — THE SYSTEM → `v0.4.0-system-ai`
+## PHASE 3 — THE SYSTEM → `v0.4.0-system-ai` СИСТЕМА ГОТОВА, КОНТЕНТ ПРОДОЛЖАЕТСЯ
 
-- [ ] `BehaviorTracker` — телеметрия: прыжки, сторона, реакция, места смертей, паузы, маршрут, риск
-- [ ] `PlayerProfile` — ~15 полей, сериализуемый, тестируемый
-- [ ] `SystemMemory` — короткая история (lastDeathType, repeatDeathCount, streak, recentAdaptation)
-- [ ] `DifficultyDirector` — выбор вариации из валидных, ограниченный диапазон, только между попытками
-- [ ] `Commentator` — 7 категорий, приоритеты, cooldown, защита от повторов
-- [ ] Прогрессия личности: SYSTEM v1.0 → v1.4 → v2.0, привязка к секторам
-- [ ] Тесты: профиль, выбор вариаций, отсутствие повторов реплик
-- [ ] Настройка троллинг-паттернов (§15): обман ожиданий без нечестности
+- [x] `BehaviorTracker` (`src/ai/BehaviorTracker.ts`) — per-attempt телеметрия:
+      прыжки и сторона (per-frame sampling), время реакции на честный warning
+      телеграф (`trap:armed`→следующий jump/directional press, с истечением
+      непойманных warning'ов вместо огромных чисел), hesitation до первого
+      инпута, risk-encounters/survived (`trap:triggered`, приближение —
+      задокументированная упрощённая модель, т.к. `Player.kill()` не несёт
+      id ловушки). Отдаёт `AttemptSummary` в конце попытки, сам не хранит
+      историю — экземпляр на одну попытку (создаётся/уничтожается вместе с
+      `GameplayScene`).
+- [x] `PlayerProfile` (`src/ai/PlayerProfile.ts`) — 12 числовых полей
+      (< 15, ТЗ §68), EMA-сглаживание вместо хранения полной истории,
+      recentFailures/recentSuccesses — скользящее окно из 5 попыток.
+      Session-only, как `GameState`; персистентность — Phase 6 (SaveService).
+- [x] `SystemMemory` (`src/ai/SystemMemory.ts`) — ровно 5 полей ТЗ §69
+      (lastDeathType, repeatDeathCount, recentTrap,
+      recentSuccessfulAdaptation, currentStreak); repeatDeathCount считает
+      подряд-смерти на том же уровне с той же причиной, сбрасывается любым
+      clear'ом.
+- [x] `DifficultyDirector` (`src/ai/DifficultyDirector.ts`) — выбирает
+      `variantId` **только** в `GameplayScene.init()`, до сборки уровня
+      (структурно исключает изменение во время попытки — CLAUDE.md #4.1).
+      Диапазон нарочно узкий: gentle/standard/bold, все — заранее
+      провалидированные `LevelValidator`'ом варианты, без ветки
+      «сделать непроходимым».
+- [x] `Commentator` (`src/ai/Commentator.ts`) + `src/data/dialogues/` — 7
+      категорий ТЗ §17 (early_death, fall, repeated_mistake, near_exit,
+      long_hesitation, successful_adaptation, multiple_deaths) + `general`
+      как fallback нижнего яруса приоритета §18; anti-repeat через
+      скользящую историю последних 8 реплик; ~40 реплик × RU/EN сейчас
+      (цель ~90 — контент продолжается, см. ниже).
+- [x] Мини-i18n (`src/i18n/Locale.ts`) — только для реплик SYSTEM; полный
+      словарь UI (кнопки, HUD-лейблы) — по плану Phase 4 вместе с bitmap-шрифтом.
+- [x] `SystemVoice` (`src/ai/SystemVoice.ts`) — **найден и исправлен баг**:
+      `GameplayScene.buildHud()` пересоздаёт весь HUD при каждом
+      `scene.restart()` (~450 мс после смерти), стирая только что
+      показанную реплику почти мгновенно вместо заявленных ~2.5 с.
+      Исправлено сохранением дедлайна показа в общем состоянии вне сцены
+      (wall-clock время, не `scene.time.now`, который сбрасывается при
+      рестарте) — подтверждено headless-браузером: реплика теперь
+      корректно доживает показ через границу рестарта уровня.
+- [x] Демонстрационные вариации: `src/data/levels/variants.ts` —
+      `GRID ENTRY` (тайминг лазера) и `PURSUIT` (голова форы/скорость
+      преследователя) получили честные `gentle`/`bold` варианты,
+      проходящие `LevelValidator`, доказывающие выбор вариаций целиком
+      (не заглушка). Полный набор 2-4 вариаций на все 30 уровней —
+      контент-задача, не инженерная (тот же принцип, что и Phase 2).
+- [x] Тесты (48 новых, 144 всего): профиль (EMA, окно recentFailures/
+      recentSuccesses, deathPatterns), память (repeat/streak переходы),
+      выбор вариаций (приоритет struggling > thriving), комментатор
+      (каскад приоритетов §18, anti-repeat, hesitation-порог), трекер
+      поведения (reaction-time матчинг и его expiry, risk-учёт), плюс
+      валидация обеих вариаций через `LevelValidator`.
+- [x] **Убран Phaser из `EventBus`**: `EventBus` был тонкой обёрткой над
+      `Phaser.Events.EventEmitter`, что не даёт юнит-тестам (`vitest`,
+      environment: node) импортировать его — Phaser требует `window`.
+      Переписан на самодостаточный typed pub/sub без изменения публичного
+      API — заодно корректная архитектура: `EventBus` используется и
+      не-сценовыми системами (AI), ему не место зависеть от рендер-движка.
+- [ ] Прогрессия личности: SYSTEM v1.0 → v1.4 → v2.0, привязка к секторам —
+      нет данных для показа прогрессии без реального контента по секторам
+      03-05; отложено вместе с их авторингом
+- [ ] Настройка троллинг-паттернов (§15) — требует контента (уровни с
+      «привычным» левым путём/gap'ом и т.д.), не чистой механики; отложено
+      до авторинга секторов 03-05
 
 ## PHASE 4 — Визуал → `v0.5.0-visual-polish`
 

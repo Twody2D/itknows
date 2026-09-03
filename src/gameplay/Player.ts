@@ -3,6 +3,7 @@ import { PHYSICS } from '@/config/physics';
 import type { InputState } from '@/utils/input/InputState';
 import type { PlayerAnimState } from './PlayerAnimState';
 import { EventBus } from '@/core/EventBus';
+import type { DeathCause } from '@/core/EventBus';
 
 type LifeState = 'alive' | 'dead' | 'victory';
 
@@ -48,7 +49,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return this.lifeState === 'alive';
   }
 
-  kill(cause: string): void {
+  kill(cause: DeathCause): void {
     if (this.lifeState !== 'alive') return;
     this.lifeState = 'dead';
     this.body.setVelocity(0, 0);

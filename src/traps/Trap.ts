@@ -1,5 +1,6 @@
 import { assertHonestTiming, DEFAULT_TRAP_TIMING } from './TrapTiming';
 import type { TrapTiming } from './TrapTiming';
+import { EventBus } from '@/core/EventBus';
 
 export type TrapPhase = 'idle' | 'warning' | 'active' | 'cooldown';
 
@@ -95,6 +96,10 @@ export abstract class Trap {
 
   private setPhase(phase: TrapPhase): void {
     this.phase = phase;
+    // Only the telegraph/lethal edges are interesting telemetry (BehaviorTracker
+    // reaction-time measurement) — idle/cooldown are non-events for the player.
+    if (phase === 'warning') EventBus.emit('trap:armed', { trapId: this.id });
+    if (phase === 'active') EventBus.emit('trap:triggered', { trapId: this.id });
     this.onEnterPhase(phase);
   }
 

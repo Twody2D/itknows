@@ -11,6 +11,15 @@ import type { LevelDef } from '@/gameplay/LevelDef';
 import { getLevel, getNextLevelId } from '@/gameplay/LevelFactory';
 import { GameState } from '@/core/GameState';
 import { EventBus } from '@/core/EventBus';
+import type { DeathCause } from '@/core/EventBus';
+import { BehaviorTracker } from '@/ai/BehaviorTracker';
+import { PlayerProfile } from '@/ai/PlayerProfile';
+import { SystemMemory } from '@/ai/SystemMemory';
+import { selectVariant } from '@/ai/DifficultyDirector';
+import { Commentator } from '@/ai/Commentator';
+import { SystemVoice } from '@/ai/SystemVoice';
+
+const SYSTEM_COMMENT_DISPLAY_MS = 2500;
 
 interface GameplaySceneData {
   levelId: string;
@@ -21,10 +30,14 @@ const ONE_WAY_TOLERANCE = 4;
 
 /**
  * Owns one attempt at one level: spawns the player, builds geometry and
- * traps, wires collisions, and resolves death/victory. Retry auto-restarts
- * fast — the SYSTEM commentary + explicit TRY AGAIN button arrive with the
- * AI system (Phase 3) and the polished result screen (Phase 4); until then
- * this keeps the death → retry loop honest and near-instant on its own.
+ * traps, wires collisions, and resolves death/victory. Feeds THE SYSTEM
+ * (`BehaviorTracker` → `PlayerProfile`/`SystemMemory` → `DifficultyDirector`/
+ * `Commentator`, Phase 3) at exactly two points: `init()` picks a variant
+ * before the level is built, and death/clear hand off the attempt's
+ * telemetry once it's over — never anything mid-attempt (CLAUDE.md #4.1).
+ * Retry auto-restarts fast; an explicit TRY AGAIN button and a polished
+ * terminal UI for SYSTEM commentary are Phase 4 — until then this keeps the
+ * death → retry loop honest and near-instant on its own.
  */
 export class GameplayScene extends Phaser.Scene {
   private levelDef!: LevelDef;
@@ -32,8 +45,15 @@ export class GameplayScene extends Phaser.Scene {
   private player!: Player;
   private inputState!: InputState;
   private touchControls?: TouchControls;
+  private behaviorTracker!: BehaviorTracker;
+  private variantId!: string;
+  private attemptStartMs = 0;
+  private hesitationCommented = false;
 
   private hudDeathsText!: Phaser.GameObjects.Text;
+  private hudSystemText!: Phaser.GameObjects.Text;
+  /** Best-effort "which trap probably did this" — `Player.kill()` only carries a cause, not a trap id (see BehaviorTracker's doc comment for the same limitation). */
+  private lastTriggeredTrapId: string | null = null;
 
   private resolving = false;
 
@@ -42,8 +62,12 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   init(data: GameplaySceneData): void {
-    this.levelDef = getLevel(data.levelId);
+    // THE SYSTEM only ever picks a variant here, before the level is built —
+    // never mid-attempt (CLAUDE.md #4.1, see DifficultyDirector's doc comment).
+    this.variantId = selectVariant(data.levelId, PlayerProfile.snapshot(), SystemMemory.snapshot());
+    this.levelDef = getLevel(data.levelId, this.variantId);
     this.resolving = false;
+    this.hesitationCommented = false;
   }
 
   create(): void {
@@ -53,9 +77,13 @@ export class GameplayScene extends Phaser.Scene {
       GameState.currentLevelId = this.levelDef.id;
       GameState.startRun();
     }
+    GameState.currentVariantId = this.variantId;
 
     this.level = buildLevel(this, this.levelDef);
     this.setupInput();
+    this.behaviorTracker = new BehaviorTracker();
+    this.attemptStartMs = this.time.now;
+    EventBus.emit('level:loaded', { levelId: this.levelDef.id, variantId: this.variantId });
 
     this.player = new Player(this, this.level.spawn.x, this.level.spawn.y, this.inputState);
 
@@ -81,9 +109,14 @@ export class GameplayScene extends Phaser.Scene {
     this.buildHud();
 
     EventBus.on('player:died', this.handlePlayerDeath, this);
+    EventBus.on('system:comment', this.handleSystemComment, this);
+    EventBus.on('trap:triggered', this.handleTrapTriggered, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       EventBus.off('player:died', this.handlePlayerDeath, this);
+      EventBus.off('system:comment', this.handleSystemComment, this);
+      EventBus.off('trap:triggered', this.handleTrapTriggered, this);
       this.touchControls?.destroy();
+      this.behaviorTracker.destroy();
       for (const trap of this.level.traps.all) trap.destroy();
     });
   }
@@ -162,6 +195,16 @@ export class GameplayScene extends Phaser.Scene {
     for (const trap of this.level.traps.updatable) trap.update(time, delta);
     for (const pursuer of this.level.traps.pursuers) pursuer.update(this.player.x);
     this.carryOnMovingPlatforms();
+
+    this.behaviorTracker.sample(time, delta, this.inputState, this.player.isAlive());
+    if (!this.hesitationCommented) {
+      const line = Commentator.commentOnHesitation(this.behaviorTracker.hesitationSoFarMs);
+      if (line) this.hesitationCommented = true;
+    }
+
+    const voiceText = SystemVoice.current();
+    const rendered = voiceText ? `SYSTEM: ${voiceText}` : '';
+    if (this.hudSystemText.text !== rendered) this.hudSystemText.setText(rendered);
   }
 
   /** Nudges the player by a moving platform's per-frame delta while standing on it. */
@@ -201,13 +244,50 @@ export class GameplayScene extends Phaser.Scene {
       })
       .setScrollFactor(0)
       .setDepth(900);
+
+    const initialVoiceText = SystemVoice.current();
+    this.hudSystemText = this.add
+      .text(8, 30, initialVoiceText ? `SYSTEM: ${initialVoiceText}` : '', {
+        fontFamily: 'monospace',
+        fontSize: '8px',
+        color: hexToCss(PALETTE.system, 0.9),
+        wordWrap: { width: this.scale.width - 16 },
+      })
+      .setScrollFactor(0)
+      .setDepth(900);
   }
 
-  private handlePlayerDeath(): void {
+  /**
+   * Renders whatever THE SYSTEM says, decoupled from who said it
+   * (Commentator emits `system:comment`; this scene just displays it). A
+   * dedicated terminal UI is Phase 4 — this is the minimum needed for the
+   * commentary to actually be visible now instead of firing silently.
+   */
+  private handleSystemComment(payload: { text: string; category: string }): void {
+    SystemVoice.show(payload.text, payload.category, SYSTEM_COMMENT_DISPLAY_MS);
+  }
+
+  private handleTrapTriggered(payload: { trapId: string }): void {
+    this.lastTriggeredTrapId = payload.trapId;
+  }
+
+  private handlePlayerDeath(payload: { cause: DeathCause; x: number; y: number }): void {
     if (this.resolving) return;
     this.resolving = true;
     GameState.registerDeath();
     this.hudDeathsText.setText(`DEATHS ${GameState.run.deaths}`);
+
+    const attemptElapsedMs = this.time.now - this.attemptStartMs;
+    const trapId = payload.cause === 'trap' ? this.lastTriggeredTrapId : null;
+    SystemMemory.registerDeath(this.levelDef.id, payload.cause, trapId);
+    PlayerProfile.integrate(this.behaviorTracker.finish(payload.cause, false));
+    Commentator.commentOnDeath({
+      cause: payload.cause,
+      attemptElapsedMs,
+      totalDeaths: GameState.run.deaths,
+      repeatDeathCount: SystemMemory.snapshot().repeatDeathCount,
+      progressFraction: Phaser.Math.Clamp(payload.x / this.level.worldWidth, 0, 1),
+    });
 
     this.time.delayedCall(450, () => {
       this.scene.restart({ levelId: this.levelDef.id });
@@ -222,6 +302,11 @@ export class GameplayScene extends Phaser.Scene {
     const timeMs = GameState.elapsedMs();
     const deaths = GameState.run.deaths;
     EventBus.emit('level:completed', { levelId: this.levelDef.id, timeMs, deaths });
+
+    const wasStruggling = SystemMemory.snapshot().repeatDeathCount >= 2;
+    SystemMemory.registerClear(this.levelDef.id, wasStruggling);
+    PlayerProfile.integrate(this.behaviorTracker.finish(null, true));
+    if (wasStruggling) Commentator.commentOnAdaptation();
 
     this.time.delayedCall(600, () => {
       const next = getNextLevelId(this.levelDef.id);
