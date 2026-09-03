@@ -8,6 +8,7 @@ import { PixelButton } from '@/ui/PixelButton';
 import { drawPanel, buildDimBackdrop } from '@/ui/Panel';
 import { personalityTag } from '@/ai/SystemPersonality';
 import { sectorNumberOf } from '@/gameplay/sectors';
+import { AdsService } from '@/services/AdsService';
 
 export interface SectorCompleteData {
   completedLevelId: string;
@@ -35,6 +36,12 @@ export class SectorCompleteScene extends Phaser.Scene {
   }
 
   create(): void {
+    // The one natural ad breakpoint in the campaign (master-prompt "fair ad
+    // system" §10) — a no-op today (no live SDK, no purchase to gate on
+    // yet), but every future caller of AdsService only ever has to change
+    // this file, not hunt for scattered ad calls.
+    AdsService.requestInterstitial('SECTOR_COMPLETE');
+
     const { width, height } = this.scale;
     this.cameras.main.setBackgroundColor(PALETTE.bgVoid);
     buildDimBackdrop(this);

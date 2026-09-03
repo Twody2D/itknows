@@ -33,6 +33,8 @@ export interface LevelDef {
   exitCol: number;
   /** Dynamic traps (all 12 non-static-spike types) — optional, empty by default. */
   traps?: TrapDef[];
+  /** Tile columns where crossing (on the ground) moves the death-respawn point forward — optional, empty by default. */
+  checkpoints?: number[];
 }
 
 /** Total playfield height in tiles — matches VIRTUAL_HEIGHT / TILE_SIZE exactly. */

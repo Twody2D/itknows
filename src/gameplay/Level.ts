@@ -44,6 +44,11 @@ export interface BuiltTraps {
   all: Array<{ destroy: () => void }>;
 }
 
+export interface CheckpointZone {
+  col: number;
+  zone: Phaser.GameObjects.Zone;
+}
+
 export interface BuiltLevel {
   groundGroup: Phaser.Physics.Arcade.StaticGroup;
   spikesGroup: Phaser.Physics.Arcade.StaticGroup;
@@ -54,6 +59,7 @@ export interface BuiltLevel {
   worldWidth: number;
   worldHeight: number;
   traps: BuiltTraps;
+  checkpoints: CheckpointZone[];
 }
 
 function isInAnyGap(col: number, gaps: Array<[number, number]>): boolean {
@@ -340,6 +346,19 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
     y: def.groundRow * TILE_SIZE,
   };
 
+  const checkpoints: CheckpointZone[] = (def.checkpoints ?? []).map((col) => {
+    const x = col * TILE_SIZE + TILE_SIZE / 2;
+    const y = def.groundRow * TILE_SIZE - TILE_SIZE;
+    // A visible post, dim until crossed — a checkpoint the player can't see
+    // coming isn't a checkpoint, it's an invisible rule (CLAUDE.md #4).
+    const marker = scene.add.rectangle(x, y, 2, TILE_SIZE * 2, PALETTE.cyanDim, 0.8);
+    marker.setData('markerFor', col);
+    const zone = scene.add.zone(x, y, TILE_SIZE, TILE_SIZE * 3);
+    scene.physics.add.existing(zone, true);
+    zone.setData('marker', marker);
+    return { col, zone };
+  });
+
   const traps = buildTraps(scene, def.traps ?? []);
 
   return {
@@ -351,6 +370,7 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
     spawn,
     worldWidth,
     worldHeight,
+    checkpoints,
     traps,
   };
 }

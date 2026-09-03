@@ -98,6 +98,11 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     ],
     playerStartCol: 2,
     exitCol: 66,
+    // One checkpoint after the opening gap+spike stretch, one after the
+    // second gap — dying to the fake exit or the closing spike no longer
+    // means replaying the whole level (CheckpointSystem pilot; see
+    // gameplay/sectors.ts / Level.ts's `checkpoints` handling).
+    checkpoints: [28, 48],
     traps: [
       // The sector's promised "first serious SYSTEM trick": a fake exit a
       // few tiles before the real one. Never lethal by construction

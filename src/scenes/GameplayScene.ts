@@ -11,7 +11,7 @@ import { buildEnvironmentLayers } from '@/art/Environment';
 import { FxManager } from '@/fx/FxManager';
 import { Player } from '@/gameplay/Player';
 import { buildLevel } from '@/gameplay/Level';
-import type { BuiltLevel } from '@/gameplay/Level';
+import type { BuiltLevel, CheckpointZone } from '@/gameplay/Level';
 import type { LevelDef } from '@/gameplay/LevelDef';
 import { getLevel, getNextLevelId } from '@/gameplay/LevelFactory';
 import { GameState } from '@/core/GameState';
@@ -33,6 +33,8 @@ const SYSTEM_COMMENT_DISPLAY_MS = 2500;
 
 interface GameplaySceneData {
   levelId: string;
+  /** Checkpoint tile column to respawn at instead of the level's own spawn — set by a mid-attempt death after crossing one. */
+  respawnCol?: number;
 }
 
 /** Pixels of leeway when deciding whether the player was already above a one-way platform. */
@@ -71,6 +73,7 @@ export class GameplayScene extends Phaser.Scene {
 
   private resolving = false;
   private tutorialHints?: TutorialHints;
+  private activeRespawnCol: number | undefined;
 
   constructor() {
     super('GameplayScene');
@@ -83,6 +86,7 @@ export class GameplayScene extends Phaser.Scene {
     this.levelDef = getLevel(data.levelId, this.variantId);
     this.resolving = false;
     this.hesitationCommented = false;
+    this.activeRespawnCol = data.respawnCol;
   }
 
   create(): void {
@@ -105,7 +109,9 @@ export class GameplayScene extends Phaser.Scene {
     this.attemptStartMs = this.time.now;
     EventBus.emit('level:loaded', { levelId: this.levelDef.id, variantId: this.variantId });
 
-    this.player = new Player(this, this.level.spawn.x, this.level.spawn.y, this.inputState);
+    const spawnX =
+      this.activeRespawnCol !== undefined ? this.activeRespawnCol * TILE_SIZE + TILE_SIZE / 2 : this.level.spawn.x;
+    this.player = new Player(this, spawnX, this.level.spawn.y, this.inputState);
 
     this.physics.world.setBounds(0, -400, this.level.worldWidth, this.level.worldHeight + 800);
     this.physics.add.collider(this.player, this.level.groundGroup);
@@ -118,6 +124,10 @@ export class GameplayScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.level.exitZone, () => {
       this.onExitReached();
     });
+
+    for (const checkpoint of this.level.checkpoints) {
+      this.physics.add.overlap(this.player, checkpoint.zone, () => this.activateCheckpoint(checkpoint));
+    }
 
     this.setupTraps();
 
@@ -378,7 +388,30 @@ export class GameplayScene extends Phaser.Scene {
     });
 
     this.time.delayedCall(450, () => {
-      this.scene.restart({ levelId: this.levelDef.id });
+      this.scene.restart({ levelId: this.levelDef.id, respawnCol: this.activeRespawnCol });
+    });
+  }
+
+  /** Crossing a checkpoint moves this attempt's death-respawn point forward — never backward, and it never re-fires for one already passed. */
+  private activateCheckpoint(checkpoint: CheckpointZone): void {
+    if (this.activeRespawnCol !== undefined && checkpoint.col <= this.activeRespawnCol) return;
+    this.activeRespawnCol = checkpoint.col;
+
+    const marker = checkpoint.zone.getData('marker') as Phaser.GameObjects.Rectangle | undefined;
+    marker?.setFillStyle(PALETTE.cyan, 1);
+
+    const label = new PixelLabel(this, checkpoint.zone.x, checkpoint.zone.y - 14, 'CHECKPOINT', {
+      color: hexToCss(PALETTE.cyan),
+      strokeColor: hexToCss(PALETTE.outline),
+      scale: 1,
+    }).setOrigin(0.5, 1);
+    this.tweens.add({
+      targets: label,
+      alpha: { from: 1, to: 0 },
+      y: label.y - 6,
+      duration: 900,
+      delay: 300,
+      onComplete: () => label.destroy(),
     });
   }
 
