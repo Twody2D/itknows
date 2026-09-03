@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { PHYSICS } from '@/config/physics';
-import { InputState } from '@/utils/input/InputState';
+import type { InputState } from '@/utils/input/InputState';
 import type { PlayerAnimState } from './PlayerAnimState';
 import { EventBus } from '@/core/EventBus';
 

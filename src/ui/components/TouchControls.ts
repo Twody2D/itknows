@@ -98,6 +98,15 @@ export class TouchControls {
   }
 
   destroy(): void {
+    // A finger can still be down when the scene tears down mid-transition
+    // (e.g. landing on the exit with a thumb on the jump button) — release
+    // every button explicitly so the shared InputState never gets stuck
+    // reporting a held input nothing can ever release again.
+    this.input.setTouchLeft(false);
+    this.input.setTouchRight(false);
+    this.input.setTouchJump(false);
+    this.input.setTouchDash(false);
+
     this.graphics.destroy();
     for (const zone of this.zones.values()) zone.destroy();
   }

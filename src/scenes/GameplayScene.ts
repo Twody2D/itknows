@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { hexToCss } from '@/utils/color';
-import { InputState } from '@/utils/input/InputState';
+import type { InputState } from '@/utils/input/InputState';
+import { inputState as sharedInputState } from '@/utils/input/InputState';
 import { TouchControls } from '@/ui/components/TouchControls';
 import { Player } from '@/gameplay/Player';
 import { buildLevel } from '@/gameplay/Level';
@@ -27,6 +28,9 @@ function nextLevelId(id: string): string | undefined {
 interface GameplaySceneData {
   levelId: string;
 }
+
+/** Pixels of leeway when deciding whether the player was already above a one-way platform. */
+const ONE_WAY_TOLERANCE = 4;
 
 /**
  * Owns one attempt at one level: spawns the player, builds geometry, wires
@@ -70,7 +74,12 @@ export class GameplayScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, -400, this.level.worldWidth, this.level.worldHeight + 800);
     this.physics.add.collider(this.player, this.level.groundGroup);
-    this.physics.add.collider(this.player, this.level.platformsGroup);
+    this.physics.add.collider(
+      this.player,
+      this.level.platformsGroup,
+      undefined,
+      (playerObj, platformObj) => this.isLandingOnPlatform(playerObj as Player, platformObj as Phaser.Physics.Arcade.Sprite),
+    );
     this.physics.add.overlap(this.player, this.level.spikesGroup, () => {
       this.player.kill('spike');
     });
@@ -92,15 +101,25 @@ export class GameplayScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * Floating platforms are one-way: solid when landed on from above, passable
+   * when approached from below or the side. Standard Arcade recipe — compare
+   * the player's bottom edge before this step's vertical movement against the
+   * platform's top edge (CLAUDE.md #Phase 1 — one-way platforms).
+   */
+  private isLandingOnPlatform(player: Player, platform: Phaser.Physics.Arcade.Sprite): boolean {
+    const platformBody = platform.body as Phaser.Physics.Arcade.StaticBody;
+    const previousBottom = player.body.bottom - player.body.deltaY();
+    return previousBottom <= platformBody.top + ONE_WAY_TOLERANCE;
+  }
+
   private setupInput(): void {
     this.input.keyboard?.addCapture(['SPACE', 'UP', 'DOWN', 'LEFT', 'RIGHT']);
-    this.inputState = new InputState(this);
+    this.inputState = sharedInputState;
     this.touchControls = new TouchControls(this, this.inputState);
   }
 
   override update(): void {
-    this.inputState.update();
-
     if (this.player.isAlive() && this.player.y > this.level.worldHeight + 40) {
       this.player.kill('fall');
     }

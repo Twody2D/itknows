@@ -36,3 +36,12 @@ const game = new Phaser.Game({
 });
 
 new ScaleController(game);
+
+// Dev-only hook for local/CI verification scripts to jump straight to a
+// scene (e.g. a specific level) without scripting menu navigation and level
+// transition timing. Never ships: import.meta.env.DEV is statically false
+// in a production build, so bundlers dead-code-eliminate this block
+// (verified as part of the bundle-size audit — CLAUDE.md #Phase 0).
+if (import.meta.env.DEV) {
+  (window as unknown as { __game: Phaser.Game }).__game = game;
+}
