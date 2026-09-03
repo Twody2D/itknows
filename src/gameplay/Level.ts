@@ -290,26 +290,27 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
 
     const { x: topX, y: topY } = tileCenter(col, def.groundRow);
     const topKey = isGapEdge ? 'tile-ground-edge' : groundTopKey(levelSeed, col);
-    groundGroup.create(topX, topY, topKey);
+    // Visual only — the whole column's collision lives in one merged body
+    // below, not per-tile. Stacked 10px static bodies (the old approach, one
+    // per row including this one) snag Arcade Physics' corner resolution
+    // when the player slides down a gap wall, occasionally reporting a false
+    // `touching.down` and letting the player climb the wall or chain
+    // air-jumps out of a pit — the fewer seams, the fewer chances to snag,
+    // so this merges the entire column (top tile included) into one body
+    // instead of leaving a seam just below the surface tile.
+    scene.add.image(topX, topY, topKey);
 
-    const fillRows = LEVEL_HEIGHT_TILES - def.groundRow - 1;
-    if (fillRows > 0) {
-      for (let row = def.groundRow + 1; row < LEVEL_HEIGHT_TILES; row++) {
-        const { x, y } = tileCenter(col, row);
-        scene.add.image(x, y, 'tile-ground-fill');
-      }
-
-      // A single merged physics body for the whole fill column, instead of one
-      // per row — stacked 10px static bodies snag Arcade Physics' corner
-      // resolution when the player slides down a gap wall, occasionally
-      // reporting a false `touching.down` and letting the player climb the
-      // wall or chain air-jumps out of a pit.
-      const fillHeight = fillRows * TILE_SIZE;
-      const fillCenterY = topY + TILE_SIZE / 2 + fillHeight / 2;
-      const filler = scene.add.rectangle(topX, fillCenterY, TILE_SIZE, fillHeight, 0, 0);
-      scene.physics.add.existing(filler, true);
-      groundGroup.add(filler);
+    for (let row = def.groundRow + 1; row < LEVEL_HEIGHT_TILES; row++) {
+      const { x, y } = tileCenter(col, row);
+      scene.add.image(x, y, 'tile-ground-fill');
     }
+
+    const columnRows = LEVEL_HEIGHT_TILES - def.groundRow;
+    const columnHeight = columnRows * TILE_SIZE;
+    const columnCenterY = topY - TILE_SIZE / 2 + columnHeight / 2;
+    const collider = scene.add.rectangle(topX, columnCenterY, TILE_SIZE, columnHeight, 0, 0);
+    scene.physics.add.existing(collider, true);
+    groundGroup.add(collider);
   }
 
   for (const col of def.spikeColumns) {
