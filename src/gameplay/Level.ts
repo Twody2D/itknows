@@ -282,14 +282,27 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
     if (isInAnyGap(col, def.gaps)) continue;
     const isGapEdge = isInAnyGap(col - 1, def.gaps) || isInAnyGap(col + 1, def.gaps);
 
-    for (let row = def.groundRow; row < LEVEL_HEIGHT_TILES; row++) {
-      const { x, y } = tileCenter(col, row);
-      const isTop = row === def.groundRow;
-      let key = 'tile-ground-fill';
-      if (isTop) {
-        key = isGapEdge ? 'tile-ground-edge' : groundTopKey(levelSeed, col);
+    const { x: topX, y: topY } = tileCenter(col, def.groundRow);
+    const topKey = isGapEdge ? 'tile-ground-edge' : groundTopKey(levelSeed, col);
+    groundGroup.create(topX, topY, topKey);
+
+    const fillRows = LEVEL_HEIGHT_TILES - def.groundRow - 1;
+    if (fillRows > 0) {
+      for (let row = def.groundRow + 1; row < LEVEL_HEIGHT_TILES; row++) {
+        const { x, y } = tileCenter(col, row);
+        scene.add.image(x, y, 'tile-ground-fill');
       }
-      groundGroup.create(x, y, key);
+
+      // A single merged physics body for the whole fill column, instead of one
+      // per row — stacked 10px static bodies snag Arcade Physics' corner
+      // resolution when the player slides down a gap wall, occasionally
+      // reporting a false `touching.down` and letting the player climb the
+      // wall or chain air-jumps out of a pit.
+      const fillHeight = fillRows * TILE_SIZE;
+      const fillCenterY = topY + TILE_SIZE / 2 + fillHeight / 2;
+      const filler = scene.add.rectangle(topX, fillCenterY, TILE_SIZE, fillHeight, 0, 0);
+      scene.physics.add.existing(filler, true);
+      groundGroup.add(filler);
     }
   }
 

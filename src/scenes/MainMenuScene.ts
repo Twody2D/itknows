@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { hexToCss } from '@/utils/color';
 import { getAllLevels } from '@/gameplay/LevelFactory';
-import { generatePlayerTextures } from '@/art/SpriteFactory';
 import { buildEnvironmentLayers } from '@/art/Environment';
 import { PixelLabel } from '@/ui/PixelLabel';
 import { PixelButton } from '@/ui/PixelButton';
@@ -22,8 +21,11 @@ export class MainMenuScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor(PALETTE.bgVoid);
-    generatePlayerTextures(this);
-
+    // Player textures/anims are generated once by BootScene (they're static
+    // and global — Phaser's TextureManager/AnimationManager aren't
+    // per-scene). Regenerating them here on every menu visit used to remove
+    // and recreate those global keys out from under any Player sprite still
+    // mid-teardown elsewhere, which could crash `AnimationState.globalRemove`.
     const { width, height } = this.scale;
     const floorY = height - 46;
 
@@ -117,7 +119,7 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private buildPlayButton(width: number, height: number): void {
-    new PixelButton(this, width / 2, height * 0.6, t('play'), {
+    const playButton = new PixelButton(this, width / 2, height * 0.6, t('play'), {
       width: 96,
       height: 30,
       onClick: () => {
@@ -125,15 +127,25 @@ export class MainMenuScene extends Phaser.Scene {
         if (firstLevel) this.scene.start('GameplayScene', { levelId: firstLevel.id });
       },
     });
+    // Attention-grabbing idle pulse — the one button on this screen that
+    // matters most gets a slow breathing scale, everything else stays still.
+    this.tweens.add({
+      targets: playButton,
+      scale: { from: 1, to: 1.08 },
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
 
-    new PixelButton(this, width / 2, height * 0.6 + 36, t('howToPlay'), {
+    new PixelButton(this, width / 2, height * 0.6 + 40, t('howToPlay'), {
       width: 140,
       height: 18,
       textScale: 1,
       onClick: () => this.scene.launch('HowToPlayScene'),
     });
 
-    new PixelButton(this, width / 2, height * 0.6 + 58, t('settings'), {
+    new PixelButton(this, width / 2, height * 0.6 + 68, t('settings'), {
       width: 140,
       height: 18,
       textScale: 1,

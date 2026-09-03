@@ -33,14 +33,14 @@ export class PauseScene extends Phaser.Scene {
 
     buildDimBackdrop(this);
 
-    const panelW = 150;
-    const panelH = 130;
+    const panelW = 170;
+    const panelH = 120;
     const panelX = width / 2 - panelW / 2;
     const panelY = height / 2 - panelH / 2;
     const g = this.add.graphics();
     drawPanel(g, panelX, panelY, panelW, panelH);
 
-    new PixelLabel(this, width / 2, panelY + 16, t('pauseTitle'), {
+    new PixelLabel(this, width / 2, panelY + 18, t('pauseTitle'), {
       color: hexToCss(PALETTE.white),
       strokeColor: hexToCss(PALETTE.outline),
       scale: 2,
@@ -48,8 +48,8 @@ export class PauseScene extends Phaser.Scene {
 
     const buttonW = panelW - 24;
     const buttonH = 20;
-    const gap = 6;
-    let y = panelY + 36;
+    const gap = 8;
+    let y = panelY + 46;
 
     new PixelButton(this, width / 2, y, t('resume'), {
       width: buttonW,

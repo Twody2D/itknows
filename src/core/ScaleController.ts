@@ -21,5 +21,19 @@ export class ScaleController {
 
     this.game.scale.resize(width, VIRTUAL_HEIGHT);
     this.game.scale.setZoom(zoom);
+
+    // setZoom sizes the canvas to an exact integer-pixel CSS box, which
+    // almost never matches the viewport exactly (rounding, the width clamp
+    // above, browser chrome) and leaves a blank margin — CLAUDE.md forbids
+    // vertical letterboxing, and a leftover margin also reads as "the game
+    // is small" even when the internal resolution is fine. Stretch the
+    // canvas the rest of the way to fill the viewport; `image-rendering:
+    // pixelated` (index.html) keeps pixel art crisp through the sub-one-zoom-
+    // step supersample this adds.
+    const canvas = this.game.canvas;
+    if (canvas) {
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+    }
   }
 }

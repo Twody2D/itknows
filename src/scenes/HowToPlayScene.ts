@@ -17,14 +17,14 @@ export class HowToPlayScene extends Phaser.Scene {
 
     buildDimBackdrop(this);
 
-    const panelW = Math.min(260, width - 40);
-    const panelH = 176;
+    const panelW = Math.min(280, width - 40);
+    const panelH = 210;
     const panelX = width / 2 - panelW / 2;
     const panelY = height / 2 - panelH / 2;
     const g = this.add.graphics();
     drawPanel(g, panelX, panelY, panelW, panelH);
 
-    new PixelLabel(this, width / 2, panelY + 16, t('howToPlayTitle'), {
+    new PixelLabel(this, width / 2, panelY + 18, t('howToPlayTitle'), {
       color: hexToCss(PALETTE.white),
       strokeColor: hexToCss(PALETTE.outline),
       scale: 2,
@@ -39,17 +39,17 @@ export class HowToPlayScene extends Phaser.Scene {
       t('htpSystemLine2'),
       t('htpRetry'),
     ];
-    let y = panelY + 34;
+    let y = panelY + 40;
     for (const line of lines) {
-      new PixelLabel(this, panelX + 14, y, line, {
+      new PixelLabel(this, panelX + 16, y, line, {
         color: hexToCss(PALETTE.white),
         strokeColor: hexToCss(PALETTE.outline),
         scale: 1,
       });
-      y += 12;
+      y += 15;
     }
 
-    new PixelButton(this, width / 2, panelY + panelH - 18, t('back'), {
+    new PixelButton(this, width / 2, panelY + panelH - 22, t('back'), {
       width: panelW - 24,
       height: 20,
       onClick: () => this.scene.stop(),

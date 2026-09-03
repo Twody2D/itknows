@@ -40,7 +40,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.body.setSize(6, 12);
     this.body.setOffset(2, 2);
     this.body.setMaxVelocity(PHYSICS.moveSpeed * 3, PHYSICS.maxFallSpeed);
-    this.setCollideWorldBounds(false);
+    // World bounds are wide enough vertically to fall through a pit (death is
+    // triggered by a Y check before the bound would stop it) but the level's
+    // left/right edges are real walls — without this, walking off either edge
+    // drops the player into untelegraphed empty space with no ground tile.
+    this.setCollideWorldBounds(true);
 
     this.play('player-idle');
   }
