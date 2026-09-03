@@ -317,9 +317,9 @@ export class GameplayScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(900);
 
-    new PixelButton(this, this.scale.width - 18, 15, 'II', {
+    new PixelButton(this, this.scale.width - 18, 16, 'II', {
       width: 24,
-      height: 20,
+      height: 24,
       onClick: () => this.pauseGame(),
     })
       .setScrollFactor(0)

@@ -127,11 +127,16 @@ export class MainMenuScene extends Phaser.Scene {
         if (firstLevel) this.scene.start('GameplayScene', { levelId: firstLevel.id });
       },
     });
-    // Attention-grabbing idle pulse — the one button on this screen that
-    // matters most gets a slow breathing scale, everything else stays still.
+    // Attention-grabbing idle pulse — a breathing glow rather than a scale
+    // tween. Scaling the whole container looked unsynced up close: the
+    // panel's vector outline and the label's baked-pixel text round to the
+    // nearest screen pixel independently every frame (`roundPixels`), so at
+    // a continuously-changing fractional scale they drift a pixel apart. A
+    // glow halo doesn't move or resize anything, so nothing can desync.
+    const glow = playButton.postFX.addGlow(PALETTE.cyan, 1, 0, false, 0.4, 6);
     this.tweens.add({
-      targets: playButton,
-      scale: { from: 1, to: 1.08 },
+      targets: glow,
+      outerStrength: { from: 1, to: 4 },
       duration: 700,
       yoyo: true,
       repeat: -1,

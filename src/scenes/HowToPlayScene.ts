@@ -52,6 +52,7 @@ export class HowToPlayScene extends Phaser.Scene {
     new PixelButton(this, width / 2, panelY + panelH - 22, t('back'), {
       width: panelW - 24,
       height: 20,
+      textScale: 1,
       onClick: () => this.scene.stop(),
     });
   }
