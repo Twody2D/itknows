@@ -1,6 +1,13 @@
 import Phaser from 'phaser';
 import { drawPlayerFrame } from './drawPlayer';
-import { drawExitTile, drawGroundTile, drawSpikeTile } from './drawTiles';
+import {
+  drawExitTile,
+  drawFakePlatformTile,
+  drawGroundTile,
+  drawMovingPlatformTile,
+  drawPursuerIcon,
+  drawSpikeTile,
+} from './drawTiles';
 import { PLAYER_FRAME_COUNTS, PLAYER_SPRITE_H, PLAYER_SPRITE_W } from './PLAYER_SPRITE';
 import { PLAYER_ANIM_STATES } from '@/gameplay/PlayerAnimState';
 import { TILE_SIZE } from '@/config/display';
@@ -74,6 +81,19 @@ export function generateTileTextures(scene: Phaser.Scene): void {
   const exitInactive = makeCanvas(exitW, exitH);
   drawExitTile(exitInactive.ctx, exitW, exitH, false);
   addOrReplaceCanvas(scene, 'exit-inactive', exitInactive.canvas);
+
+  const fakePlatform = makeCanvas(TILE_SIZE, TILE_SIZE);
+  drawFakePlatformTile(fakePlatform.ctx);
+  addOrReplaceCanvas(scene, 'tile-fake-platform', fakePlatform.canvas);
+
+  const movingPlatform = makeCanvas(TILE_SIZE, TILE_SIZE);
+  drawMovingPlatformTile(movingPlatform.ctx);
+  addOrReplaceCanvas(scene, 'tile-moving-platform', movingPlatform.canvas);
+
+  const pursuerSize = 8;
+  const pursuer = makeCanvas(pursuerSize, pursuerSize);
+  drawPursuerIcon(pursuer.ctx, pursuerSize);
+  addOrReplaceCanvas(scene, 'trap-pursuer', pursuer.canvas);
 }
 
 export function generateAllTextures(scene: Phaser.Scene): void {

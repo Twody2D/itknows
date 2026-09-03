@@ -1,19 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { SECTOR_01_LEVELS } from '@/data/levels/sector01';
+import { SECTOR_02_LEVELS } from '@/data/levels/sector02';
 import { LEVEL_HEIGHT_TILES } from '@/gameplay/LevelDef';
 import type { LevelDef } from '@/gameplay/LevelDef';
 
 /**
  * Cheap structural sanity checks. This is not the reachability solver
- * (CLAUDE.md #4.3 / Phase 2's LevelValidator) — it only catches authoring
- * mistakes that would make a level definition nonsensical before physics
- * ever runs.
+ * (`LevelValidator.ts`, covered by tests/level-validator.test.ts) — it only
+ * catches authoring mistakes that would make a level definition nonsensical
+ * before physics ever runs.
  */
 function isInAnyGap(col: number, gaps: Array<[number, number]>): boolean {
   return gaps.some(([from, to]) => col >= from && col <= to);
 }
 
-describe.each(SECTOR_01_LEVELS)('level def: $id', (level: LevelDef) => {
+describe.each([...SECTOR_01_LEVELS, ...SECTOR_02_LEVELS])('level def: $id', (level: LevelDef) => {
   it('has a ground row within the playfield', () => {
     expect(level.groundRow).toBeGreaterThan(0);
     expect(level.groundRow).toBeLessThan(LEVEL_HEIGHT_TILES);
@@ -54,5 +55,21 @@ describe.each(SECTOR_01_LEVELS)('level def: $id', (level: LevelDef) => {
       expect(platform.col + platform.width).toBeLessThanOrEqual(level.width);
       expect(platform.row).toBeLessThan(level.groundRow);
     }
+  });
+
+  it('resolves every trigger targetId to a trap id defined in the same level', () => {
+    const traps = level.traps ?? [];
+    const ids = new Set(traps.map((t) => t.id));
+    for (const trap of traps) {
+      if (trap.type === 'trigger') {
+        expect(ids.has(trap.targetId)).toBe(true);
+      }
+    }
+  });
+
+  it('has unique trap ids within the level', () => {
+    const traps = level.traps ?? [];
+    const ids = traps.map((t) => t.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

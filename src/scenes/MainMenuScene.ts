@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { hexToCss } from '@/utils/color';
-import { SECTOR_01_LEVELS } from '@/data/levels/sector01';
+import { getAllLevels } from '@/gameplay/LevelFactory';
 
 /**
  * Functional vertical-slice menu. Visual polish (animated logo, living
@@ -58,7 +58,7 @@ export class MainMenuScene extends Phaser.Scene {
     playButton.on('pointerover', () => playButton.setColor(hexToCss(PALETTE.white)));
     playButton.on('pointerout', () => playButton.setColor(hexToCss(PALETTE.cyan)));
     playButton.on('pointerdown', () => {
-      const firstLevel = SECTOR_01_LEVELS[0];
+      const firstLevel = getAllLevels()[0];
       if (firstLevel) this.scene.start('GameplayScene', { levelId: firstLevel.id });
     });
 

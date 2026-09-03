@@ -8,22 +8,9 @@ import { Player } from '@/gameplay/Player';
 import { buildLevel } from '@/gameplay/Level';
 import type { BuiltLevel } from '@/gameplay/Level';
 import type { LevelDef } from '@/gameplay/LevelDef';
-import { SECTOR_01_LEVELS } from '@/data/levels/sector01';
+import { getLevel, getNextLevelId } from '@/gameplay/LevelFactory';
 import { GameState } from '@/core/GameState';
 import { EventBus } from '@/core/EventBus';
-
-const ALL_LEVELS: LevelDef[] = [...SECTOR_01_LEVELS];
-
-function findLevel(id: string): LevelDef {
-  const level = ALL_LEVELS.find((l) => l.id === id);
-  if (!level) throw new Error(`Unknown level id: ${id}`);
-  return level;
-}
-
-function nextLevelId(id: string): string | undefined {
-  const index = ALL_LEVELS.findIndex((l) => l.id === id);
-  return ALL_LEVELS[index + 1]?.id;
-}
 
 interface GameplaySceneData {
   levelId: string;
@@ -33,11 +20,11 @@ interface GameplaySceneData {
 const ONE_WAY_TOLERANCE = 4;
 
 /**
- * Owns one attempt at one level: spawns the player, builds geometry, wires
- * collisions, and resolves death/victory. Retry auto-restarts fast — the
- * SYSTEM commentary + explicit TRY AGAIN button arrive with the AI system
- * (Phase 3) and the polished result screen (Phase 4); until then this keeps
- * the death → retry loop honest and near-instant on its own.
+ * Owns one attempt at one level: spawns the player, builds geometry and
+ * traps, wires collisions, and resolves death/victory. Retry auto-restarts
+ * fast — the SYSTEM commentary + explicit TRY AGAIN button arrive with the
+ * AI system (Phase 3) and the polished result screen (Phase 4); until then
+ * this keeps the death → retry loop honest and near-instant on its own.
  */
 export class GameplayScene extends Phaser.Scene {
   private levelDef!: LevelDef;
@@ -55,7 +42,7 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   init(data: GameplaySceneData): void {
-    this.levelDef = findLevel(data.levelId);
+    this.levelDef = getLevel(data.levelId);
     this.resolving = false;
   }
 
@@ -74,11 +61,8 @@ export class GameplayScene extends Phaser.Scene {
 
     this.physics.world.setBounds(0, -400, this.level.worldWidth, this.level.worldHeight + 800);
     this.physics.add.collider(this.player, this.level.groundGroup);
-    this.physics.add.collider(
-      this.player,
-      this.level.platformsGroup,
-      undefined,
-      (playerObj, platformObj) => this.isLandingOnPlatform(playerObj as Player, platformObj as Phaser.Physics.Arcade.Sprite),
+    this.physics.add.collider(this.player, this.level.platformsGroup, undefined, (playerObj, platformObj) =>
+      this.isLandingOnPlatform(playerObj as Player, platformObj as Phaser.Physics.Arcade.Sprite),
     );
     this.physics.add.overlap(this.player, this.level.spikesGroup, () => {
       this.player.kill('spike');
@@ -86,6 +70,8 @@ export class GameplayScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.level.exitZone, () => {
       this.onExitReached();
     });
+
+    this.setupTraps();
 
     this.cameras.main.setBounds(0, 0, this.level.worldWidth, this.level.worldHeight);
     this.cameras.main.startFollow(this.player, true, 0.15, 0.15);
@@ -98,6 +84,7 @@ export class GameplayScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       EventBus.off('player:died', this.handlePlayerDeath, this);
       this.touchControls?.destroy();
+      for (const trap of this.level.traps.all) trap.destroy();
     });
   }
 
@@ -108,9 +95,57 @@ export class GameplayScene extends Phaser.Scene {
    * platform's top edge (CLAUDE.md #Phase 1 — one-way platforms).
    */
   private isLandingOnPlatform(player: Player, platform: Phaser.Physics.Arcade.Sprite): boolean {
-    const platformBody = platform.body as Phaser.Physics.Arcade.StaticBody;
+    const platformBody = platform.body as Phaser.Physics.Arcade.StaticBody | Phaser.Physics.Arcade.Body;
     const previousBottom = player.body.bottom - player.body.deltaY();
     return previousBottom <= platformBody.top + ONE_WAY_TOLERANCE;
+  }
+
+  private setupTraps(): void {
+    const traps = this.level.traps;
+
+    for (const hazard of traps.lethalHazards) {
+      this.physics.add.overlap(this.player, hazard.gameObject, () => {
+        if (hazard.isLethal()) this.player.kill('trap');
+      });
+    }
+
+    for (const platform of traps.disappearingPlatforms) {
+      this.physics.add.collider(
+        this.player,
+        platform.gameObject,
+        () => platform.notifyStandingOn(),
+        (playerObj, platformObj) =>
+          platform.isSolid() && this.isLandingOnPlatform(playerObj as Player, platformObj as Phaser.Physics.Arcade.Sprite),
+      );
+    }
+
+    for (const platform of traps.fallingPlatforms) {
+      this.physics.add.collider(
+        this.player,
+        platform.gameObject,
+        () => platform.notifyStandingOn(),
+        (playerObj, platformObj) =>
+          platform.isSolid() && this.isLandingOnPlatform(playerObj as Player, platformObj as Phaser.Physics.Arcade.Sprite),
+      );
+    }
+
+    for (const platform of traps.movingPlatforms) {
+      this.physics.add.collider(this.player, platform.gameObject, undefined, (playerObj, platformObj) =>
+        this.isLandingOnPlatform(playerObj as Player, platformObj as Phaser.Physics.Arcade.Sprite),
+      );
+    }
+
+    for (const gate of traps.timingGates) {
+      this.physics.add.collider(this.player, gate.gameObject, undefined, () => !gate.isOpen());
+    }
+
+    for (const trigger of traps.triggers) {
+      this.physics.add.overlap(this.player, trigger.gameObject, () => trigger.fire());
+    }
+
+    for (const fakeExit of traps.fakeExits) {
+      this.physics.add.overlap(this.player, fakeExit.zone, () => fakeExit.reject());
+    }
   }
 
   private setupInput(): void {
@@ -119,9 +154,32 @@ export class GameplayScene extends Phaser.Scene {
     this.touchControls = new TouchControls(this, this.inputState);
   }
 
-  override update(): void {
+  override update(time: number, delta: number): void {
     if (this.player.isAlive() && this.player.y > this.level.worldHeight + 40) {
       this.player.kill('fall');
+    }
+
+    for (const trap of this.level.traps.updatable) trap.update(time, delta);
+    for (const pursuer of this.level.traps.pursuers) pursuer.update(this.player.x);
+    this.carryOnMovingPlatforms();
+  }
+
+  /** Nudges the player by a moving platform's per-frame delta while standing on it. */
+  private carryOnMovingPlatforms(): void {
+    for (const platform of this.level.traps.movingPlatforms) {
+      const { dx, dy } = platform.consumeDelta();
+      if (dx === 0 && dy === 0) continue;
+
+      const body = platform.gameObject.body as Phaser.Physics.Arcade.Body;
+      const isRiding =
+        Math.abs(this.player.body.bottom - body.top) <= ONE_WAY_TOLERANCE + 2 &&
+        this.player.body.right > body.left &&
+        this.player.body.left < body.right;
+
+      if (isRiding) {
+        this.player.x += dx;
+        this.player.y += dy;
+      }
     }
   }
 
@@ -166,7 +224,7 @@ export class GameplayScene extends Phaser.Scene {
     EventBus.emit('level:completed', { levelId: this.levelDef.id, timeMs, deaths });
 
     this.time.delayedCall(600, () => {
-      const next = nextLevelId(this.levelDef.id);
+      const next = getNextLevelId(this.levelDef.id);
       if (next) {
         this.scene.start('GameplayScene', { levelId: next });
       } else {

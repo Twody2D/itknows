@@ -1,7 +1,9 @@
+import type { TrapDef } from '@/traps/TrapDef';
+
 /**
- * Vertical-slice level format: structured geometry, not a hand-drawn tile
- * grid. Phase 2 replaces this with the full data-driven LevelFactory /
- * variation system (CLAUDE.md #Phase 2) — this stays intentionally small.
+ * Level format: structured geometry plus optional dynamic traps, not a
+ * hand-drawn tile grid or a JSON blob repeating per-tile data (CLAUDE.md
+ * §54 — reusable definitions).
  */
 export interface PlatformDef {
   /** Tile column of the platform's left edge. */
@@ -21,7 +23,7 @@ export interface LevelDef {
   groundRow: number;
   /** Inclusive [from, to] tile-column ranges with no ground — pits. */
   gaps: Array<[number, number]>;
-  /** Tile columns with a single spike sitting on the ground surface. */
+  /** Tile columns with a single static spike sitting on the ground surface. */
   spikeColumns: number[];
   /** Floating platforms above the ground. */
   platforms: PlatformDef[];
@@ -29,6 +31,8 @@ export interface LevelDef {
   playerStartCol: number;
   /** Exit tile column (occupies exitCol, exitCol+1). */
   exitCol: number;
+  /** Dynamic traps (all 12 non-static-spike types) — optional, empty by default. */
+  traps?: TrapDef[];
 }
 
 /** Total playfield height in tiles — matches VIRTUAL_HEIGHT / TILE_SIZE exactly. */
