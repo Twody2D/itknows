@@ -72,6 +72,15 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     platforms: [{ col: 19, row: 20, width: 5 }],
     playerStartCol: 2,
     exitCol: 60,
+    traps: [
+      // First non-static threat in the campaign: full standing height, can
+      // only be waited out, not jumped or ducked — same honest
+      // patience-not-reflexes pattern sector 02 opens with. Placed on clear
+      // ground with no gap or spike nearby so the only new thing being
+      // taught here is "SYSTEM can put something in your way that isn't a
+      // spike," not a timing check stacked on another obstacle.
+      { type: 'laser', id: 'laser-01', col: 32, topRow: 16, bottomRow: 21 },
+    ],
   },
   {
     id: 'sector-01-level-06',
@@ -89,5 +98,14 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     ],
     playerStartCol: 2,
     exitCol: 66,
+    traps: [
+      // The sector's promised "first serious SYSTEM trick": a fake exit a
+      // few tiles before the real one. Never lethal by construction
+      // (`FakeExit.reject()` only nudges its own sprite) and visually
+      // distinguishable (no glow on the exit core) per CLAUDE.md #4.7 — the
+      // trick is that it looks identical enough at a glance to make a
+      // careless player briefly think they're done, not that it's unfair.
+      { type: 'fake-exit', id: 'fake-exit-01', col: 60, row: 22 },
+    ],
   },
 ];

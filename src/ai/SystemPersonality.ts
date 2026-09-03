@@ -1,3 +1,5 @@
+import { sectorNumberOf } from '@/gameplay/sectors';
+
 export type PersonalityTag = 'v1.0' | 'v1.4' | 'v2.0';
 
 /**
@@ -11,8 +13,7 @@ export type PersonalityTag = 'v1.0' | 'v1.4' | 'v2.0';
  * (session-only — SaveService is Phase 6).
  */
 export function personalityTag(levelId: string): PersonalityTag {
-  const match = /^sector-(\d+)-level-\d+$/.exec(levelId);
-  const sector = match ? Number(match[1]) : 1;
+  const sector = sectorNumberOf(levelId);
   if (sector >= 5) return 'v2.0';
   if (sector >= 3) return 'v1.4';
   return 'v1.0';

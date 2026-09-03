@@ -11,6 +11,7 @@ import { GameplayScene } from '@/scenes/GameplayScene';
 import { PauseScene } from '@/scenes/PauseScene';
 import { SettingsScene } from '@/scenes/SettingsScene';
 import { HowToPlayScene } from '@/scenes/HowToPlayScene';
+import { SectorCompleteScene } from '@/scenes/SectorCompleteScene';
 
 const root = document.getElementById('app');
 if (!root) throw new Error('#app root element not found');
@@ -36,7 +37,7 @@ const game = new Phaser.Game({
       debug: false,
     },
   },
-  scene: [BootScene, MainMenuScene, GameplayScene, PauseScene, SettingsScene, HowToPlayScene],
+  scene: [BootScene, MainMenuScene, GameplayScene, PauseScene, SettingsScene, HowToPlayScene, SectorCompleteScene],
 });
 
 new ScaleController(game);

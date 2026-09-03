@@ -42,6 +42,8 @@ const UI_STRINGS = {
   resultBest: { ru: 'Лучшее', en: 'Best' },
   resultNewBest: { ru: 'Новый рекорд', en: 'New best' },
   resultCleanerRun: { ru: 'Чище, чем в прошлый раз', en: 'Cleaner run than last time' },
+  resultSystemUpdate: { ru: 'Обновление SYSTEM', en: 'SYSTEM update' },
+  resultCampaignDone: { ru: 'SYSTEM изучил тебя полностью', en: 'SYSTEM has fully profiled you' },
   next: { ru: 'Дальше', en: 'Next' },
 } as const;
 

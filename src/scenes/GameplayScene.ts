@@ -24,6 +24,8 @@ import { selectVariant } from '@/ai/DifficultyDirector';
 import { Commentator } from '@/ai/Commentator';
 import { SystemVoice } from '@/ai/SystemVoice';
 import { personalityTag } from '@/ai/SystemPersonality';
+import { isSectorFinale } from '@/gameplay/sectors';
+import type { SectorCompleteData } from '@/scenes/SectorCompleteScene';
 import { TutorialHints } from '@/ui/TutorialHints';
 import { TILE_SIZE } from '@/config/display';
 
@@ -90,6 +92,7 @@ export class GameplayScene extends Phaser.Scene {
       GameState.currentLevelId = this.levelDef.id;
       GameState.startRun();
     }
+    if (this.levelDef.id.endsWith('-level-01')) GameState.startSector();
     GameState.currentVariantId = this.variantId;
 
     this.level = buildLevel(this, this.levelDef);
@@ -396,7 +399,14 @@ export class GameplayScene extends Phaser.Scene {
 
     this.time.delayedCall(600, () => {
       const next = getNextLevelId(this.levelDef.id);
-      if (next) {
+      if (isSectorFinale(this.levelDef.id)) {
+        this.scene.start('SectorCompleteScene', {
+          completedLevelId: this.levelDef.id,
+          deaths: GameState.sector.deaths,
+          timeMs: GameState.sectorElapsedMs(),
+          nextLevelId: next,
+        } satisfies SectorCompleteData);
+      } else if (next) {
         this.scene.start('GameplayScene', { levelId: next });
       } else {
         this.scene.start('MainMenuScene');
