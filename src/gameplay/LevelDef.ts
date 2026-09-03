@@ -1,4 +1,5 @@
 import type { TrapDef } from '@/traps/TrapDef';
+import type { LevelSectionConfig } from './LevelSections';
 
 /**
  * Level format: structured geometry plus optional dynamic traps, not a
@@ -35,6 +36,8 @@ export interface LevelDef {
   traps?: TrapDef[];
   /** Tile columns where crossing (on the ground) moves the death-respawn point forward — optional, empty by default. */
   checkpoints?: number[];
+  /** Structural breakdown of the level's shape (intro/challenge/.../final) — optional, informational (see `LevelSections.ts`). */
+  sections?: LevelSectionConfig[];
 }
 
 /** Total playfield height in tiles — matches VIRTUAL_HEIGHT / TILE_SIZE exactly. */
