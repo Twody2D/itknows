@@ -15,10 +15,15 @@ import type { Triggerable } from '@/traps/TriggerTrap';
 import { Pursuer } from '@/traps/Pursuer';
 import { TimingGate } from '@/traps/TimingGate';
 import { FakeExit } from '@/traps/FakeExit';
+import { hash01, stringHash } from '@/art/hash';
+import { PALETTE } from '@/config/palette';
 
 export interface LethalHazard {
+  id: string;
   gameObject: Phaser.GameObjects.GameObject;
   isLethal: () => boolean;
+  /** The object that actually renders the hazard, for FX (warning-pulse) — defaults to `gameObject` when the physics body itself is visible. Electric floor's `gameObject` is an invisible overlap zone; its visible surface is a separate sprite. */
+  visual?: Phaser.GameObjects.GameObject & { alpha: number };
 }
 
 export interface UpdatableTrap {
@@ -57,6 +62,22 @@ function isInAnyGap(col: number, gaps: Array<[number, number]>): boolean {
 
 function tileCenter(col: number, row: number): { x: number; y: number } {
   return { x: col * TILE_SIZE + TILE_SIZE / 2, y: row * TILE_SIZE + TILE_SIZE / 2 };
+}
+
+/**
+ * Picks a ground-top texture key per column from a level-seeded hash instead
+ * of `col % N` — panel seams and lights land at irregular positions so a run
+ * of tiles reads as variable-width panels, not one unit repeated (art-
+ * direction reset, gameplay-screen pass). Deterministic: same level, same
+ * column, same key, every run (CLAUDE.md #4.6's reproducibility discipline).
+ */
+function groundTopKey(levelSeed: number, col: number): string {
+  const seamRoll = hash01(levelSeed + col * 7919);
+  const seam = seamRoll < 0.3 ? 0 : seamRoll < 0.55 ? 1 : seamRoll < 0.8 ? 2 : 3;
+  const damageRoll = hash01(levelSeed + col * 5303 + 1);
+  if (damageRoll < 0.05) return 'tile-ground-damaged';
+  const lightRoll = hash01(levelSeed + col * 2609 + 2);
+  return lightRoll < 0.12 ? `tile-ground-top-s${seam}-light` : `tile-ground-top-s${seam}`;
 }
 
 /**
@@ -178,7 +199,12 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[]): BuiltTraps {
         const y = def.row * TILE_SIZE + TILE_SIZE / 2;
         const trap = new ElectricFloorTrap(scene, { id: def.id, x, y, widthTiles: def.width, timing: def.timing });
         result.updatable.push(trap);
-        result.lethalHazards.push({ gameObject: trap.hazard, isLethal: () => trap.isLethal() });
+        result.lethalHazards.push({
+          id: trap.id,
+          gameObject: trap.hazard,
+          isLethal: () => trap.isLethal(),
+          visual: trap.support,
+        });
         result.all.push(trap);
         triggerable.set(def.id, trap);
         break;
@@ -250,11 +276,20 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
   const worldWidth = def.width * TILE_SIZE;
   const worldHeight = LEVEL_HEIGHT_TILES * TILE_SIZE;
 
+  const levelSeed = stringHash(def.id);
+
   for (let col = 0; col < def.width; col++) {
     if (isInAnyGap(col, def.gaps)) continue;
+    const isGapEdge = isInAnyGap(col - 1, def.gaps) || isInAnyGap(col + 1, def.gaps);
+
     for (let row = def.groundRow; row < LEVEL_HEIGHT_TILES; row++) {
       const { x, y } = tileCenter(col, row);
-      groundGroup.create(x, y, 'tile-ground');
+      const isTop = row === def.groundRow;
+      let key = 'tile-ground-fill';
+      if (isTop) {
+        key = isGapEdge ? 'tile-ground-edge' : groundTopKey(levelSeed, col);
+      }
+      groundGroup.create(x, y, key);
     }
   }
 
@@ -272,7 +307,8 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
   for (const platform of def.platforms) {
     for (let i = 0; i < platform.width; i++) {
       const { x, y } = tileCenter(platform.col + i, platform.row);
-      platformsGroup.create(x, y, 'tile-ground');
+      const bolt = hash01(levelSeed + (platform.col + i) * 4111 + 3) < 0.3;
+      platformsGroup.create(x, y, bolt ? 'tile-platform-slab-bolt' : 'tile-platform-slab');
     }
   }
 
@@ -282,6 +318,7 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
   const exitY = def.groundRow * TILE_SIZE - exitHeight / 2;
 
   const exitSprite = scene.add.image(exitX, exitY, 'exit-active');
+  exitSprite.postFX.addGlow(PALETTE.cyan, 0, 0, false, 0.25, 4);
   const exitZone = scene.add.zone(exitX, exitY, exitWidth, exitHeight);
   scene.physics.add.existing(exitZone, true);
 

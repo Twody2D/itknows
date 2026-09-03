@@ -3,8 +3,12 @@ import { drawPlayerFrame } from './drawPlayer';
 import {
   drawExitTile,
   drawFakePlatformTile,
-  drawGroundTile,
+  drawGroundDamaged,
+  drawGroundEdge,
+  drawGroundFill,
+  drawGroundTop,
   drawMovingPlatformTile,
+  drawPlatformSlab,
   drawPursuerIcon,
   drawSpikeTile,
 } from './drawTiles';
@@ -31,6 +35,7 @@ function makeCanvas(w: number, h: number): { canvas: HTMLCanvasElement; ctx: Can
   canvas.height = h;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('2D canvas context unavailable');
+  ctx.imageSmoothingEnabled = false;
   return { canvas, ctx };
 }
 
@@ -64,9 +69,45 @@ export function generatePlayerTextures(scene: Phaser.Scene): void {
 }
 
 export function generateTileTextures(scene: Phaser.Scene): void {
-  const ground = makeCanvas(TILE_SIZE, TILE_SIZE);
-  drawGroundTile(ground.ctx);
-  addOrReplaceCanvas(scene, 'tile-ground', ground.canvas);
+  // 'tile-ground' stays as the default top-edge look — dynamic platform
+  // traps (falling/disappearing/electric-floor) key off it directly; the
+  // position-aware variants below are only for `Level.ts`'s static ground.
+  const groundTop = makeCanvas(TILE_SIZE, TILE_SIZE);
+  drawGroundTop(groundTop.ctx, 0, false);
+  addOrReplaceCanvas(scene, 'tile-ground', groundTop.canvas);
+  addOrReplaceCanvas(scene, 'tile-ground-top', groundTop.canvas);
+
+  // Four seam variants (irregular panel breaks), each with a lit and unlit version.
+  const seams = [0, 1, 2, 3] as const;
+  for (const seam of seams) {
+    const plain = makeCanvas(TILE_SIZE, TILE_SIZE);
+    drawGroundTop(plain.ctx, seam, false);
+    addOrReplaceCanvas(scene, `tile-ground-top-s${seam}`, plain.canvas);
+
+    const lit = makeCanvas(TILE_SIZE, TILE_SIZE);
+    drawGroundTop(lit.ctx, seam, true);
+    addOrReplaceCanvas(scene, `tile-ground-top-s${seam}-light`, lit.canvas);
+  }
+
+  const groundDamaged = makeCanvas(TILE_SIZE, TILE_SIZE);
+  drawGroundDamaged(groundDamaged.ctx, 4);
+  addOrReplaceCanvas(scene, 'tile-ground-damaged', groundDamaged.canvas);
+
+  const groundEdge = makeCanvas(TILE_SIZE, TILE_SIZE);
+  drawGroundEdge(groundEdge.ctx);
+  addOrReplaceCanvas(scene, 'tile-ground-edge', groundEdge.canvas);
+
+  const groundFill = makeCanvas(TILE_SIZE, TILE_SIZE);
+  drawGroundFill(groundFill.ctx);
+  addOrReplaceCanvas(scene, 'tile-ground-fill', groundFill.canvas);
+
+  const platformSlab = makeCanvas(TILE_SIZE, TILE_SIZE);
+  drawPlatformSlab(platformSlab.ctx, false);
+  addOrReplaceCanvas(scene, 'tile-platform-slab', platformSlab.canvas);
+
+  const platformSlabBolt = makeCanvas(TILE_SIZE, TILE_SIZE);
+  drawPlatformSlab(platformSlabBolt.ctx, true);
+  addOrReplaceCanvas(scene, 'tile-platform-slab-bolt', platformSlabBolt.canvas);
 
   const spike = makeCanvas(TILE_SIZE, TILE_SIZE);
   drawSpikeTile(spike.ctx);

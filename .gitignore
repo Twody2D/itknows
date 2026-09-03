@@ -7,3 +7,6 @@ Thumbs.db
 .vite/
 coverage/
 *.local
+
+current-main-menu.svg
+current-first-level.svg

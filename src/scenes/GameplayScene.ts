@@ -4,6 +4,11 @@ import { hexToCss } from '@/utils/color';
 import type { InputState } from '@/utils/input/InputState';
 import { inputState as sharedInputState } from '@/utils/input/InputState';
 import { TouchControls } from '@/ui/components/TouchControls';
+import { PixelLabel } from '@/ui/PixelLabel';
+import { PixelButton } from '@/ui/PixelButton';
+import { isTouchDevice } from '@/utils/input/isTouchDevice';
+import { buildEnvironmentLayers } from '@/art/Environment';
+import { FxManager } from '@/fx/FxManager';
 import { Player } from '@/gameplay/Player';
 import { buildLevel } from '@/gameplay/Level';
 import type { BuiltLevel } from '@/gameplay/Level';
@@ -51,10 +56,14 @@ export class GameplayScene extends Phaser.Scene {
   private attemptStartMs = 0;
   private hesitationCommented = false;
 
-  private hudDeathsText!: Phaser.GameObjects.Text;
-  private hudSystemText!: Phaser.GameObjects.Text;
+  private hudDeathsText!: PixelLabel;
+  private hudSystemText!: PixelLabel;
   /** Best-effort "which trap probably did this" — `Player.kill()` only carries a cause, not a trap id (see BehaviorTracker's doc comment for the same limitation). */
   private lastTriggeredTrapId: string | null = null;
+
+  private fx!: FxManager;
+  /** id → hazard game object, built once per level so warning-pulse can find the right visual from `trap:armed`'s id-only payload. */
+  private hazardById = new Map<string, Phaser.GameObjects.GameObject & { alpha: number }>();
 
   private resolving = false;
 
@@ -81,6 +90,10 @@ export class GameplayScene extends Phaser.Scene {
     GameState.currentVariantId = this.variantId;
 
     this.level = buildLevel(this, this.levelDef);
+    // Ground the skyline on the visible floor line, not the world's full
+    // fall-pit height (`worldHeight` includes space below the floor) —
+    // the same class of bug the menu's environment call already fixed.
+    buildEnvironmentLayers(this, this.level.worldWidth, this.level.spawn.y, this.levelDef.id);
     this.setupInput();
     this.behaviorTracker = new BehaviorTracker();
     this.attemptStartMs = this.time.now;
@@ -102,6 +115,12 @@ export class GameplayScene extends Phaser.Scene {
 
     this.setupTraps();
 
+    this.fx = new FxManager(this);
+    this.hazardById.clear();
+    for (const hazard of this.level.traps.lethalHazards) {
+      this.hazardById.set(hazard.id, hazard.visual ?? (hazard.gameObject as Phaser.GameObjects.GameObject & { alpha: number }));
+    }
+
     this.cameras.main.setBounds(0, 0, this.level.worldWidth, this.level.worldHeight);
     this.cameras.main.startFollow(this.player, true, 0.15, 0.15);
     this.cameras.main.setDeadzone(this.scale.width * 0.2, this.scale.height * 0.3);
@@ -112,12 +131,19 @@ export class GameplayScene extends Phaser.Scene {
     EventBus.on('player:died', this.handlePlayerDeath, this);
     EventBus.on('system:comment', this.handleSystemComment, this);
     EventBus.on('trap:triggered', this.handleTrapTriggered, this);
+    EventBus.on('trap:armed', this.handleTrapArmed, this);
+    EventBus.on('player:jumped', this.handlePlayerJumped, this);
+    EventBus.on('player:landed', this.handlePlayerLanded, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       EventBus.off('player:died', this.handlePlayerDeath, this);
       EventBus.off('system:comment', this.handleSystemComment, this);
       EventBus.off('trap:triggered', this.handleTrapTriggered, this);
+      EventBus.off('trap:armed', this.handleTrapArmed, this);
+      EventBus.off('player:jumped', this.handlePlayerJumped, this);
+      EventBus.off('player:landed', this.handlePlayerLanded, this);
       this.touchControls?.destroy();
       this.behaviorTracker.destroy();
+      this.fx.destroy();
       for (const trap of this.level.traps.all) trap.destroy();
     });
   }
@@ -186,6 +212,15 @@ export class GameplayScene extends Phaser.Scene {
     this.input.keyboard?.addCapture(['SPACE', 'UP', 'DOWN', 'LEFT', 'RIGHT']);
     this.inputState = sharedInputState;
     this.touchControls = new TouchControls(this, this.inputState);
+    this.touchControls.setVisible(isTouchDevice());
+    this.input.keyboard?.on('keydown-ESC', () => this.pauseGame());
+  }
+
+  /** Menu/pause and settings are never on the retry-loop's hot path — freely pausable, no honesty-invariant concerns (CLAUDE.md #4 is about level geometry/timing during an attempt, not the player choosing to step away). */
+  private pauseGame(): void {
+    if (this.resolving) return;
+    this.scene.pause();
+    this.scene.launch('PauseScene', { gameplaySceneKey: this.scene.key, levelId: this.levelDef.id });
   }
 
   /** master-prompt §70 — the version tag climbs with campaign progress, see SystemPersonality.ts. */
@@ -210,7 +245,7 @@ export class GameplayScene extends Phaser.Scene {
 
     const voiceText = SystemVoice.current();
     const rendered = voiceText ? `${this.systemLabel()}: ${voiceText}` : '';
-    if (this.hudSystemText.text !== rendered) this.hudSystemText.setText(rendered);
+    if (this.hudSystemText.pixelText !== rendered) this.hudSystemText.setPixelText(rendered);
   }
 
   /** Nudges the player by a moving platform's per-frame delta while standing on it. */
@@ -233,32 +268,49 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private buildHud(): void {
-    this.add
-      .text(8, 6, this.levelDef.name, {
-        fontFamily: 'monospace',
-        fontSize: '9px',
-        color: hexToCss(PALETTE.white, 0.85),
-      })
+    const panel = this.add.graphics().setScrollFactor(0).setDepth(899);
+    panel.fillStyle(PALETTE.bgVoid, 0.55);
+    panel.fillRect(0, 0, 150, 30);
+    panel.fillStyle(PALETTE.cyanDim, 0.6);
+    panel.fillRect(0, 0, 150, 1);
+
+    new PixelLabel(this, 6, 4, this.levelDef.name, {
+      color: hexToCss(PALETTE.white),
+      strokeColor: hexToCss(PALETTE.outline),
+      scale: 1,
+    })
       .setScrollFactor(0)
       .setDepth(900);
 
-    this.hudDeathsText = this.add
-      .text(8, 18, `DEATHS ${GameState.run.deaths}`, {
-        fontFamily: 'monospace',
-        fontSize: '8px',
-        color: hexToCss(PALETTE.danger, 0.85),
-      })
+    this.hudDeathsText = new PixelLabel(this, 6, 15, `DEATHS ${GameState.run.deaths}`, {
+      color: hexToCss(PALETTE.danger),
+      strokeColor: hexToCss(PALETTE.outline),
+      scale: 1,
+    })
       .setScrollFactor(0)
       .setDepth(900);
 
     const initialVoiceText = SystemVoice.current();
-    this.hudSystemText = this.add
-      .text(8, 30, initialVoiceText ? `${this.systemLabel()}: ${initialVoiceText}` : '', {
-        fontFamily: 'monospace',
-        fontSize: '8px',
-        color: hexToCss(PALETTE.system, 0.9),
-        wordWrap: { width: this.scale.width - 16 },
-      })
+    this.hudSystemText = new PixelLabel(
+      this,
+      6,
+      this.scale.height - 16,
+      initialVoiceText ? `${this.systemLabel()}: ${initialVoiceText}` : '',
+      {
+        color: hexToCss(PALETTE.system),
+        strokeColor: hexToCss(PALETTE.outline),
+        scale: 1,
+        wordWrapWidth: this.scale.width - 12,
+      },
+    )
+      .setScrollFactor(0)
+      .setDepth(900);
+
+    new PixelButton(this, this.scale.width - 18, 15, 'II', {
+      width: 24,
+      height: 20,
+      onClick: () => this.pauseGame(),
+    })
       .setScrollFactor(0)
       .setDepth(900);
   }
@@ -275,13 +327,29 @@ export class GameplayScene extends Phaser.Scene {
 
   private handleTrapTriggered(payload: { trapId: string }): void {
     this.lastTriggeredTrapId = payload.trapId;
+    this.fx.stopWarningPulse(payload.trapId, this.hazardById.get(payload.trapId));
+  }
+
+  /** Fast alpha pulse on the hazard while it's telegraphing — makes the honest warning (CLAUDE.md #4.2) harder to miss, not just a color swap. */
+  private handleTrapArmed(payload: { trapId: string }): void {
+    const target = this.hazardById.get(payload.trapId);
+    if (target) this.fx.startWarningPulse(payload.trapId, target);
+  }
+
+  private handlePlayerJumped(): void {
+    this.fx.jumpDust(this.player.x, this.player.y);
+  }
+
+  private handlePlayerLanded(payload: { x: number; y: number }): void {
+    this.fx.landDust(payload.x, payload.y);
   }
 
   private handlePlayerDeath(payload: { cause: DeathCause; x: number; y: number }): void {
     if (this.resolving) return;
     this.resolving = true;
     GameState.registerDeath();
-    this.hudDeathsText.setText(`DEATHS ${GameState.run.deaths}`);
+    this.hudDeathsText.setPixelText(`DEATHS ${GameState.run.deaths}`);
+    this.fx.deathBurst(payload.x, payload.y);
 
     const attemptElapsedMs = this.time.now - this.attemptStartMs;
     const trapId = payload.cause === 'trap' ? this.lastTriggeredTrapId : null;
@@ -304,6 +372,7 @@ export class GameplayScene extends Phaser.Scene {
     if (this.resolving || !this.player.isAlive()) return;
     this.resolving = true;
     this.player.markVictory();
+    this.fx.victoryBurst(this.player.x, this.player.y);
 
     const timeMs = GameState.elapsedMs();
     const deaths = GameState.run.deaths;
