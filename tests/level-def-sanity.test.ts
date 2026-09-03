@@ -3,6 +3,7 @@ import { SECTOR_01_LEVELS } from '@/data/levels/sector01';
 import { SECTOR_02_LEVELS } from '@/data/levels/sector02';
 import { SECTOR_03_LEVELS } from '@/data/levels/sector03';
 import { SECTOR_04_LEVELS } from '@/data/levels/sector04';
+import { SECTOR_05_LEVELS } from '@/data/levels/sector05';
 import { LEVEL_HEIGHT_TILES } from '@/gameplay/LevelDef';
 import type { LevelDef } from '@/gameplay/LevelDef';
 import { MAX_JUMP_RISE_PX } from '@/gameplay/jumpPhysics';
@@ -18,7 +19,13 @@ function isInAnyGap(col: number, gaps: Array<[number, number]>): boolean {
   return gaps.some(([from, to]) => col >= from && col <= to);
 }
 
-describe.each([...SECTOR_01_LEVELS, ...SECTOR_02_LEVELS, ...SECTOR_03_LEVELS, ...SECTOR_04_LEVELS])('level def: $id', (level: LevelDef) => {
+describe.each([
+  ...SECTOR_01_LEVELS,
+  ...SECTOR_02_LEVELS,
+  ...SECTOR_03_LEVELS,
+  ...SECTOR_04_LEVELS,
+  ...SECTOR_05_LEVELS,
+])('level def: $id', (level: LevelDef) => {
   it('has a ground row within the playfield', () => {
     expect(level.groundRow).toBeGreaterThan(0);
     expect(level.groundRow).toBeLessThan(LEVEL_HEIGHT_TILES);
