@@ -24,6 +24,8 @@ import { selectVariant } from '@/ai/DifficultyDirector';
 import { Commentator } from '@/ai/Commentator';
 import { SystemVoice } from '@/ai/SystemVoice';
 import { personalityTag } from '@/ai/SystemPersonality';
+import { TutorialHints } from '@/ui/TutorialHints';
+import { TILE_SIZE } from '@/config/display';
 
 const SYSTEM_COMMENT_DISPLAY_MS = 2500;
 
@@ -66,6 +68,7 @@ export class GameplayScene extends Phaser.Scene {
   private hazardById = new Map<string, Phaser.GameObjects.GameObject & { alpha: number }>();
 
   private resolving = false;
+  private tutorialHints?: TutorialHints;
 
   constructor() {
     super('GameplayScene');
@@ -128,6 +131,12 @@ export class GameplayScene extends Phaser.Scene {
 
     this.buildHud();
 
+    if (this.levelDef.id === 'sector-01-level-01') {
+      const firstGapCol = this.levelDef.gaps[0]?.[0] ?? this.levelDef.exitCol;
+      const jumpTriggerX = (firstGapCol - 5) * TILE_SIZE;
+      this.tutorialHints = new TutorialHints(this, this.player, this.inputState, jumpTriggerX);
+    }
+
     EventBus.on('player:died', this.handlePlayerDeath, this);
     EventBus.on('system:comment', this.handleSystemComment, this);
     EventBus.on('trap:triggered', this.handleTrapTriggered, this);
@@ -144,6 +153,7 @@ export class GameplayScene extends Phaser.Scene {
       this.touchControls?.destroy();
       this.behaviorTracker.destroy();
       this.fx.destroy();
+      this.tutorialHints?.destroy();
       for (const trap of this.level.traps.all) trap.destroy();
     });
   }
@@ -236,6 +246,7 @@ export class GameplayScene extends Phaser.Scene {
     for (const trap of this.level.traps.updatable) trap.update(time, delta);
     for (const pursuer of this.level.traps.pursuers) pursuer.update(this.player.x);
     this.carryOnMovingPlatforms();
+    this.tutorialHints?.update();
 
     this.behaviorTracker.sample(time, delta, this.inputState, this.player.isAlive());
     if (!this.hesitationCommented) {

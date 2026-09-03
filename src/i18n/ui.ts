@@ -24,6 +24,9 @@ const UI_STRINGS = {
   on: { ru: 'Вкл', en: 'On' },
   off: { ru: 'Выкл', en: 'Off' },
 
+  hintMove: { ru: 'A/D - Движение', en: 'A/D - Move' },
+  hintJump: { ru: 'Space - Прыжок', en: 'Space - Jump' },
+
   howToPlayTitle: { ru: 'Как играть', en: 'How to play' },
   htpMove: { ru: 'Движение: A/D или стрелки', en: 'Move: A/D or arrow keys' },
   htpJump: { ru: 'Прыжок: Space', en: 'Jump: Space' },
