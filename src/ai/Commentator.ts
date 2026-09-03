@@ -3,7 +3,6 @@ import type { CommentCategory, DialogueLine } from '@/data/dialogues';
 import { LocaleState } from '@/i18n/Locale';
 import { EventBus } from '@/core/EventBus';
 
-const RECENT_HISTORY_SIZE = 8;
 const EARLY_DEATH_MS = 2500;
 const NEAR_EXIT_FRACTION = 0.85;
 const MULTIPLE_DEATHS_INTERVAL = 10;
@@ -30,12 +29,19 @@ export interface DeathCommentContext {
  * of *why* a category was chosen. Rendering the emitted `system:comment`
  * event is the scene's job, not this module's (EventBus decouples them,
  * same as every other cross-scene system here).
+ *
+ * Anti-repeat is a per-category shuffle bag, not a shared recency window:
+ * each category tracks its own "already shown this cycle" set, and the set
+ * resets only once every line in that category's pool has appeared. That
+ * guarantees no repeat until the whole pool has cycled regardless of pool
+ * size (some categories have ~10 lines, others ~13) and regardless of how
+ * often other categories are picked in between.
  */
 class CommentatorStore {
-  private recentLineIds: string[] = [];
+  private usedIdsByCategory = new Map<CommentCategory, Set<string>>();
 
   reset(): void {
-    this.recentLineIds = [];
+    this.usedIdsByCategory.clear();
   }
 
   /**
@@ -73,12 +79,15 @@ class CommentatorStore {
 
   private emitFrom(category: CommentCategory, rng: () => number): DialogueLine {
     const pool = DIALOGUE_POOLS[category];
-    const candidates = pool.filter((line) => !this.recentLineIds.includes(line.id));
-    const options = candidates.length > 0 ? candidates : pool;
-    const chosen = options[Math.floor(rng() * options.length)] as DialogueLine;
+    let used = this.usedIdsByCategory.get(category);
+    if (!used || used.size >= pool.length) {
+      used = new Set<string>();
+      this.usedIdsByCategory.set(category, used);
+    }
 
-    this.recentLineIds.push(chosen.id);
-    if (this.recentLineIds.length > RECENT_HISTORY_SIZE) this.recentLineIds.shift();
+    const candidates = pool.filter((line) => !(used as Set<string>).has(line.id));
+    const chosen = candidates[Math.floor(rng() * candidates.length)] as DialogueLine;
+    used.add(chosen.id);
 
     EventBus.emit('system:comment', { text: chosen[LocaleState.current], category });
     return chosen;

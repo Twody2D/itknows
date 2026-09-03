@@ -9,4 +9,14 @@ export const EARLY_DEATH_LINES: DialogueLine[] = [
   { id: 'early_death-05', ru: 'Даже разогреться не успел.', en: "Didn't even warm up." },
   { id: 'early_death-06', ru: 'Ноль секунд на раздумья.', en: 'Zero seconds of hesitation.' },
   { id: 'early_death-07', ru: 'Смело. Опрометчиво, но смело.', en: 'Bold. Reckless, but bold.' },
+  { id: 'early_death-08', ru: 'Это было даже не разминкой.', en: "That wasn't even a warm-up." },
+  { id: 'early_death-09', ru: 'Уровень тебя толком не заметил.', en: 'The level barely registered you.' },
+  {
+    id: 'early_death-10',
+    ru: 'Такими темпами отчёт допишу раньше тебя.',
+    en: "At this rate, I'll finish my report before you finish this.",
+  },
+  { id: 'early_death-11', ru: 'Полсекунды. Личный рекорд.', en: 'Half a second. Personal best.' },
+  { id: 'early_death-12', ru: 'Кнопки работают, я проверил.', en: 'The buttons work, I checked.' },
+  { id: 'early_death-13', ru: 'Смерть до титров.', en: 'Dead before the intro finished.' },
 ];
