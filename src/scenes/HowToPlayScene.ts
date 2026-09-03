@@ -4,6 +4,8 @@ import { hexToCss } from '@/utils/color';
 import { t } from '@/i18n/ui';
 import { PixelLabel } from '@/ui/PixelLabel';
 import { PixelButton } from '@/ui/PixelButton';
+import { buildKeyRow } from '@/ui/KeyCap';
+import { jumpHintKeys, moveHintKeys } from '@/ui/TutorialHints';
 import { drawPanel, buildDimBackdrop } from '@/ui/Panel';
 
 /** Static instructional overlay — launched from the main menu, always ends itself with `scene.stop()` on Back. */
@@ -30,23 +32,43 @@ export class HowToPlayScene extends Phaser.Scene {
       scale: 2,
     }).setOrigin(0.5, 0.5);
 
-    const lines = [
-      t('htpMove'),
-      t('htpJump'),
+    // Controls are shown as keycaps, listing every binding that works — the
+    // same treatment Level 01's in-play hints use, so the two teach the same
+    // thing the same way (`ui/KeyCap.ts`).
+    const keysX = panelX + panelW - 62;
+    let y = panelY + 42;
+
+    for (const row of [
+      { caption: t('htpMove'), keys: moveHintKeys() },
+      { caption: t('htpJump'), keys: jumpHintKeys() },
+    ]) {
+      new PixelLabel(this, panelX + 16, y, row.caption, {
+        color: hexToCss(PALETTE.white),
+        strokeColor: hexToCss(PALETTE.outline),
+        scale: 1,
+      }).setOrigin(0, 0.5);
+      buildKeyRow(this, keysX, y, row.keys);
+      y += 22;
+    }
+
+    const divider = this.add.graphics();
+    divider.fillStyle(PALETTE.cyanDim, 0.5);
+    divider.fillRect(panelX + 16, y - 4, panelW - 32, 1);
+    y += 6;
+
+    for (const line of [
       t('htpHazardLine1'),
       t('htpHazardLine2'),
       t('htpSystemLine1'),
       t('htpSystemLine2'),
       t('htpRetry'),
-    ];
-    let y = panelY + 40;
-    for (const line of lines) {
+    ]) {
       new PixelLabel(this, panelX + 16, y, line, {
         color: hexToCss(PALETTE.white),
         strokeColor: hexToCss(PALETTE.outline),
         scale: 1,
-      });
-      y += 15;
+      }).setOrigin(0, 0.5);
+      y += 14;
     }
 
     new PixelButton(this, width / 2, panelY + panelH - 22, t('back'), {

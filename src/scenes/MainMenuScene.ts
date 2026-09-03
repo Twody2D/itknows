@@ -119,9 +119,15 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private buildPlayButton(width: number, height: number): void {
-    const playButton = new PixelButton(this, width / 2, height * 0.6, t('play'), {
-      width: 96,
-      height: 30,
+    // Fixed rows, not fractions of `height` — VIRTUAL_HEIGHT is fixed at 270
+    // (CLAUDE.md #2), and the menu has to sit clear of both the logo above and
+    // the floor line below, which fractions kept getting wrong.
+    void height;
+    const playY = 136;
+    const secondaryWidth = 132;
+
+    const playButton = new PixelButton(this, width / 2, playY, t('play'), {
+      variant: 'primary',
       onClick: () => {
         const firstLevel = getAllLevels()[0];
         if (firstLevel) this.scene.start('GameplayScene', { levelId: firstLevel.id });
@@ -143,17 +149,13 @@ export class MainMenuScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
 
-    new PixelButton(this, width / 2, height * 0.6 + 40, t('howToPlay'), {
-      width: 140,
-      height: 18,
-      textScale: 1,
+    new PixelButton(this, width / 2, playY + 38, t('howToPlay'), {
+      width: secondaryWidth,
       onClick: () => this.scene.launch('HowToPlayScene'),
     });
 
-    new PixelButton(this, width / 2, height * 0.6 + 68, t('settings'), {
-      width: 140,
-      height: 18,
-      textScale: 1,
+    new PixelButton(this, width / 2, playY + 70, t('settings'), {
+      width: secondaryWidth,
       onClick: () => this.scene.launch('SettingsScene'),
     });
   }

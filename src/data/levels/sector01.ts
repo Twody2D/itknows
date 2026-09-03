@@ -16,10 +16,13 @@ import type { LevelSectionConfig } from '@/gameplay/LevelSections';
  * not from tighter windows — every individual jump here is the same
  * comfortably-clearable jump it always was.
  *
- * CHECKPOINTS. Every level carries 2-5, placed on solid ground right after a
- * block resolves. That's what makes length fair rather than punishing: a
- * mistake at tile 190 costs the last block, not the whole level (CLAUDE.md #4
- * — a longer level must not mean a longer punishment).
+ * CHECKPOINTS. Deliberately sparse: none at all on the two levels that can't
+ * really kill you (01-02), one past the midpoint on 03-05, two on the sector
+ * finale. A checkpoint every other block turned the run into a series of
+ * short hops with no stretch long enough to feel like it was at stake — the
+ * whole point of the added length. They exist to stop a late mistake costing
+ * the entire level (CLAUDE.md #4 — length must not mean a longer punishment),
+ * not to remove the cost of a mistake.
  *
  * GEOMETRY BUDGET (`jumpPhysics.ts`, unchanged): a full-held jump clears
  * ~55px horizontally (5.5 tiles) at the same height and rises ~32px (3.2
@@ -49,26 +52,13 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     platforms: [],
     playerStartCol: 2,
     exitCol: 114,
-    checkpoints: [52, 84],
+    // No checkpoints: nothing in this level can kill you but a pit, and the
+    // longest stretch back to one is a few seconds of running.
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 25, requiredMechanics: ['move'] },
       { id: 'first-gap', type: 'challenge', fromCol: 26, toCol: 43, requiredMechanics: ['gap-jump'] },
-      {
-        id: 'wider-gap',
-        type: 'challenge',
-        fromCol: 44,
-        toCol: 51,
-        checkpointAfter: true,
-        requiredMechanics: ['gap-jump'],
-      },
-      {
-        id: 'rhythm',
-        type: 'variation',
-        fromCol: 52,
-        toCol: 83,
-        checkpointAfter: true,
-        requiredMechanics: ['gap-jump'],
-      },
+      { id: 'wider-gap', type: 'challenge', fromCol: 44, toCol: 51, requiredMechanics: ['gap-jump'] },
+      { id: 'rhythm', type: 'variation', fromCol: 52, toCol: 83, requiredMechanics: ['gap-jump'] },
       { id: 'closing-run', type: 'combination', fromCol: 84, toCol: 101, requiredMechanics: ['gap-jump'] },
       { id: 'exit', type: 'final', fromCol: 102, toCol: 119 },
     ] satisfies LevelSectionConfig[],
@@ -90,24 +80,17 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     platforms: [{ col: 83, row: 20, width: 5 }],
     playerStartCol: 2,
     exitCol: 134,
-    checkpoints: [46, 94],
+    // Still no checkpoints — spikes are jumped, not timed, and the level has
+    // no stretch you can't re-run in seconds.
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 17, requiredMechanics: ['move'] },
       { id: 'first-spikes', type: 'challenge', fromCol: 18, toCol: 27, requiredMechanics: ['spike-jump'] },
-      {
-        id: 'spike-practice',
-        type: 'challenge',
-        fromCol: 28,
-        toCol: 45,
-        checkpointAfter: true,
-        requiredMechanics: ['spike-jump'],
-      },
+      { id: 'spike-practice', type: 'challenge', fromCol: 28, toCol: 45, requiredMechanics: ['spike-jump'] },
       {
         id: 'clusters-and-bridge',
         type: 'variation',
         fromCol: 46,
         toCol: 93,
-        checkpointAfter: true,
         optionalRoute: true,
         requiredMechanics: ['spike-jump', 'platform'],
       },
@@ -145,17 +128,11 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     ],
     playerStartCol: 2,
     exitCol: 159,
-    checkpoints: [42, 88, 128],
+    // One, just past the midpoint.
+    checkpoints: [88],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 15, requiredMechanics: ['move'] },
-      {
-        id: 'gaps',
-        type: 'challenge',
-        fromCol: 16,
-        toCol: 41,
-        checkpointAfter: true,
-        requiredMechanics: ['gap-jump'],
-      },
+      { id: 'gaps', type: 'challenge', fromCol: 16, toCol: 41, requiredMechanics: ['gap-jump'] },
       {
         id: 'gap-and-spike',
         type: 'combination',
@@ -169,7 +146,6 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         type: 'variation',
         fromCol: 88,
         toCol: 127,
-        checkpointAfter: true,
         optionalRoute: true,
         requiredMechanics: ['platform', 'spike-jump'],
       },
@@ -211,17 +187,11 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     ],
     playerStartCol: 2,
     exitCol: 184,
-    checkpoints: [46, 94, 140],
+    // One, right after the wide bridged pit — the level's one real gate.
+    checkpoints: [94],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 17, requiredMechanics: ['move'] },
-      {
-        id: 'gaps',
-        type: 'challenge',
-        fromCol: 18,
-        toCol: 45,
-        checkpointAfter: true,
-        requiredMechanics: ['gap-jump'],
-      },
+      { id: 'gaps', type: 'challenge', fromCol: 18, toCol: 45, requiredMechanics: ['gap-jump'] },
       {
         id: 'spikes-and-wide-pit',
         type: 'combination',
@@ -236,7 +206,6 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         type: 'variation',
         fromCol: 116,
         toCol: 139,
-        checkpointAfter: true,
         requiredMechanics: ['platform', 'platform-chain'],
       },
       {
@@ -275,7 +244,9 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     ],
     playerStartCol: 2,
     exitCol: 209,
-    checkpoints: [44, 90, 138, 186],
+    // One, after the first laser — the first thing in the campaign that can
+    // kill you without you touching it.
+    checkpoints: [138],
     traps: [
       // First non-static threat in the campaign: full standing height, can
       // only be waited out, not jumped or ducked — the same honest
@@ -302,7 +273,6 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         type: 'variation',
         fromCol: 44,
         toCol: 89,
-        checkpointAfter: true,
         optionalRoute: true,
         requiredMechanics: ['spike-jump', 'platform'],
       },
@@ -319,7 +289,6 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         type: 'combination',
         fromCol: 138,
         toCol: 185,
-        checkpointAfter: true,
         requiredMechanics: ['laser', 'spike-jump', 'platform'],
       },
       {
@@ -362,7 +331,10 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     ],
     playerStartCol: 2,
     exitCol: 244,
-    checkpoints: [46, 96, 144, 192, 226],
+    // Two on the sector finale — after the bridged pit, and after the long
+    // laser stretch. It's the only level here where losing everything to the
+    // fake exit at tile 238 would be a genuinely sour ending.
+    checkpoints: [96, 192],
     traps: [
       { type: 'laser', id: 'laser-01', col: 106, topRow: 16, bottomRow: 21 },
       { type: 'laser', id: 'laser-02', col: 156, topRow: 16, bottomRow: 21 },
@@ -382,7 +354,6 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         type: 'challenge',
         fromCol: 16,
         toCol: 45,
-        checkpointAfter: true,
         requiredMechanics: ['gap-jump'],
       },
       {
@@ -398,7 +369,6 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         type: 'system',
         fromCol: 96,
         toCol: 143,
-        checkpointAfter: true,
         requiredMechanics: ['laser', 'spike-jump'],
       },
       {
@@ -415,7 +385,6 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         type: 'combination',
         fromCol: 192,
         toCol: 225,
-        checkpointAfter: true,
         requiredMechanics: ['spike-jump', 'gap-jump', 'platform'],
       },
       {

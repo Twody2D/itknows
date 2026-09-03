@@ -27,9 +27,11 @@ import { personalityTag } from '@/ai/SystemPersonality';
 import { isSectorFinale } from '@/gameplay/sectors';
 import type { SectorCompleteData } from '@/scenes/SectorCompleteScene';
 import { TutorialHints } from '@/ui/TutorialHints';
-import { TILE_SIZE } from '@/config/display';
+import { MIN_VIRTUAL_WIDTH, TILE_SIZE } from '@/config/display';
 
 const SYSTEM_COMMENT_DISPLAY_MS = 2500;
+/** Upper bound on the touch-device world zoom — past this the visible level gets narrower than levels are authored for. */
+const MAX_WORLD_ZOOM = 1.22;
 
 interface GameplaySceneData {
   levelId: string;
@@ -74,6 +76,8 @@ export class GameplayScene extends Phaser.Scene {
   private resolving = false;
   private tutorialHints?: TutorialHints;
   private activeRespawnCol: number | undefined;
+  private uiCamera?: Phaser.Cameras.Scene2D.Camera;
+  private buildingUi = false;
 
   constructor() {
     super('GameplayScene');
@@ -137,11 +141,7 @@ export class GameplayScene extends Phaser.Scene {
       this.hazardById.set(hazard.id, hazard.visual ?? (hazard.gameObject as Phaser.GameObjects.GameObject & { alpha: number }));
     }
 
-    this.cameras.main.setBounds(0, 0, this.level.worldWidth, this.level.worldHeight);
-    this.cameras.main.startFollow(this.player, true, 0.15, 0.15);
-    this.cameras.main.setDeadzone(this.scale.width * 0.2, this.scale.height * 0.3);
-    this.cameras.main.setRoundPixels(true);
-
+    this.setupCameras();
     this.buildHud();
 
     if (this.levelDef.id === 'sector-01-level-01') {
@@ -169,6 +169,60 @@ export class GameplayScene extends Phaser.Scene {
       this.tutorialHints?.destroy();
       for (const trap of this.level.traps.all) trap.destroy();
     });
+  }
+
+  /**
+   * Two cameras: the world camera, which may be zoomed in, and a UI camera at
+   * 1:1 that draws the HUD, the pause button, touch controls and SYSTEM
+   * commentary.
+   *
+   * On a phone the virtual viewport is at its widest (a 20:9 screen fills
+   * ~586 virtual px across), which made the character and the level read as
+   * tiny — you were looking at more level than you needed to. Zooming the
+   * world camera shows less of it, at a larger size, and is capped so that no
+   * less than MIN_VIRTUAL_WIDTH of level stays visible (CLAUDE.md #2 — nothing
+   * gameplay-critical may need more horizontal space than that). Zooming the
+   * single camera the scene used to have would have scaled the HUD and the
+   * thumb buttons with it, which is the opposite of what's wanted.
+   */
+  private setupCameras(): void {
+    const main = this.cameras.main;
+    const zoom = isTouchDevice() ? Phaser.Math.Clamp(this.scale.width / MIN_VIRTUAL_WIDTH, 1, MAX_WORLD_ZOOM) : 1;
+
+    main.setBounds(0, 0, this.level.worldWidth, this.level.worldHeight);
+    main.setZoom(zoom);
+    main.startFollow(this.player, true, 0.15, 0.15);
+    // Deadzone is in world units, so it has to shrink with the zoom to stay
+    // the same fraction of what's actually on screen.
+    main.setDeadzone((this.scale.width / zoom) * 0.2, (this.scale.height / zoom) * 0.3);
+    main.setRoundPixels(true);
+
+    this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
+    this.uiCamera.setRoundPixels(true);
+    // Everything built so far is world content.
+    this.uiCamera.ignore(this.children.list);
+    // From here on, route by which pass created the object — UI is built
+    // inside `withUiCamera`, everything else (FX particles, trap visuals,
+    // tutorial hints) is world content created at arbitrary later times.
+    this.events.on(Phaser.Scenes.Events.ADDED_TO_SCENE, this.routeObjectToCamera, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.events.off(Phaser.Scenes.Events.ADDED_TO_SCENE, this.routeObjectToCamera, this);
+    });
+  }
+
+  private routeObjectToCamera(obj: Phaser.GameObjects.GameObject): void {
+    if (this.buildingUi) this.cameras.main.ignore(obj);
+    else this.uiCamera?.ignore(obj);
+  }
+
+  /** Runs `build` with new objects routed to the UI camera instead of the world camera. */
+  private withUiCamera(build: () => void): void {
+    this.buildingUi = true;
+    try {
+      build();
+    } finally {
+      this.buildingUi = false;
+    }
   }
 
   /**
@@ -234,8 +288,8 @@ export class GameplayScene extends Phaser.Scene {
   private setupInput(): void {
     this.input.keyboard?.addCapture(['SPACE', 'UP', 'DOWN', 'LEFT', 'RIGHT']);
     this.inputState = sharedInputState;
-    this.touchControls = new TouchControls(this, this.inputState);
-    this.touchControls.setVisible(isTouchDevice());
+    // Touch controls are HUD, so they're built with the rest of it, after the
+    // UI camera exists (`buildHud`).
     this.input.keyboard?.on('keydown-ESC', () => this.pauseGame());
   }
 
@@ -292,6 +346,10 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private buildHud(): void {
+    this.withUiCamera(() => this.buildHudObjects());
+  }
+
+  private buildHudObjects(): void {
     const panel = this.add.graphics().setScrollFactor(0).setDepth(899);
     panel.fillStyle(PALETTE.bgVoid, 0.55);
     panel.fillRect(0, 0, 150, 30);
@@ -333,10 +391,14 @@ export class GameplayScene extends Phaser.Scene {
     new PixelButton(this, this.scale.width - 18, 16, 'II', {
       width: 24,
       height: 24,
+      textScale: 2,
       onClick: () => this.pauseGame(),
     })
       .setScrollFactor(0)
       .setDepth(900);
+
+    this.touchControls = new TouchControls(this, this.inputState);
+    this.touchControls.setVisible(isTouchDevice());
   }
 
   /**

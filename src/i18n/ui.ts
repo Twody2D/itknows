@@ -24,12 +24,15 @@ const UI_STRINGS = {
   on: { ru: 'Вкл', en: 'On' },
   off: { ru: 'Выкл', en: 'Off' },
 
-  hintMove: { ru: 'A/D - Движение', en: 'A/D - Move' },
-  hintJump: { ru: 'Space - Прыжок', en: 'Space - Jump' },
+  // The keys themselves are drawn as keycaps (`ui/KeyCap.ts`), so these are
+  // captions only — never a binding list that could go stale.
+  hintMove: { ru: 'Движение', en: 'Move' },
+  hintJump: { ru: 'Прыжок', en: 'Jump' },
+  hintOr: { ru: 'или', en: 'or' },
 
   howToPlayTitle: { ru: 'Как играть', en: 'How to play' },
-  htpMove: { ru: 'Движение: A/D или стрелки', en: 'Move: A/D or arrow keys' },
-  htpJump: { ru: 'Прыжок: Space', en: 'Jump: Space' },
+  htpMove: { ru: 'Движение', en: 'Move' },
+  htpJump: { ru: 'Прыжок', en: 'Jump' },
   htpHazardLine1: { ru: 'Ловушки всегда', en: 'Hazards always' },
   htpHazardLine2: { ru: 'предупреждают заранее', en: 'warn before they kill' },
   htpSystemLine1: { ru: 'SYSTEM наблюдает', en: 'SYSTEM is watching' },

@@ -21,9 +21,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private lastGroundedAtMs = -Infinity;
   private lastJumpPressedAtMs = -Infinity;
 
-  private isDashing = false;
-  private dashEndsAtMs = 0;
-  private dashReadyAtMs = 0;
 
   private currentAnim: PlayerAnimState = 'idle';
   private lifeState: LifeState = 'alive';
@@ -93,44 +90,30 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.body.setVelocityY(this.body.velocity.y * PHYSICS.jumpCutMultiplier);
     }
 
-    if (this.isDashing) {
-      if (nowMs >= this.dashEndsAtMs) {
-        this.isDashing = false;
-      } else {
-        this.body.setVelocityX(this.facing * PHYSICS.dashSpeed);
-      }
+    const wantLeft = this.inputState.left;
+    const wantRight = this.inputState.right;
+    const accel = onGround ? PHYSICS.acceleration : PHYSICS.airAcceleration;
+
+    if (wantLeft && !wantRight) {
+      this.facing = -1;
+      this.body.setAccelerationX(-accel);
+    } else if (wantRight && !wantLeft) {
+      this.facing = 1;
+      this.body.setAccelerationX(accel);
     } else {
-      if (this.inputState.dashJustPressed() && nowMs >= this.dashReadyAtMs) {
-        this.isDashing = true;
-        this.dashEndsAtMs = nowMs + PHYSICS.dashDurationMs;
-        this.dashReadyAtMs = nowMs + PHYSICS.dashCooldownMs;
-      }
-
-      const wantLeft = this.inputState.left;
-      const wantRight = this.inputState.right;
-      const accel = onGround ? PHYSICS.acceleration : PHYSICS.airAcceleration;
-
-      if (wantLeft && !wantRight) {
-        this.facing = -1;
-        this.body.setAccelerationX(-accel);
-      } else if (wantRight && !wantLeft) {
-        this.facing = 1;
-        this.body.setAccelerationX(accel);
+      this.body.setAccelerationX(0);
+      const sign = Math.sign(this.body.velocity.x);
+      const friction = PHYSICS.friction * dt;
+      if (Math.abs(this.body.velocity.x) <= friction) {
+        this.body.setVelocityX(0);
       } else {
-        this.body.setAccelerationX(0);
-        const sign = Math.sign(this.body.velocity.x);
-        const friction = PHYSICS.friction * dt;
-        if (Math.abs(this.body.velocity.x) <= friction) {
-          this.body.setVelocityX(0);
-        } else {
-          this.body.setVelocityX(this.body.velocity.x - sign * friction);
-        }
+        this.body.setVelocityX(this.body.velocity.x - sign * friction);
       }
-
-      const maxSpeed = PHYSICS.moveSpeed;
-      if (this.body.velocity.x > maxSpeed) this.body.setVelocityX(maxSpeed);
-      if (this.body.velocity.x < -maxSpeed) this.body.setVelocityX(-maxSpeed);
     }
+
+    const maxSpeed = PHYSICS.moveSpeed;
+    if (this.body.velocity.x > maxSpeed) this.body.setVelocityX(maxSpeed);
+    if (this.body.velocity.x < -maxSpeed) this.body.setVelocityX(-maxSpeed);
 
     const gravityScale = this.body.velocity.y > 0 ? PHYSICS.fallGravityMultiplier : 1;
     this.body.setGravityY(PHYSICS.gravity * (gravityScale - 1));

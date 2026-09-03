@@ -3,9 +3,15 @@ import { MAX_VIRTUAL_WIDTH, MIN_VIRTUAL_WIDTH, VIRTUAL_HEIGHT } from '@/config/d
 
 /**
  * Keeps the internal resolution at a fixed VIRTUAL_HEIGHT with a floating
- * width (CLAUDE.md #2), then integer-zooms the canvas via CSS to fill the
- * viewport. A wide phone sees more of the level horizontally; it never sees
- * a stretched or letterboxed image.
+ * width (CLAUDE.md #2), then scales the canvas to the viewport with square
+ * pixels. A wide screen sees more of the level horizontally; it never sees a
+ * stretched image.
+ *
+ * The scale factor is deliberately fractional, not an integer step. Integer
+ * zoom leaves whatever doesn't divide evenly as a blank margin, which is what
+ * used to read as "the game is small" / "there's a black bar." Fractional
+ * scale plus `image-rendering: pixelated` (index.html) fills the viewport and
+ * still resolves every source pixel as a hard-edged block.
  */
 export class ScaleController {
   constructor(private game: Phaser.Game) {
@@ -15,25 +21,25 @@ export class ScaleController {
   }
 
   private apply(): void {
-    const zoom = Math.max(1, Math.floor(window.innerHeight / VIRTUAL_HEIGHT));
-    const rawWidth = Math.round(window.innerWidth / zoom);
-    const width = Phaser.Math.Clamp(rawWidth, MIN_VIRTUAL_WIDTH, MAX_VIRTUAL_WIDTH);
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+
+    // Fill the height, but never so much that fewer than MIN_VIRTUAL_WIDTH
+    // virtual pixels fit across — levels are authored against that width, so
+    // dropping below it would cut off gameplay rather than just show less
+    // scenery.
+    const scale = Math.min(viewportH / VIRTUAL_HEIGHT, viewportW / MIN_VIRTUAL_WIDTH);
+    const width = Phaser.Math.Clamp(Math.round(viewportW / scale), MIN_VIRTUAL_WIDTH, MAX_VIRTUAL_WIDTH);
 
     this.game.scale.resize(width, VIRTUAL_HEIGHT);
-    this.game.scale.setZoom(zoom);
 
-    // setZoom sizes the canvas to an exact integer-pixel CSS box, which
-    // almost never matches the viewport exactly (rounding, the width clamp
-    // above, browser chrome) and leaves a blank margin — CLAUDE.md forbids
-    // vertical letterboxing, and a leftover margin also reads as "the game
-    // is small" even when the internal resolution is fine. Stretch the
-    // canvas the rest of the way to fill the viewport; `image-rendering:
-    // pixelated` (index.html) keeps pixel art crisp through the sub-one-zoom-
-    // step supersample this adds.
     const canvas = this.game.canvas;
     if (canvas) {
-      canvas.style.width = '100%';
-      canvas.style.height = '100%';
+      canvas.style.width = `${Math.round(width * scale)}px`;
+      canvas.style.height = `${Math.round(VIRTUAL_HEIGHT * scale)}px`;
+      // Pointer coordinates are derived from the canvas' CSS box, which was
+      // just resized behind the ScaleManager's back.
+      this.game.scale.updateBounds();
     }
   }
 }

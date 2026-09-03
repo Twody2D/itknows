@@ -85,13 +85,14 @@ export class PixelLabel extends Phaser.GameObjects.Image {
     ctx.imageSmoothingEnabled = false;
 
     if (opts.strokeColor) {
-      const ring = [-scale, 0, scale];
-      for (const dx of ring) {
-        for (const dy of ring) {
-          if (dx === 0 && dy === 0) continue;
-          drawLines(ctx, lines, pad + dx, pad + dy, opts.strokeColor, scale);
-        }
-      }
+      // A drop shadow down-right, not a full outline ring. Ringing every
+      // glyph in black doubled its apparent weight and hard-edged every
+      // curve — text read as stamped rather than lit. One offset pass keeps
+      // the contrast that makes copy legible over the level behind it while
+      // leaving the letterform itself intact.
+      ctx.globalAlpha = 0.75;
+      drawLines(ctx, lines, pad + scale, pad + scale, opts.strokeColor, scale);
+      ctx.globalAlpha = 1;
     }
     drawLines(ctx, lines, pad, pad, opts.color, scale);
 

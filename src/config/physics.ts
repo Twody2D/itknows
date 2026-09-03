@@ -14,15 +14,15 @@ export const PHYSICS = {
 
   jumpVelocity: -240,
   jumpCutMultiplier: 0.45,
+  // There is deliberately no dash. Run and jump are the whole vocabulary;
+  // every level in the game is authored against that reach (`jumpPhysics.ts`),
+  // and a dash on Shift only ever let a player skip past hazards they were
+  // meant to read.
 
   /** Time after leaving a platform edge the player may still jump. */
   coyoteTimeMs: 100,
   /** Time a jump press is buffered before landing. */
   jumpBufferMs: 120,
-
-  dashSpeed: 320,
-  dashDurationMs: 140,
-  dashCooldownMs: 500,
 } as const;
 
 /** Minimum time a lethal trap must telegraph before it can kill (CLAUDE.md #4.2). */

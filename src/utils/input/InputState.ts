@@ -1,7 +1,6 @@
 const LEFT_CODES = new Set(['KeyA', 'ArrowLeft']);
 const RIGHT_CODES = new Set(['KeyD', 'ArrowRight']);
 const JUMP_CODES = new Set(['Space', 'ArrowUp', 'KeyW']);
-const DASH_CODES = new Set(['ShiftLeft', 'ShiftRight', 'KeyX']);
 
 /**
  * Merges keyboard and touch button sources into one state. Gameplay code
@@ -28,17 +27,14 @@ class InputStateController {
   private touchLeft = false;
   private touchRight = false;
   private touchJumpDown = false;
-  private touchDashDown = false;
 
   private jumpBuffered = false;
-  private dashBuffered = false;
 
   constructor() {
     window.addEventListener('keydown', (e) => {
       if (this.pressed.has(e.code)) return; // ignore OS auto-repeat
       this.pressed.add(e.code);
       if (JUMP_CODES.has(e.code)) this.jumpBuffered = true;
-      if (DASH_CODES.has(e.code)) this.dashBuffered = true;
     });
     window.addEventListener('keyup', (e) => {
       this.pressed.delete(e.code);
@@ -56,11 +52,6 @@ class InputStateController {
   setTouchJump(down: boolean): void {
     this.touchJumpDown = down;
     if (down) this.jumpBuffered = true;
-  }
-
-  setTouchDash(down: boolean): void {
-    this.touchDashDown = down;
-    if (down) this.dashBuffered = true;
   }
 
   private hasAny(codes: Set<string>): boolean {
@@ -82,10 +73,6 @@ class InputStateController {
     return this.hasAny(JUMP_CODES) || this.touchJumpDown;
   }
 
-  isDashDown(): boolean {
-    return this.hasAny(DASH_CODES) || this.touchDashDown;
-  }
-
   /** Consumes the buffered jump press — returns true at most once per press. */
   jumpJustPressed(): boolean {
     if (!this.jumpBuffered) return false;
@@ -93,12 +80,6 @@ class InputStateController {
     return true;
   }
 
-  /** Consumes the buffered dash press — returns true at most once per press. */
-  dashJustPressed(): boolean {
-    if (!this.dashBuffered) return false;
-    this.dashBuffered = false;
-    return true;
-  }
 }
 
 export type InputState = InputStateController;
