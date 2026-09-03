@@ -1,4 +1,5 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
+import type { LevelSectionConfig } from '@/gameplay/LevelSections';
 
 /**
  * SECTOR 03 — INDUSTRIAL CORE. Lasers (master-prompt §23), teach → practice
@@ -48,6 +49,12 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
       { type: 'laser', id: 'laser-01', col: 30, topRow: 16, bottomRow: 21 },
       { type: 'laser', id: 'laser-02', col: 44, topRow: 16, bottomRow: 21 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      { id: 'lasers', type: 'system', fromCol: 22, toCol: 45, requiredMechanics: ['laser'] },
+      { id: 'exit', type: 'final', fromCol: 46, toCol: 55 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-03-level-02',
@@ -68,6 +75,12 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
       // committing to cross.
       { type: 'laser', id: 'laser-02', col: 40, topRow: 16, bottomRow: 21, initialIdleMs: 1150 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      { id: 'lasers', type: 'system', fromCol: 22, toCol: 45, requiredMechanics: ['laser'] },
+      { id: 'exit', type: 'final', fromCol: 46, toCol: 53 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-03-level-03',
@@ -94,6 +107,20 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
       },
       { type: 'laser', id: 'laser-01', col: 46, topRow: 16, bottomRow: 21 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes-1', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      {
+        id: 'bridge-spikes-2',
+        type: 'variation',
+        fromCol: 22,
+        toCol: 41,
+        optionalRoute: true,
+        requiredMechanics: ['platform', 'spike-jump'],
+      },
+      { id: 'laser', type: 'system', fromCol: 42, toCol: 49, requiredMechanics: ['laser'] },
+      { id: 'exit', type: 'final', fromCol: 50, toCol: 57 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-03-level-04',
@@ -117,6 +144,13 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
       { type: 'trigger', id: 'trig-02', col: 40, row: 19, width: 2, height: 3, targetId: 'laser-02' },
       { type: 'laser', id: 'laser-02', col: 48, topRow: 16, bottomRow: 21, loop: false },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      { id: 'trigger-laser-1', type: 'system', fromCol: 22, toCol: 35, requiredMechanics: ['trigger', 'laser'] },
+      { id: 'trigger-laser-2', type: 'system', fromCol: 36, toCol: 49, requiredMechanics: ['trigger', 'laser'] },
+      { id: 'exit', type: 'final', fromCol: 50, toCol: 57 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-03-level-05',
@@ -132,6 +166,13 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
       { type: 'electric-floor', id: 'ef-01', col: 28, row: 22, width: 4 },
       { type: 'laser', id: 'laser-01', col: 42, topRow: 16, bottomRow: 21 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      { id: 'electric-floor', type: 'system', fromCol: 22, toCol: 33, requiredMechanics: ['electric-floor'] },
+      { id: 'laser', type: 'system', fromCol: 34, toCol: 47, requiredMechanics: ['laser'] },
+      { id: 'exit', type: 'final', fromCol: 48, toCol: 55 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-03-level-06',
@@ -156,5 +197,19 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
       },
       { type: 'laser', id: 'laser-01', col: 48, topRow: 16, bottomRow: 21 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes-1', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      {
+        id: 'bridge-spikes-2',
+        type: 'variation',
+        fromCol: 22,
+        toCol: 41,
+        optionalRoute: true,
+        requiredMechanics: ['platform', 'spike-jump'],
+      },
+      { id: 'laser', type: 'system', fromCol: 42, toCol: 53, requiredMechanics: ['laser'] },
+      { id: 'exit', type: 'final', fromCol: 54, toCol: 59 },
+    ] satisfies LevelSectionConfig[],
   },
 ];

@@ -1,4 +1,5 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
+import type { LevelSectionConfig } from '@/gameplay/LevelSections';
 
 /**
  * SECTOR 05 — SYSTEM CORE. Campaign finale (master-prompt §23): "комбинирование
@@ -63,6 +64,19 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       // look at the mechanic.
       { type: 'moving-spike', id: 'mspike-01', fromCol: 26, fromRow: 19, toCol: 32, toRow: 19, travelMs: 2600 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      {
+        id: 'patrol-platform',
+        type: 'variation',
+        fromCol: 22,
+        toCol: 41,
+        optionalRoute: true,
+        requiredMechanics: ['platform', 'moving-spike'],
+      },
+      { id: 'exit', type: 'final', fromCol: 42, toCol: 55 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-05-level-02',
@@ -81,6 +95,19 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       { type: 'moving-spike', id: 'mspike-01', fromCol: 26, fromRow: 19, toCol: 32, toRow: 19, travelMs: 2600 },
       { type: 'moving-spike', id: 'mspike-02', fromCol: 34, fromRow: 19, toCol: 40, toRow: 19, travelMs: 1900 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      {
+        id: 'crossfire-platform',
+        type: 'variation',
+        fromCol: 22,
+        toCol: 43,
+        optionalRoute: true,
+        requiredMechanics: ['platform', 'moving-spike'],
+      },
+      { id: 'exit', type: 'final', fromCol: 44, toCol: 57 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-05-level-03',
@@ -99,6 +126,19 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       { type: 'pursuer', id: 'pursuer-01', col: 1, row: 21, speedFactor: 0.6 },
       { type: 'moving-spike', id: 'mspike-01', fromCol: 40, fromRow: 19, toCol: 46, toRow: 19, travelMs: 2600 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'pursuit-spikes', type: 'system', fromCol: 14, toCol: 33, requiredMechanics: ['pursuer', 'spike-jump'] },
+      {
+        id: 'platform-mspike',
+        type: 'variation',
+        fromCol: 34,
+        toCol: 51,
+        optionalRoute: true,
+        requiredMechanics: ['platform', 'moving-spike'],
+      },
+      { id: 'exit', type: 'final', fromCol: 52, toCol: 57 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-05-level-04',
@@ -126,6 +166,20 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
         travelMs: 2600,
       },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes-1', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      { id: 'electric-floor', type: 'system', fromCol: 22, toCol: 29, requiredMechanics: ['electric-floor'] },
+      {
+        id: 'bridge-spikes-2',
+        type: 'variation',
+        fromCol: 30,
+        toCol: 49,
+        optionalRoute: true,
+        requiredMechanics: ['platform', 'spike-jump'],
+      },
+      { id: 'exit', type: 'final', fromCol: 50, toCol: 57 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-05-level-05',
@@ -148,6 +202,21 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       { type: 'timing-gate', id: 'gate-01', col: 38, topRow: 16, bottomRow: 21 },
       { type: 'moving-spike', id: 'mspike-01', fromCol: 44, fromRow: 19, toCol: 50, toRow: 19, travelMs: 2600 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      { id: 'trigger-laser', type: 'system', fromCol: 22, toCol: 33, requiredMechanics: ['trigger', 'laser'] },
+      { id: 'gate', type: 'system', fromCol: 34, toCol: 41, requiredMechanics: ['timing-gate'] },
+      {
+        id: 'platform-mspike',
+        type: 'variation',
+        fromCol: 42,
+        toCol: 53,
+        optionalRoute: true,
+        requiredMechanics: ['platform', 'moving-spike'],
+      },
+      { id: 'exit', type: 'final', fromCol: 54, toCol: 59 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-05-level-06',
@@ -179,5 +248,21 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       // Final gate before the real exit.
       { type: 'timing-gate', id: 'gate-01', col: 56, topRow: 16, bottomRow: 21 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes-1', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      {
+        id: 'bridge-spikes-2',
+        type: 'variation',
+        fromCol: 22,
+        toCol: 41,
+        optionalRoute: true,
+        requiredMechanics: ['platform', 'spike-jump'],
+      },
+      { id: 'laser', type: 'system', fromCol: 42, toCol: 47, requiredMechanics: ['laser'] },
+      { id: 'fake-exit', type: 'system', fromCol: 48, toCol: 53, requiredMechanics: ['fake-exit'] },
+      { id: 'gate', type: 'combination', fromCol: 54, toCol: 61, requiredMechanics: ['timing-gate'] },
+      { id: 'exit', type: 'final', fromCol: 62, toCol: 63 },
+    ] satisfies LevelSectionConfig[],
   },
 ];

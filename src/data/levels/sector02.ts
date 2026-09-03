@@ -1,4 +1,5 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
+import type { LevelSectionConfig } from '@/gameplay/LevelSections';
 
 /**
  * SECTOR 02 — NEON GRID. All 6 levels, exercising every one of the 12
@@ -52,6 +53,13 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
       // reflex check (master-prompt §66 — teach before testing).
       { type: 'laser', id: 'laser-01', col: 35, topRow: 16, bottomRow: 21 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 15, requiredMechanics: ['move'] },
+      { id: 'gap', type: 'challenge', fromCol: 16, toCol: 23, requiredMechanics: ['gap-jump'] },
+      { id: 'spikes', type: 'challenge', fromCol: 24, toCol: 31, requiredMechanics: ['spike-jump'] },
+      { id: 'laser', type: 'system', fromCol: 32, toCol: 39, requiredMechanics: ['laser'] },
+      { id: 'exit', type: 'final', fromCol: 40, toCol: 51 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-02-level-02',
@@ -84,6 +92,13 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
       { type: 'trigger', id: 'trig-01', col: 9, row: 19, width: 2, height: 3, targetId: 'laser-02' },
       { type: 'laser', id: 'laser-02', col: 40, topRow: 16, bottomRow: 21, loop: false },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 8, requiredMechanics: ['move'] },
+      { id: 'trigger', type: 'system', fromCol: 9, toCol: 21, requiredMechanics: ['trigger'] },
+      { id: 'bridge-spikes', type: 'variation', fromCol: 22, toCol: 32, optionalRoute: true, requiredMechanics: ['spike-jump', 'platform'] },
+      { id: 'laser-payoff', type: 'system', fromCol: 33, toCol: 44, requiredMechanics: ['laser'] },
+      { id: 'exit', type: 'final', fromCol: 45, toCol: 53 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-02-level-03',
@@ -104,6 +119,11 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
       // can corner an honest player.
       { type: 'pursuer', id: 'pursuer-01', col: 1, row: 21, speedFactor: 0.6 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'pursuit', type: 'system', fromCol: 14, toCol: 33, requiredMechanics: ['pursuer', 'gap-jump', 'spike-jump'] },
+      { id: 'exit', type: 'final', fromCol: 34, toCol: 55 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-02-level-04',
@@ -135,6 +155,14 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
       // must be readable before it's punished).
       { type: 'fake-platform', id: 'fp-01', col: 38, row: 20, width: 3 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes-1', type: 'challenge', fromCol: 14, toCol: 23, requiredMechanics: ['spike-jump'] },
+      { id: 'crumble-gap', type: 'combination', fromCol: 24, toCol: 33, requiredMechanics: ['gap-jump', 'disappearing-platform'] },
+      { id: 'decoy', type: 'variation', fromCol: 34, toCol: 41, requiredMechanics: ['fake-platform'] },
+      { id: 'spikes-2', type: 'challenge', fromCol: 42, toCol: 49, requiredMechanics: ['spike-jump'] },
+      { id: 'exit', type: 'final', fromCol: 50, toCol: 55 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-02-level-05',
@@ -161,6 +189,20 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
       // on past its 350ms shake telegraph.
       { type: 'falling-platform', id: 'flp-01', col: 41, row: 20, width: 4 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes-1', type: 'challenge', fromCol: 14, toCol: 23, requiredMechanics: ['spike-jump'] },
+      { id: 'electric-floor', type: 'system', fromCol: 24, toCol: 33, requiredMechanics: ['electric-floor'] },
+      {
+        id: 'bypass-spikes',
+        type: 'combination',
+        fromCol: 34,
+        toCol: 49,
+        optionalRoute: true,
+        requiredMechanics: ['falling-platform', 'spike-jump'],
+      },
+      { id: 'exit', type: 'final', fromCol: 50, toCol: 55 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-02-level-06',
@@ -196,5 +238,20 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
       // the thing that kills a player, only the honest hazards can).
       { type: 'timing-gate', id: 'gate-01', col: 50, topRow: 16, bottomRow: 21 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes-1', type: 'challenge', fromCol: 14, toCol: 23, requiredMechanics: ['spike-jump'] },
+      {
+        id: 'bridge-spikes-2',
+        type: 'variation',
+        fromCol: 24,
+        toCol: 40,
+        optionalRoute: true,
+        requiredMechanics: ['platform', 'spike-jump'],
+      },
+      { id: 'fake-exit', type: 'system', fromCol: 41, toCol: 47, requiredMechanics: ['fake-exit'] },
+      { id: 'gate', type: 'combination', fromCol: 48, toCol: 54, requiredMechanics: ['timing-gate'] },
+      { id: 'exit', type: 'final', fromCol: 55, toCol: 57 },
+    ] satisfies LevelSectionConfig[],
   },
 ];

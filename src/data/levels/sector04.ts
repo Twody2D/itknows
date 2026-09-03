@@ -1,4 +1,5 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
+import type { LevelSectionConfig } from '@/gameplay/LevelSections';
 
 /**
  * SECTOR 04 — DATA DISTRICT. Timing traps (master-prompt §23): the
@@ -46,6 +47,12 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
       { type: 'timing-gate', id: 'gate-01', col: 30, topRow: 16, bottomRow: 21 },
       { type: 'timing-gate', id: 'gate-02', col: 42, topRow: 16, bottomRow: 21 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      { id: 'gates', type: 'system', fromCol: 22, toCol: 45, requiredMechanics: ['timing-gate'] },
+      { id: 'exit', type: 'final', fromCol: 46, toCol: 53 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-04-level-02',
@@ -71,6 +78,12 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
       // there's no shared beat to count instead of watching the gates.
       { type: 'timing-gate', id: 'gate-02', col: 40, topRow: 16, bottomRow: 21 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      { id: 'gates', type: 'system', fromCol: 22, toCol: 45, requiredMechanics: ['timing-gate'] },
+      { id: 'exit', type: 'final', fromCol: 46, toCol: 53 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-04-level-03',
@@ -91,6 +104,12 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
       { type: 'disappearing-platform', id: 'dp-02', col: 28, row: 22, width: 2 },
       { type: 'disappearing-platform', id: 'dp-03', col: 30, row: 22, width: 2 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      { id: 'crumble', type: 'combination', fromCol: 22, toCol: 35, requiredMechanics: ['gap-jump', 'disappearing-platform'] },
+      { id: 'exit', type: 'final', fromCol: 36, toCol: 55 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-04-level-04',
@@ -110,6 +129,12 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
       { type: 'falling-platform', id: 'flp-01', col: 26, row: 22, width: 2 },
       { type: 'falling-platform', id: 'flp-02', col: 28, row: 22, width: 2 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      { id: 'freefall', type: 'combination', fromCol: 22, toCol: 33, requiredMechanics: ['gap-jump', 'falling-platform'] },
+      { id: 'exit', type: 'final', fromCol: 34, toCol: 55 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-04-level-05',
@@ -138,6 +163,20 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
       // with the bridge above.
       { type: 'timing-gate', id: 'gate-01', col: 46, topRow: 16, bottomRow: 21 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes-1', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      {
+        id: 'bridge-spikes-2',
+        type: 'variation',
+        fromCol: 22,
+        toCol: 41,
+        optionalRoute: true,
+        requiredMechanics: ['platform', 'spike-jump'],
+      },
+      { id: 'gate', type: 'system', fromCol: 42, toCol: 49, requiredMechanics: ['timing-gate'] },
+      { id: 'exit', type: 'final', fromCol: 50, toCol: 57 },
+    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-04-level-06',
@@ -167,5 +206,19 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
       // Mandatory finale gate before the exit.
       { type: 'timing-gate', id: 'gate-01', col: 50, topRow: 16, bottomRow: 21 },
     ],
+    sections: [
+      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
+      { id: 'spikes-1', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
+      {
+        id: 'trigger-laser-bridge-spikes',
+        type: 'combination',
+        fromCol: 22,
+        toCol: 49,
+        optionalRoute: true,
+        requiredMechanics: ['trigger', 'laser', 'platform', 'spike-jump'],
+      },
+      { id: 'gate', type: 'system', fromCol: 50, toCol: 57, requiredMechanics: ['timing-gate'] },
+      { id: 'exit', type: 'final', fromCol: 58, toCol: 61 },
+    ] satisfies LevelSectionConfig[],
   },
 ];
