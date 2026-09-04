@@ -1,5 +1,11 @@
 import Phaser from 'phaser';
 import { TILE_SIZE } from '@/config/display';
+import {
+  SPIKE_HITBOX_WIDTH,
+  SPIKE_HITBOX_HEIGHT,
+  SPIKE_HITBOX_OFFSET_X,
+  SPIKE_HITBOX_OFFSET_Y,
+} from '@/config/physics';
 import type { LevelDef } from './LevelDef';
 import { LEVEL_HEIGHT_TILES } from './LevelDef';
 import type { TrapDef } from '@/traps/TrapDef';
@@ -371,10 +377,19 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
     const { x, y } = tileCenter(col, def.groundRow - 1);
     const spike = spikesGroup.create(x, y, 'tile-spike') as Phaser.Physics.Arcade.Sprite;
     const spikeBody = spike.body as Phaser.Physics.Arcade.StaticBody;
-    // Forgiving hitbox — a few pixels smaller than the visible spike (CLAUDE.md #5).
-    spikeBody.setSize(TILE_SIZE - 4, TILE_SIZE - 6);
-    spikeBody.setOffset(2, 6);
-    spike.refreshBody();
+    // Forgiving hitbox — well smaller than the visible spike (CLAUDE.md #5, `config/physics.ts`).
+    //
+    // Real bug, found live: `refreshBody()` (`StaticBody.updateFromGameObject()`
+    // under the hood) re-derives the static body's size/offset from the
+    // sprite's texture frame every time it's called — calling it AFTER
+    // `setSize`/`setOffset` silently threw both away back to the full 10x10
+    // tile, every spike, in every level, since this code was first written.
+    // The forgiving hitbox never actually applied at runtime; only the full
+    // rectangular tile did. No `refreshBody()` call is needed here at all —
+    // it exists to reposition a body after moving its sprite post-creation,
+    // and this sprite is already created at its final x/y.
+    spikeBody.setSize(SPIKE_HITBOX_WIDTH, SPIKE_HITBOX_HEIGHT);
+    spikeBody.setOffset(SPIKE_HITBOX_OFFSET_X, SPIKE_HITBOX_OFFSET_Y);
   }
 
   for (const platform of def.platforms) {

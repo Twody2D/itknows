@@ -25,6 +25,20 @@ export const PHYSICS = {
   jumpBufferMs: 120,
 } as const;
 
+/**
+ * Static spike hitbox, in px, against a `TILE_SIZE` (10x10) tile
+ * (CLAUDE.md #5 — "хитбоксы шипов «прощают» 1-2 px"). Widened from an
+ * earlier 6x4/offset(2,6) after direct playtest feedback that spike-jumps
+ * should be forgiving enough for a casual player, not just a technically-
+ * honest minimum — this only shrinks the margin for error on a grazing
+ * near-miss, static spike columns still reliably kill on a direct run-in or
+ * fall straight onto one (verified live, both cases).
+ */
+export const SPIKE_HITBOX_WIDTH = 4;
+export const SPIKE_HITBOX_HEIGHT = 3;
+export const SPIKE_HITBOX_OFFSET_X = 3;
+export const SPIKE_HITBOX_OFFSET_Y = 7;
+
 /** Minimum time a lethal trap must telegraph before it can kill (CLAUDE.md #4.2). */
 export const MIN_WARNING_MS = 250;
 /** Minimum reaction window between a visible signal and required input (CLAUDE.md #4.5). */
