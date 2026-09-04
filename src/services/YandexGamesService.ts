@@ -28,6 +28,30 @@ interface YsdkPlayer {
   setData(data: Record<string, unknown>, flush?: boolean): Promise<void>;
 }
 
+/** Shapes verified against the real docs (`yandex.com/dev/games/doc/en/sdk/sdk-purchases`), not assumed — see `docs/yandex-games.md`'s Payments section. Client-side (unsigned) mode only; `signed: true`'s encrypted `ISign` response is out of scope this pass. */
+export interface YsdkProduct {
+  id: string;
+  title: string;
+  description: string;
+  imageURI: string;
+  price: string;
+  priceValue: string;
+  priceCurrencyCode: string;
+}
+
+export interface YsdkPurchase {
+  productID: string;
+  purchaseToken: string;
+  developerPayload: string;
+}
+
+interface YsdkPayments {
+  getCatalog(): Promise<YsdkProduct[]>;
+  purchase(options: { id: string; developerPayload?: string }): Promise<YsdkPurchase>;
+  getPurchases(): Promise<YsdkPurchase[]>;
+  consumePurchase(purchaseToken: string): Promise<void>;
+}
+
 interface Ysdk {
   features?: {
     LoadingAPI?: { ready(): void };
@@ -38,6 +62,7 @@ interface Ysdk {
     showRewardedVideo(options?: { callbacks?: YsdkRewardedCallbacks }): void;
   };
   getPlayer?(options?: { scopes?: boolean }): Promise<YsdkPlayer>;
+  getPayments?(options?: { signed?: boolean }): Promise<YsdkPayments>;
 }
 
 interface YaGamesGlobal {
@@ -59,6 +84,8 @@ class YandexGamesServiceController {
   private loadingReadyNotified = false;
   private player: YsdkPlayer | null = null;
   private playerPromise: Promise<YsdkPlayer | null> | null = null;
+  private payments: YsdkPayments | null = null;
+  private paymentsPromise: Promise<YsdkPayments | null> | null = null;
 
   /** Call once, as early as possible (`main.ts`) — never blocks game creation, the network can be slower than boot. */
   init(): Promise<void> {
@@ -158,6 +185,63 @@ class YandexGamesServiceController {
     }
   }
 
+  /**
+   * `PurchaseManager`'s only door into real purchases — every method here
+   * degrades the same way everything else in this facade does: unavailable
+   * (empty catalog/purchase list, a `null`/no-op result) outside a real
+   * Yandex iframe, never a thrown error `PurchaseManager` has to guard
+   * against separately. Always requests unsigned (client-side) mode —
+   * server-side signed verification is a documented, deliberate gap (see
+   * `docs/SHOP.md`), not an oversight.
+   */
+  async getCatalog(): Promise<YsdkProduct[]> {
+    const payments = await this.getPayments();
+    if (!payments) return [];
+    try {
+      return await payments.getCatalog();
+    } catch {
+      return [];
+    }
+  }
+
+  async purchase(productId: string, developerPayload?: string): Promise<YsdkPurchase | null> {
+    const payments = await this.getPayments();
+    if (!payments) return null;
+    try {
+      return await payments.purchase(developerPayload === undefined ? { id: productId } : { id: productId, developerPayload });
+    } catch {
+      return null;
+    }
+  }
+
+  /** Called at boot to detect/replay an unprocessed purchase (master-prompt §6/§44 scenarios E/F) — see `PurchaseManager.restorePurchases`. */
+  async getPurchases(): Promise<YsdkPurchase[]> {
+    const payments = await this.getPayments();
+    if (!payments) return [];
+    try {
+      return await payments.getPurchases();
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * The real API requires player data to already reflect the grant *before*
+   * this is called (verified against the docs) — `PurchaseManager` always
+   * persists first. Best-effort: a failed consume leaves the purchase in
+   * `getPurchases()` for the next `restorePurchases()` pass to find, backed
+   * by `SaveService`'s own idempotency guard, so nothing is lost either way.
+   */
+  async consumePurchase(purchaseToken: string): Promise<void> {
+    const payments = await this.getPayments();
+    if (!payments) return;
+    try {
+      await payments.consumePurchase(purchaseToken);
+    } catch {
+      /* best-effort — see doc comment above */
+    }
+  }
+
   /** Test/dev-only reset — never called from gameplay code. */
   resetForTests(): void {
     this.ysdk = null;
@@ -166,6 +250,8 @@ class YandexGamesServiceController {
     this.loadingReadyNotified = false;
     this.player = null;
     this.playerPromise = null;
+    this.payments = null;
+    this.paymentsPromise = null;
   }
 
   /** `ysdk.getPlayer()` is rate-limited (20 requests/5 minutes) — resolved once and cached, never re-requested per call. */
@@ -177,6 +263,16 @@ class YandexGamesServiceController {
     }
     this.player = await this.playerPromise;
     return this.player;
+  }
+
+  private async getPayments(): Promise<YsdkPayments | null> {
+    if (this.payments) return this.payments;
+    if (!this.ysdk?.getPayments) return null;
+    if (!this.paymentsPromise) {
+      this.paymentsPromise = this.ysdk.getPayments({ signed: false }).catch(() => null);
+    }
+    this.payments = await this.paymentsPromise;
+    return this.payments;
   }
 
   private flushLoadingReady(): void {

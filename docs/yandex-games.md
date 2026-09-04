@@ -102,6 +102,37 @@ localStorage — подробности мёржа в `TODO.md` Phase 6 и до�
 `itknows.save.v1` — единицы КБ, пуш только на каждое завершение/начало
 уровня).
 
+## Payments — реализовано (клиентский режим)
+
+Сверено против `yandex.com/dev/games/doc/en/sdk/sdk-purchases`:
+
+```js
+const payments = await ysdk.getPayments({ signed: false });
+const catalog = await payments.getCatalog();           // IProduct[]
+const purchase = await payments.purchase({ id });       // IPurchase (unsigned)
+const purchases = await payments.getPurchases();        // IPurchase[]
+await payments.consumePurchase(purchaseToken);
+```
+
+`IProduct`: `id`, `title`, `description`, `imageURI`, `price` (`"<цена> <валюта>"`),
+`priceValue`, `priceCurrencyCode`. `IPurchase` (unsigned): `productID`,
+`purchaseToken`, `developerPayload`. **Важно, из документации**: перед
+`consumePurchase` игра обязана сначала сохранить факт начисления через
+`player.setData`/`setStats`/`incrementStats` — иначе можно потерять
+покупку, если приложение закроется между consume и сохранением.
+`PurchaseManager` (`src/services/PurchaseManager.ts`) соблюдает этот порядок
+(сначала `SaveService`, потом `consumePurchase`).
+
+`YandexGamesService.getCatalog/purchase/getPurchases/consumePurchase` —
+такая же деградация до пустого результата/`null`/no-op вне реального
+Yandex-фрейма, как и весь остальной фасад; `getPayments({ signed: false })`
+кэшируется один раз, как `getPlayer()`.
+
+**Сознательно не реализовано**: `signed: true` (серверная проверка подписи
+HMAC-SHA256) — это отдельная серверная инфраструктура, вне охвата текущего
+среза магазина. Задокументировано как реальный пробел в `docs/SHOP.md`, а не
+скрыто.
+
 ## Что сверено, но не реализовано (следующие инкременты Phase 6)
 
 - **Leaderboards** (`ysdk.leaderboards.setScore/getEntries/getPlayerEntry`)
