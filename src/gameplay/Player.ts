@@ -20,6 +20,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   private lastGroundedAtMs = -Infinity;
   private lastJumpPressedAtMs = -Infinity;
+  private jumpCutApplied = false;
 
 
   private currentAnim: PlayerAnimState = 'idle';
@@ -34,8 +35,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     scene.physics.add.existing(this);
 
     this.setOrigin(0.5, 1);
+    // Hitbox is the ORIGINAL 6x12 box, not scaled up with the bigger 24x36
+    // sprite (VISUAL RESET v1). Gap widths across every level are tuned in
+    // absolute pixels against this exact box (`jumpPhysics.ts`/`LevelDef`
+    // gaps) — scaling it up proportionally with the art (as a first pass
+    // did, to 14x30) silently shrank the "no ground under either edge"
+    // window under a 2-tile gap from 14px to 6px, which let a player just
+    // run straight across it at speed with no jump at all. Forgiving-hitbox
+    // margin now comes entirely from the sprite being much bigger than the
+    // box, not from the box itself growing (CLAUDE.md #5).
     this.body.setSize(6, 12);
-    this.body.setOffset(2, 2);
+    this.body.setOffset(9, 24);
     this.body.setMaxVelocity(PHYSICS.moveSpeed * 3, PHYSICS.maxFallSpeed);
     // World bounds are wide enough vertically to fall through a pit (death is
     // triggered by a Y check before the bound would stop it) but the level's
@@ -85,9 +95,18 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.body.setVelocityY(PHYSICS.jumpVelocity);
       this.lastJumpPressedAtMs = -Infinity;
       this.lastGroundedAtMs = -Infinity;
+      this.jumpCutApplied = false;
       EventBus.emit('player:jumped', undefined);
-    } else if (!this.inputState.isJumpDown() && this.body.velocity.y < 0) {
+    } else if (!this.inputState.isJumpDown() && this.body.velocity.y < 0 && !this.jumpCutApplied) {
+      // Applied once per jump, not every frame the key stays up — multiplying
+      // every frame compounded (0.45, then 0.45² within 2 frames, ...), so a
+      // tap shorter than ~3 frames decayed almost to zero velocity instead of
+      // a short hop. That tiny hop touched ground again almost immediately,
+      // and with a jump press still buffered from rapid tapping, re-triggered
+      // an instant re-jump — the character visibly juddering in place instead
+      // of jumping, exactly what rapid space-tapping produced.
       this.body.setVelocityY(this.body.velocity.y * PHYSICS.jumpCutMultiplier);
+      this.jumpCutApplied = true;
     }
 
     const wantLeft = this.inputState.left;
@@ -123,7 +142,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private updateAnimState(onGround: boolean): void {
-    if (this.currentAnim === 'land' && this.anims.isPlaying) {
+    // The land squash plays out uninterrupted normally, but a fresh jump
+    // (rapid tapping can trigger one before it finishes) has to visibly
+    // override it — otherwise the sprite shows a landed/squashed pose while
+    // actually launching upward, which is its own kind of "looks broken".
+    if (this.currentAnim === 'land' && this.anims.isPlaying && this.body.velocity.y >= 0) {
       this.wasOnGround = onGround;
       return;
     }
