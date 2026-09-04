@@ -70,6 +70,7 @@ const UI_STRINGS = {
   shopOwned: { ru: 'Уже получено', en: 'Owned' },
   shopInsufficientCredits: { ru: 'Недостаточно кредитов', en: 'Insufficient credits' },
   shopGetCredits: { ru: 'Получить кредиты', en: 'Get credits' },
+  shopToArchive: { ru: 'В архив', en: 'To archive' },
   shopWatchAd: { ru: 'Смотреть сигнал', en: 'Watch signal' },
   shopPurchaseFailed: { ru: 'Покупка не удалась', en: 'Purchase failed' },
   shopTryAgain: { ru: 'Попробовать снова', en: 'Try again' },
@@ -77,6 +78,7 @@ const UI_STRINGS = {
   shopRestoring: { ru: 'Восстановление покупок…', en: 'Restoring purchases…' },
   shopAdsDisabled: { ru: 'Реклама отключена', en: 'Ads disabled' },
   shopNoAdsOwned: { ru: 'РЕКЛАМА ОТКЛЮЧЕНА', en: 'ADS DISABLED' },
+  resultCreditsEarned: { ru: 'Получено', en: 'Earned' },
 
   shopSkinDefault: { ru: 'DEFAULT', en: 'DEFAULT' },
   shopSkinDefaultDesc: { ru: 'Базовый корпус android.', en: 'The android’s stock chassis.' },

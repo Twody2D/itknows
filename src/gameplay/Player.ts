@@ -5,6 +5,7 @@ import type { PlayerAnimState } from './PlayerAnimState';
 import { EventBus } from '@/core/EventBus';
 import type { DeathCause } from '@/core/EventBus';
 import { InventoryService } from '@/services/InventoryService';
+import { playerTexturePrefix } from '@/data/shop/skinVisuals';
 
 type LifeState = 'alive' | 'dead' | 'victory';
 
@@ -32,7 +33,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   constructor(scene: Phaser.Scene, x: number, y: number, input: InputState) {
     const skinId = InventoryService.getEquipped('character');
-    const texPrefix = skinId === 'default' ? 'player' : `player-${skinId}`;
+    const texPrefix = playerTexturePrefix(skinId);
     super(scene, x, y, `${texPrefix}-idle-0`);
     this.texPrefix = texPrefix;
     this.inputState = input;

@@ -68,7 +68,7 @@ export class SectorCompleteScene extends Phaser.Scene {
     const stats = [
       `${t('resultTime')}: ${formatMmSs(this.sectorData.timeMs)}`,
       `${t('resultDeaths')}: ${this.sectorData.deaths}`,
-      `+${EARN_AMOUNTS.sectorComplete} CREDITS`,
+      `${t('resultCreditsEarned')}: ${EARN_AMOUNTS.sectorComplete} CREDITS`,
     ];
     let y = panelY + 44;
     for (const line of stats) {

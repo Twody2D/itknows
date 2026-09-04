@@ -20,3 +20,8 @@ export const SKIN_VISUALS: Record<string, PlayerColors> = {
 export function skinColorsFor(skinId: string): PlayerColors | undefined {
   return SKIN_VISUALS[skinId];
 }
+
+/** The one place that knows `SpriteFactory`'s texture/anim key scheme (`'player'` for `default`, `'player-{skinId}'` otherwise) — `Player.ts` and `ShopScene`'s preview both go through this instead of re-deriving it. */
+export function playerTexturePrefix(skinId: string): string {
+  return skinId === 'default' ? 'player' : `player-${skinId}`;
+}

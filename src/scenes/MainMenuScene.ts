@@ -176,5 +176,17 @@ export class MainMenuScene extends Phaser.Scene {
       width: pairWidth,
       onClick: () => this.scene.launch('SettingsScene'),
     });
+
+    // A corner control, not a 4th stacked row — the standing character owns
+    // the lower-left, and the button stack above already reaches close to
+    // the floor line at every supported width (CLAUDE.md #2's 480-620px
+    // range). The top-right corner is clear of the centered logo/SYSTEM
+    // ONLINE line and the character both.
+    new PixelButton(this, width - 38, 16, t('shop'), {
+      width: 60,
+      height: 18,
+      textScale: 1,
+      onClick: () => this.scene.launch('ShopScene'),
+    });
   }
 }

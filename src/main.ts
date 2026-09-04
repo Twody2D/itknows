@@ -17,6 +17,7 @@ import { SettingsScene } from '@/scenes/SettingsScene';
 import { HowToPlayScene } from '@/scenes/HowToPlayScene';
 import { SectorCompleteScene } from '@/scenes/SectorCompleteScene';
 import { LevelSelectScene } from '@/scenes/LevelSelectScene';
+import { ShopScene } from '@/scenes/ShopScene';
 import '@/shop/EconomyRewards';
 
 const root = document.getElementById('app');
@@ -89,6 +90,7 @@ const game = new Phaser.Game({
     HowToPlayScene,
     SectorCompleteScene,
     LevelSelectScene,
+    ShopScene,
   ],
 });
 

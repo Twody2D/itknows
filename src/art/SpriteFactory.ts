@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { drawPlayerFrame } from './drawPlayer';
-import { SKIN_VISUALS, skinColorsFor } from '@/data/shop/skinVisuals';
+import { SKIN_VISUALS, playerTexturePrefix, skinColorsFor } from '@/data/shop/skinVisuals';
 import {
   drawExitTile,
   drawFakePlatformTile,
@@ -56,7 +56,7 @@ function addOrReplaceCanvas(scene: Phaser.Scene, key: string, canvas: HTMLCanvas
  * catalog skin at boot (`BootScene`) — see `skinColorsFor`.
  */
 export function generatePlayerTextures(scene: Phaser.Scene, skinId = 'default'): void {
-  const prefix = skinId === 'default' ? 'player' : `player-${skinId}`;
+  const prefix = playerTexturePrefix(skinId);
   const colors = skinColorsFor(skinId);
 
   for (const state of PLAYER_ANIM_STATES) {
