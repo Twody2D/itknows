@@ -15,6 +15,10 @@ import type { BuiltLevel, CheckpointZone } from '@/gameplay/Level';
 import type { LevelDef } from '@/gameplay/LevelDef';
 import { getLevel, getNextLevelId } from '@/gameplay/LevelFactory';
 import { GameState } from '@/core/GameState';
+import { SaveService } from '@/services/SaveService';
+import { YandexGamesService } from '@/services/YandexGamesService';
+import { playSfx } from '@/audio/SfxManager';
+import { MusicSequencer } from '@/audio/MusicSequencer';
 import { EventBus } from '@/core/EventBus';
 import type { DeathCause } from '@/core/EventBus';
 import { BehaviorTracker } from '@/ai/BehaviorTracker';
@@ -30,9 +34,17 @@ import { TutorialHints } from '@/ui/TutorialHints';
 import { fadeIn } from '@/ui/SceneFade';
 import { MIN_VIRTUAL_WIDTH, TILE_SIZE } from '@/config/display';
 
-const SYSTEM_COMMENT_DISPLAY_MS = 2500;
-/** Upper bound on the touch-device world zoom — past this the visible level gets narrower than levels are authored for. */
-const MAX_WORLD_ZOOM = 1.22;
+const SYSTEM_COMMENT_DISPLAY_MS = 3800;
+/**
+ * Upper bound on the world zoom — past this the visible level gets narrower
+ * than levels are authored for (`MIN_VIRTUAL_WIDTH`). VISUAL RESET v1 #15:
+ * tighter framing everywhere (not just touch) keeps the character a large
+ * fraction of the frame; 1.28 is the highest value that still leaves at
+ * least `MIN_VIRTUAL_WIDTH` visible even at `MAX_VIRTUAL_WIDTH`'s widest
+ * screen (620 / 1.28 ≈ 484 > 480), so no level ever shows less than it was
+ * designed against.
+ */
+const MAX_WORLD_ZOOM = 1.28;
 
 interface GameplaySceneData {
   levelId: string;
@@ -92,6 +104,7 @@ export class GameplayScene extends Phaser.Scene {
     // never mid-attempt (CLAUDE.md #4.1, see DifficultyDirector's doc comment).
     this.variantId = selectVariant(data.levelId, PlayerProfile.snapshot(), SystemMemory.snapshot());
     this.levelDef = getLevel(data.levelId, this.variantId);
+    SaveService.setLastLevelId(this.levelDef.id);
     this.resolving = false;
     this.hesitationCommented = false;
     this.activeRespawnCol = data.respawnCol;
@@ -121,6 +134,9 @@ export class GameplayScene extends Phaser.Scene {
     this.behaviorTracker = new BehaviorTracker();
     this.attemptStartMs = this.time.now;
     EventBus.emit('level:loaded', { levelId: this.levelDef.id, variantId: this.variantId });
+    MusicSequencer.start();
+    YandexGamesService.notifyGameplayStart();
+    this.events.on(Phaser.Scenes.Events.RESUME, this.handleResume, this);
 
     const spawnX =
       this.activeRespawnCol !== undefined ? this.activeRespawnCol * TILE_SIZE + TILE_SIZE / 2 : this.level.spawn.x;
@@ -172,6 +188,9 @@ export class GameplayScene extends Phaser.Scene {
       EventBus.off('trap:armed', this.handleTrapArmed, this);
       EventBus.off('player:jumped', this.handlePlayerJumped, this);
       EventBus.off('player:landed', this.handlePlayerLanded, this);
+      this.events.off(Phaser.Scenes.Events.RESUME, this.handleResume, this);
+      MusicSequencer.stop();
+      YandexGamesService.notifyGameplayStop();
       this.touchControls?.destroy();
       this.behaviorTracker.destroy();
       this.fx.destroy();
@@ -196,14 +215,17 @@ export class GameplayScene extends Phaser.Scene {
    */
   private setupCameras(): void {
     const main = this.cameras.main;
-    const zoom = isTouchDevice() ? Phaser.Math.Clamp(this.scale.width / MIN_VIRTUAL_WIDTH, 1, MAX_WORLD_ZOOM) : 1;
+    const zoom = Phaser.Math.Clamp(this.scale.width / MIN_VIRTUAL_WIDTH, 1, MAX_WORLD_ZOOM);
 
     main.setBounds(0, 0, this.level.worldWidth, this.level.worldHeight);
     main.setZoom(zoom);
-    main.startFollow(this.player, true, 0.15, 0.15);
-    // Deadzone is in world units, so it has to shrink with the zoom to stay
-    // the same fraction of what's actually on screen.
-    main.setDeadzone((this.scale.width / zoom) * 0.2, (this.scale.height / zoom) * 0.3);
+    // Plain lerp-follow, no deadzone: a deadzone rectangle here would have to
+    // be sized precisely against `scale.width/zoom` to behave, and it did
+    // not — the camera would sit frozen for well over half the screen's
+    // width of player movement, then catch up all at once, reading exactly
+    // like "the world jerks and slides back". Lerp alone tracks continuously
+    // and smoothly with no such catch-up snap.
+    main.startFollow(this.player, true, 0.12, 0.12);
     main.setRoundPixels(true);
 
     this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
@@ -305,8 +327,14 @@ export class GameplayScene extends Phaser.Scene {
   /** Menu/pause and settings are never on the retry-loop's hot path — freely pausable, no honesty-invariant concerns (CLAUDE.md #4 is about level geometry/timing during an attempt, not the player choosing to step away). */
   private pauseGame(): void {
     if (this.resolving) return;
+    YandexGamesService.notifyGameplayStop();
     this.scene.pause();
     this.scene.launch('PauseScene', { gameplaySceneKey: this.scene.key, levelId: this.levelDef.id });
+  }
+
+  /** Mirrors `pauseGame`'s stop — fired by `PauseScene`'s "Продолжить" resuming this scene directly (CLAUDE.md #8: pause never counts as gameplay, so the pair must be exact). */
+  private handleResume(): void {
+    YandexGamesService.notifyGameplayStart();
   }
 
   /** master-prompt §70 — the version tag climbs with campaign progress, see SystemPersonality.ts. */
@@ -359,24 +387,42 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   private buildHudObjects(): void {
+    // VISUAL RESET v1 #11/#12: HUD text at 2x the old scale — "LEVEL 01" and
+    // the deaths counter have to read instantly, not just be technically
+    // present. Panel grows to fit the bigger glyphs without crowding them.
+    const panelW = 168;
+    const panelH = 56;
     const panel = this.add.graphics().setScrollFactor(0).setDepth(899);
-    panel.fillStyle(PALETTE.bgVoid, 0.55);
-    panel.fillRect(0, 0, 150, 30);
-    panel.fillStyle(PALETTE.cyanDim, 0.6);
-    panel.fillRect(0, 0, 150, 1);
+    panel.fillStyle(PALETTE.bgVoid, 0.6);
+    panel.fillRect(0, 0, panelW, panelH);
+    panel.fillStyle(PALETTE.cyanDim, 0.7);
+    panel.fillRect(0, 0, panelW, 2);
 
-    new PixelLabel(this, 6, 4, this.levelDef.name, {
+    new PixelLabel(this, 8, 6, this.levelDef.name, {
       color: hexToCss(PALETTE.white),
       strokeColor: hexToCss(PALETTE.outline),
-      scale: 1,
+      scale: 2,
     })
       .setScrollFactor(0)
       .setDepth(900);
 
-    this.hudDeathsText = new PixelLabel(this, 6, 15, `DEATHS ${GameState.run.deaths}`, {
+    // SYSTEM presence — a small always-on pulsing dot next to the level name,
+    // distinct from the transient commentary line below (§13: SYSTEM should
+    // feel like a character that's always watching, not just a text log).
+    const systemDot = this.add.circle(panelW - 14, 15, 4, PALETTE.system, 1).setScrollFactor(0).setDepth(900);
+    this.tweens.add({
+      targets: systemDot,
+      alpha: { from: 0.5, to: 1 },
+      duration: 1200,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    this.hudDeathsText = new PixelLabel(this, 8, 30, `DEATHS ${GameState.run.deaths}`, {
       color: hexToCss(PALETTE.danger),
       strokeColor: hexToCss(PALETTE.outline),
-      scale: 1,
+      scale: 2,
     })
       .setScrollFactor(0)
       .setDepth(900);
@@ -384,23 +430,31 @@ export class GameplayScene extends Phaser.Scene {
     const initialVoiceText = SystemVoice.current();
     this.hudSystemText = new PixelLabel(
       this,
-      6,
-      this.scale.height - 16,
+      8,
+      this.scale.height - 8,
       initialVoiceText ? `${this.systemLabel()}: ${initialVoiceText}` : '',
       {
         color: hexToCss(PALETTE.system),
         strokeColor: hexToCss(PALETTE.outline),
+        // Deliberately smaller than the title/deaths counter above — a full
+        // SYSTEM sentence at scale 2 could wrap to 2-3 lines and dominate the
+        // whole bottom of the screen right after a death. Scale 1 plus the
+        // longer display window above reads as a caption, not a billboard.
         scale: 1,
-        wordWrapWidth: this.scale.width - 12,
+        wordWrapWidth: this.scale.width - 16,
       },
     )
+      // Bottom-anchored (not top-left) so a 2-line SYSTEM line grows upward
+      // off the screen edge instead of overflowing past the bottom of it —
+      // the old top-left anchor at a fixed offset only worked for one line.
+      .setOrigin(0, 1)
       .setScrollFactor(0)
       .setDepth(900);
 
-    new PixelButton(this, this.scale.width - 18, 16, 'II', {
-      width: 24,
-      height: 24,
-      textScale: 2,
+    new PixelButton(this, this.scale.width - 24, 24, 'II', {
+      width: 36,
+      height: 36,
+      textScale: 3,
       onClick: () => this.pauseGame(),
     })
       .setScrollFactor(0)
@@ -423,20 +477,25 @@ export class GameplayScene extends Phaser.Scene {
   private handleTrapTriggered(payload: { trapId: string }): void {
     this.lastTriggeredTrapId = payload.trapId;
     this.fx.stopWarningPulse(payload.trapId, this.hazardById.get(payload.trapId));
+    playSfx('trapTrigger');
   }
 
   /** Fast alpha pulse on the hazard while it's telegraphing — makes the honest warning (CLAUDE.md #4.2) harder to miss, not just a color swap. */
   private handleTrapArmed(payload: { trapId: string }): void {
     const target = this.hazardById.get(payload.trapId);
     if (target) this.fx.startWarningPulse(payload.trapId, target);
+    playSfx('trapWarning');
+    MusicSequencer.requestTension();
   }
 
   private handlePlayerJumped(): void {
     this.fx.jumpDust(this.player.x, this.player.y);
+    playSfx('jump');
   }
 
   private handlePlayerLanded(payload: { x: number; y: number }): void {
     this.fx.landDust(payload.x, payload.y);
+    playSfx('land');
   }
 
   private handlePlayerDeath(payload: { cause: DeathCause; x: number; y: number }): void {
@@ -445,6 +504,7 @@ export class GameplayScene extends Phaser.Scene {
     GameState.registerDeath();
     this.hudDeathsText.setPixelText(`DEATHS ${GameState.run.deaths}`);
     this.fx.deathBurst(payload.x, payload.y);
+    playSfx('death');
 
     const attemptElapsedMs = this.time.now - this.attemptStartMs;
     const trapId = payload.cause === 'trap' ? this.lastTriggeredTrapId : null;
@@ -467,14 +527,15 @@ export class GameplayScene extends Phaser.Scene {
   private activateCheckpoint(checkpoint: CheckpointZone): void {
     if (this.activeRespawnCol !== undefined && checkpoint.col <= this.activeRespawnCol) return;
     this.activeRespawnCol = checkpoint.col;
+    playSfx('checkpoint');
 
     const marker = checkpoint.zone.getData('marker') as Phaser.GameObjects.Rectangle | undefined;
     marker?.setFillStyle(PALETTE.cyan, 1);
 
-    const label = new PixelLabel(this, checkpoint.zone.x, checkpoint.zone.y - 14, 'CHECKPOINT', {
+    const label = new PixelLabel(this, checkpoint.zone.x, checkpoint.zone.y - 20, 'CHECKPOINT', {
       color: hexToCss(PALETTE.cyan),
       strokeColor: hexToCss(PALETTE.outline),
-      scale: 1,
+      scale: 2,
     }).setOrigin(0.5, 1);
     this.tweens.add({
       targets: label,
@@ -491,6 +552,8 @@ export class GameplayScene extends Phaser.Scene {
     this.resolving = true;
     this.player.markVictory();
     this.fx.victoryBurst(this.player.x, this.player.y);
+    playSfx('levelComplete');
+    MusicSequencer.celebrateVictory();
 
     const timeMs = GameState.elapsedMs();
     const deaths = GameState.run.deaths;
@@ -501,8 +564,16 @@ export class GameplayScene extends Phaser.Scene {
     PlayerProfile.integrate(this.behaviorTracker.finish(null, true));
     if (wasStruggling) Commentator.commentOnAdaptation();
 
+    const next = getNextLevelId(this.levelDef.id);
+    SaveService.markCompleted(this.levelDef.id);
+    // Points PLAY at what comes after this level, not this level itself — so
+    // returning to the main menu (Sector Complete's "back to menu", or simply
+    // backing out) and pressing PLAY again continues the campaign instead of
+    // replaying what's already done. Falls back to staying put at the last
+    // level once there's no `next` (campaign end).
+    if (next) SaveService.setLastLevelId(next);
+
     this.time.delayedCall(600, () => {
-      const next = getNextLevelId(this.levelDef.id);
       if (isSectorFinale(this.levelDef.id)) {
         this.scene.start('SectorCompleteScene', {
           completedLevelId: this.levelDef.id,
