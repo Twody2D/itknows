@@ -6,7 +6,9 @@ import type { LevelSectionConfig } from '@/gameplay/LevelSections';
  * → combine (§66):
  *
  * 01 PISTON ROW — two independent lasers in sequence (practice: "more than
- *    one" doesn't change the rule — wait, watch, go).
+ *    one" doesn't change the rule — wait, watch, go), plus a sudden-pit
+ *    falling-platform ahead of the first laser (see the level's own
+ *    doc comment).
  * 02 OFFSET — two lasers close together, deliberately out of phase
  *    (`initialIdleMs` on the second) so there's never a moment both read as
  *    safe by habit — has to actually be watched, not memorized.
@@ -53,19 +55,36 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
     // untouched.
     width: 64,
     groundRow: 22,
-    gaps: [],
+    // A "sudden pit" — the ordinary campaign's `falling-platform` (already
+    // proven honest in sector 04's FREEFALL, `col`/`row` right on the
+    // ground row instead of an elevated row 20 bypass) used here as a
+    // genuine surprise instead of a themed, telegraphed section: right
+    // after the spike lesson lands and before the sector's own laser
+    // lesson starts, so nothing else is competing for attention when it
+    // first appears. Visually identical to ordinary ground (`tile-ground`
+    // texture) until stepped on — same honest 350ms shake telegraph as
+    // every other falling-platform, comfortably above `MIN_WARNING_MS`.
+    // Keep moving off it and it never falls; loiter and it does.
+    gaps: [[24, 25]],
     spikeColumns: [18, 19],
     platforms: [],
     playerStartCol: 2,
     exitCol: 52,
     traps: [
+      { type: 'falling-platform', id: 'flp-ambush-01', col: 24, row: 22, width: 2 },
       { type: 'laser', id: 'laser-01', col: 30, topRow: 16, bottomRow: 21 },
       { type: 'laser', id: 'laser-02', col: 44, topRow: 16, bottomRow: 21 },
     ],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
       { id: 'spikes', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
-      { id: 'lasers', type: 'system', fromCol: 22, toCol: 45, requiredMechanics: ['laser'] },
+      {
+        id: 'lasers',
+        type: 'system',
+        fromCol: 22,
+        toCol: 45,
+        requiredMechanics: ['gap-jump', 'falling-platform', 'laser'],
+      },
       { id: 'exit', type: 'final', fromCol: 46, toCol: 63 },
     ] satisfies LevelSectionConfig[],
   },

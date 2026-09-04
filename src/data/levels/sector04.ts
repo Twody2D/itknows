@@ -8,10 +8,13 @@ import type { LevelSectionConfig } from '@/gameplay/LevelSections';
  * combine (§66):
  *
  * 01 SYNC GATE — two timing gates in sequence (practice: more than one
- *    doesn't change the rule — wait for green, go).
+ *    doesn't change the rule — wait for green, go), plus a sudden-pit
+ *    falling-platform ahead of the first gate — before this sector's own
+ *    falling-platform lesson (level 04) ever teaches the mechanic formally.
  * 02 RHYTHM — two gates with genuinely different cycle speeds (one fast,
  *    one slow custom `timing`), so there's no single rhythm to memorize —
- *    each has to be watched on its own terms.
+ *    each has to be watched on its own terms — plus an ambush spike ahead
+ *    of the first gate (see sector01-level-01's doc comment).
  * 03 CRUMBLE RUN — three disappearing platforms back to back across one
  *    wide gap: keep moving, don't stop on any single one.
  * 04 FREEFALL — two falling platforms back to back across a gap — the
@@ -39,19 +42,30 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     // Widened from 54 — see sector03.ts's level-01 doc comment for why.
     width: 64,
     groundRow: 22,
-    gaps: [],
+    // Sudden pit (see sector03.ts level-01's doc comment for the full
+    // reasoning) — before this sector's own falling-platform lesson
+    // (level 04, FREEFALL) ever teaches the mechanic formally, right after
+    // the spike lesson and before the gate lesson starts.
+    gaps: [[24, 25]],
     spikeColumns: [18, 19],
     platforms: [],
     playerStartCol: 2,
     exitCol: 50,
     traps: [
+      { type: 'falling-platform', id: 'flp-ambush-01', col: 24, row: 22, width: 2 },
       { type: 'timing-gate', id: 'gate-01', col: 30, topRow: 16, bottomRow: 21 },
       { type: 'timing-gate', id: 'gate-02', col: 42, topRow: 16, bottomRow: 21 },
     ],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
       { id: 'spikes', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
-      { id: 'gates', type: 'system', fromCol: 22, toCol: 45, requiredMechanics: ['timing-gate'] },
+      {
+        id: 'gates',
+        type: 'system',
+        fromCol: 22,
+        toCol: 45,
+        requiredMechanics: ['gap-jump', 'falling-platform', 'timing-gate'],
+      },
       { id: 'exit', type: 'final', fromCol: 46, toCol: 63 },
     ] satisfies LevelSectionConfig[],
   },
@@ -66,6 +80,35 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     playerStartCol: 2,
     exitCol: 50,
     traps: [
+      // Ambush spike (see sector01-level-01's doc comment for the full
+      // mechanism/honesty reasoning) — right after the spike lesson,
+      // before this level's own gate lesson starts. Second campaign
+      // instance: still a surprise here specifically because sector 04's
+      // own mechanic is "wait it out"/"don't linger", not "something falls
+      // on you out of nowhere" — this doesn't fit the pattern the sector
+      // otherwise teaches, which is what keeps it landing as a surprise
+      // rather than becoming the expected shape of every level's opening.
+      {
+        type: 'moving-spike',
+        id: 'mspike-01',
+        ambush: true,
+        fromCol: 26,
+        fromRow: 11,
+        toCol: 26,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-01-trigger',
+        col: 20,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-01',
+        visible: false,
+      },
       // Faster cycle — warningMs still well above MIN_WARNING_MS (250ms).
       {
         type: 'timing-gate',
@@ -82,7 +125,13 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
       { id: 'spikes', type: 'challenge', fromCol: 14, toCol: 21, requiredMechanics: ['spike-jump'] },
-      { id: 'gates', type: 'system', fromCol: 22, toCol: 45, requiredMechanics: ['timing-gate'] },
+      {
+        id: 'gates',
+        type: 'system',
+        fromCol: 22,
+        toCol: 45,
+        requiredMechanics: ['moving-spike', 'timing-gate'],
+      },
       { id: 'exit', type: 'final', fromCol: 46, toCol: 63 },
     ] satisfies LevelSectionConfig[],
   },

@@ -7,7 +7,8 @@ import type { LevelSectionConfig } from '@/gameplay/LevelSections';
  * combine progression (master-prompt §66):
  *
  * 01 GRID ENTRY — laser (patience, not reflexes: full-height, wait it out),
- *    then three more at wider spacing.
+ *    then three more at wider spacing, plus an ambush spike (see
+ *    sector01-level-01's doc comment) mid-way through the laser run.
  * 02 MOVING BRIDGE — moving platform (optional) + trigger-armed dormant laser,
  *    both repeated later in the level.
  * 03 PURSUIT — pursuer (always slower than the player, always outrunnable).
@@ -68,6 +69,31 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
       // tiles, so a laser is never stacked on another obstacle.
       { type: 'laser', id: 'laser-01', col: 35, topRow: 16, bottomRow: 21 },
       { type: 'laser', id: 'laser-02', col: 66, topRow: 16, bottomRow: 21 },
+      // Ambush spike (see sector01-level-01's doc comment for the full
+      // mechanism/honesty reasoning) — right after the checkpoint, in the
+      // middle of the long laser-run stretch where nothing else is within
+      // several tiles. Third campaign instance, first outside sector 01.
+      {
+        type: 'moving-spike',
+        id: 'mspike-01',
+        ambush: true,
+        fromCol: 82,
+        fromRow: 11,
+        toCol: 82,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-01-trigger',
+        col: 76,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-01',
+        visible: false,
+      },
       { type: 'laser', id: 'laser-03', col: 92, topRow: 16, bottomRow: 21 },
       { type: 'laser', id: 'laser-04', col: 118, topRow: 16, bottomRow: 21 },
     ],
@@ -84,7 +110,13 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
         checkpointAfter: true,
         requiredMechanics: ['gap-jump', 'spike-jump', 'laser'],
       },
-      { id: 'laser-run', type: 'system', fromCol: 72, toCol: 121, requiredMechanics: ['laser', 'gap-jump'] },
+      {
+        id: 'laser-run',
+        type: 'system',
+        fromCol: 72,
+        toCol: 121,
+        requiredMechanics: ['laser', 'gap-jump', 'moving-spike'],
+      },
       { id: 'closing-run', type: 'combination', fromCol: 122, toCol: 133, requiredMechanics: ['spike-jump'] },
       { id: 'exit', type: 'final', fromCol: 134, toCol: 139 },
     ] satisfies LevelSectionConfig[],
