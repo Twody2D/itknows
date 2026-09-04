@@ -27,6 +27,7 @@ import { personalityTag } from '@/ai/SystemPersonality';
 import { isSectorFinale } from '@/gameplay/sectors';
 import type { SectorCompleteData } from '@/scenes/SectorCompleteScene';
 import { TutorialHints } from '@/ui/TutorialHints';
+import { fadeIn } from '@/ui/SceneFade';
 import { MIN_VIRTUAL_WIDTH, TILE_SIZE } from '@/config/display';
 
 const SYSTEM_COMMENT_DISPLAY_MS = 2500;
@@ -37,6 +38,8 @@ interface GameplaySceneData {
   levelId: string;
   /** Checkpoint tile column to respawn at instead of the level's own spawn — set by a mid-attempt death after crossing one. */
   respawnCol?: number;
+  /** Fade in from black on entry — only for deliberate navigation (main menu → gameplay, sector complete → next sector), never death-retry or a same-level restart (`ui/SceneFade.ts`). */
+  entryTransition?: boolean;
 }
 
 /** Pixels of leeway when deciding whether the player was already above a one-way platform. */
@@ -78,6 +81,7 @@ export class GameplayScene extends Phaser.Scene {
   private activeRespawnCol: number | undefined;
   private uiCamera?: Phaser.Cameras.Scene2D.Camera;
   private buildingUi = false;
+  private useEntryFade = false;
 
   constructor() {
     super('GameplayScene');
@@ -91,10 +95,15 @@ export class GameplayScene extends Phaser.Scene {
     this.resolving = false;
     this.hesitationCommented = false;
     this.activeRespawnCol = data.respawnCol;
+    this.useEntryFade = data.entryTransition ?? false;
   }
 
   create(): void {
     this.cameras.main.setBackgroundColor(PALETTE.bgVoid);
+    // Added before either camera exists, so it renders on both without extra
+    // routing (`ui/SceneFade.ts`). Never set for a death-retry or a same-
+    // level restart — see `GameplaySceneData.entryTransition`'s doc comment.
+    if (this.useEntryFade) fadeIn(this);
 
     if (GameState.currentLevelId !== this.levelDef.id) {
       GameState.currentLevelId = this.levelDef.id;

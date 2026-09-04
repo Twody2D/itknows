@@ -5,6 +5,7 @@ import { getAllLevels } from '@/gameplay/LevelFactory';
 import { buildEnvironmentLayers } from '@/art/Environment';
 import { PixelLabel } from '@/ui/PixelLabel';
 import { PixelButton } from '@/ui/PixelButton';
+import { fadeIn } from '@/ui/SceneFade';
 import { t } from '@/i18n/ui';
 
 /**
@@ -21,6 +22,7 @@ export class MainMenuScene extends Phaser.Scene {
 
   create(): void {
     this.cameras.main.setBackgroundColor(PALETTE.bgVoid);
+    fadeIn(this);
     // Player textures/anims are generated once by BootScene (they're static
     // and global — Phaser's TextureManager/AnimationManager aren't
     // per-scene). Regenerating them here on every menu visit used to remove
@@ -130,7 +132,7 @@ export class MainMenuScene extends Phaser.Scene {
       variant: 'primary',
       onClick: () => {
         const firstLevel = getAllLevels()[0];
-        if (firstLevel) this.scene.start('GameplayScene', { levelId: firstLevel.id });
+        if (firstLevel) this.scene.start('GameplayScene', { levelId: firstLevel.id, entryTransition: true });
       },
     });
     // Attention-grabbing idle pulse — a breathing glow rather than a scale

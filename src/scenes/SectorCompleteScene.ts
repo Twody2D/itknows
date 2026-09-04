@@ -6,6 +6,7 @@ import { formatMmSs } from '@/utils/formatTime';
 import { PixelLabel } from '@/ui/PixelLabel';
 import { PixelButton } from '@/ui/PixelButton';
 import { drawPanel, buildDimBackdrop } from '@/ui/Panel';
+import { fadeIn } from '@/ui/SceneFade';
 import { personalityTag } from '@/ai/SystemPersonality';
 import { sectorNumberOf } from '@/gameplay/sectors';
 import { AdsService } from '@/services/AdsService';
@@ -44,6 +45,7 @@ export class SectorCompleteScene extends Phaser.Scene {
 
     const { width, height } = this.scale;
     this.cameras.main.setBackgroundColor(PALETTE.bgVoid);
+    fadeIn(this);
     buildDimBackdrop(this);
 
     const panelW = Math.min(260, width - 40);
@@ -104,7 +106,7 @@ export class SectorCompleteScene extends Phaser.Scene {
       textScale: 1,
       onClick: () => {
         if (this.sectorData.nextLevelId) {
-          this.scene.start('GameplayScene', { levelId: this.sectorData.nextLevelId });
+          this.scene.start('GameplayScene', { levelId: this.sectorData.nextLevelId, entryTransition: true });
         } else {
           this.scene.start('MainMenuScene');
         }
