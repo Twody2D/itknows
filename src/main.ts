@@ -3,6 +3,7 @@ import { PALETTE } from '@/config/palette';
 import { PHYSICS } from '@/config/physics';
 import { MIN_VIRTUAL_WIDTH, VIRTUAL_HEIGHT } from '@/config/display';
 import { blockBrowserGestures } from '@/utils/input/blockBrowserGestures';
+import { AudioEngine } from '@/audio/AudioEngine';
 import { ScaleController } from '@/core/ScaleController';
 import { OrientationGate } from '@/ui/OrientationGate';
 import { BootScene } from '@/scenes/BootScene';
@@ -17,6 +18,14 @@ const root = document.getElementById('app');
 if (!root) throw new Error('#app root element not found');
 
 blockBrowserGestures(root);
+
+// Audio focus (master-prompt §32): a hidden tab suspends the context outright
+// instead of letting scheduled nodes play into nothing, and picks back up on
+// return — the game itself already pauses independently via `OrientationGate`.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) AudioEngine.suspend();
+  else AudioEngine.resume();
+});
 
 const game = new Phaser.Game({
   type: Phaser.AUTO,
@@ -34,6 +43,12 @@ const game = new Phaser.Game({
   // jump zone need to be held down by two fingers at once (TouchControls.ts).
   input: {
     activePointers: 2,
+  },
+  // All sound is our own procedural synth (`audio/`), never Phaser's sample
+  // player — without this, Phaser's own `WebAudioSoundManager` still opens a
+  // second, entirely unused `AudioContext` at boot.
+  audio: {
+    noAudio: true,
   },
   physics: {
     default: 'arcade',

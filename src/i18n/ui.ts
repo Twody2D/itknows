@@ -18,6 +18,7 @@ const UI_STRINGS = {
   mainMenu: { ru: 'Главное меню', en: 'Main menu' },
 
   settingsTitle: { ru: 'Настройки', en: 'Settings' },
+  sound: { ru: 'Звук', en: 'Sound' },
   particles: { ru: 'Частицы', en: 'Particles' },
   screenShake: { ru: 'Тряска экрана', en: 'Screen shake' },
   language: { ru: 'Язык', en: 'Language' },

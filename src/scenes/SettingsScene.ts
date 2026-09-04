@@ -4,6 +4,7 @@ import { hexToCss } from '@/utils/color';
 import { t } from '@/i18n/ui';
 import { LocaleState } from '@/i18n/Locale';
 import { FxSettings } from '@/fx/FxSettings';
+import { AudioSettings } from '@/audio/AudioSettings';
 import { PixelLabel } from '@/ui/PixelLabel';
 import { PixelButton } from '@/ui/PixelButton';
 import { drawPanel, buildDimBackdrop } from '@/ui/Panel';
@@ -17,6 +18,7 @@ import { drawPanel, buildDimBackdrop } from '@/ui/Panel';
  * with nothing scene-specific to wire.
  */
 export class SettingsScene extends Phaser.Scene {
+  private soundButton!: PixelButton;
   private particlesButton!: PixelButton;
   private shakeButton!: PixelButton;
 
@@ -30,7 +32,7 @@ export class SettingsScene extends Phaser.Scene {
     buildDimBackdrop(this);
 
     const panelW = 190;
-    const panelH = 148;
+    const panelH = 176;
     const panelX = width / 2 - panelW / 2;
     const panelY = height / 2 - panelH / 2;
     const g = this.add.graphics();
@@ -46,6 +48,17 @@ export class SettingsScene extends Phaser.Scene {
     const rowH = 20;
     const gap = 8;
     let y = panelY + 46;
+
+    this.soundButton = new PixelButton(this, width / 2, y, this.soundLabel(), {
+      width: rowW,
+      height: rowH,
+      textScale: 1,
+      onClick: () => {
+        AudioSettings.toggle();
+        this.soundButton.setLabelText(this.soundLabel());
+      },
+    });
+    y += rowH + gap;
 
     this.particlesButton = new PixelButton(this, width / 2, y, this.particlesLabel(), {
       width: rowW,
@@ -86,6 +99,10 @@ export class SettingsScene extends Phaser.Scene {
       textScale: 1,
       onClick: () => this.scene.stop(),
     });
+  }
+
+  private soundLabel(): string {
+    return `${t('sound')}: ${AudioSettings.muted ? t('off') : t('on')}`;
   }
 
   private particlesLabel(): string {

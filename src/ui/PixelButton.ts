@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { hexToCss } from '@/utils/color';
 import { PixelLabel } from './PixelLabel';
+import { playSfx } from '@/audio/SfxManager';
 
 export type PixelButtonVariant = 'primary' | 'secondary';
 
@@ -72,6 +73,7 @@ export class PixelButton extends Phaser.GameObjects.Container {
     this.hitZone.on('pointerdown', () => this.redraw(true, true));
     this.hitZone.on('pointerup', () => {
       this.redraw(true, false);
+      playSfx('uiClick');
       opts.onClick();
     });
 
