@@ -114,6 +114,9 @@ const UI_STRINGS = {
 
 export type UiStringKey = keyof typeof UI_STRINGS;
 
+/** Test-only — lets a data-sanity test (e.g. `tests/shop-items-sanity.test.ts`) confirm a `UiStringKey` reference is real without importing this module's internal `UI_STRINGS`. */
+export const UI_STRING_KEYS_FOR_TEST: readonly string[] = Object.keys(UI_STRINGS);
+
 /** Looks up a UI string in the current locale — the only way scene/UI code should produce user-facing text (CLAUDE.md #7). */
 export function t(key: UiStringKey): string {
   return UI_STRINGS[key][LocaleState.current];
