@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { hexToCss } from '@/utils/color';
-import { getAllLevels } from '@/gameplay/LevelFactory';
+import { SaveService } from '@/services/SaveService';
+import { YandexGamesService } from '@/services/YandexGamesService';
 import { buildEnvironmentLayers } from '@/art/Environment';
 import { PixelLabel } from '@/ui/PixelLabel';
 import { PixelButton } from '@/ui/PixelButton';
@@ -39,6 +40,12 @@ export class MainMenuScene extends Phaser.Scene {
     this.buildLogo(width);
     this.buildSystemLine(width);
     this.buildPlayButton(width, height);
+
+    // The menu is now fully built and interactive — this is the moment
+    // CLAUDE.md #8 means by "LoadingAPI.ready", not a generic "boot done"
+    // signal. Idempotent inside the service, so returning to this scene
+    // later doesn't re-fire it.
+    YandexGamesService.notifyLoadingReady();
   }
 
   private buildFloor(width: number, floorY: number): void {
@@ -131,8 +138,7 @@ export class MainMenuScene extends Phaser.Scene {
     const playButton = new PixelButton(this, width / 2, playY, t('play'), {
       variant: 'primary',
       onClick: () => {
-        const firstLevel = getAllLevels()[0];
-        if (firstLevel) this.scene.start('GameplayScene', { levelId: firstLevel.id, entryTransition: true });
+        this.scene.start('GameplayScene', { levelId: SaveService.getResumeLevelId(), entryTransition: true });
       },
     });
     // Attention-grabbing idle pulse — a breathing glow rather than a scale
@@ -156,8 +162,18 @@ export class MainMenuScene extends Phaser.Scene {
       onClick: () => this.scene.launch('HowToPlayScene'),
     });
 
-    new PixelButton(this, width / 2, playY + 70, t('settings'), {
-      width: secondaryWidth,
+    // Levels + Settings share the last row instead of stacking a 4th row —
+    // the menu only has so much clearance above the floor line before it
+    // starts fighting for the same space as the character/floor.
+    const pairWidth = 96;
+    const pairGap = 12;
+    new PixelButton(this, width / 2 - pairWidth / 2 - pairGap / 2, playY + 70, t('levels'), {
+      width: pairWidth,
+      onClick: () => this.scene.launch('LevelSelectScene'),
+    });
+
+    new PixelButton(this, width / 2 + pairWidth / 2 + pairGap / 2, playY + 70, t('settings'), {
+      width: pairWidth,
       onClick: () => this.scene.launch('SettingsScene'),
     });
   }

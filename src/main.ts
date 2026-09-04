@@ -4,6 +4,8 @@ import { PHYSICS } from '@/config/physics';
 import { MIN_VIRTUAL_WIDTH, VIRTUAL_HEIGHT } from '@/config/display';
 import { blockBrowserGestures } from '@/utils/input/blockBrowserGestures';
 import { AudioEngine } from '@/audio/AudioEngine';
+import { YandexGamesService } from '@/services/YandexGamesService';
+import { SaveService } from '@/services/SaveService';
 import { ScaleController } from '@/core/ScaleController';
 import { OrientationGate } from '@/ui/OrientationGate';
 import { BootScene } from '@/scenes/BootScene';
@@ -13,11 +15,21 @@ import { PauseScene } from '@/scenes/PauseScene';
 import { SettingsScene } from '@/scenes/SettingsScene';
 import { HowToPlayScene } from '@/scenes/HowToPlayScene';
 import { SectorCompleteScene } from '@/scenes/SectorCompleteScene';
+import { LevelSelectScene } from '@/scenes/LevelSelectScene';
 
 const root = document.getElementById('app');
 if (!root) throw new Error('#app root element not found');
 
 blockBrowserGestures(root);
+
+// Started as early as possible — the SDK script is a network fetch, slower
+// than generating textures in BootScene, so this races the boot sequence
+// rather than blocking it (CLAUDE.md #8 — the game works fully without it).
+// Cloud save sync only makes sense once we know whether the SDK/an
+// authorized player is actually there, hence chained after `init()` instead
+// of also firing immediately — `SaveService`'s own localStorage-backed API
+// already works synchronously before this ever resolves.
+void YandexGamesService.init().then(() => SaveService.syncWithCloud());
 
 // Audio focus (master-prompt §32): a hidden tab suspends the context outright
 // instead of letting scheduled nodes play into nothing, and picks back up on
@@ -57,7 +69,16 @@ const game = new Phaser.Game({
       debug: false,
     },
   },
-  scene: [BootScene, MainMenuScene, GameplayScene, PauseScene, SettingsScene, HowToPlayScene, SectorCompleteScene],
+  scene: [
+    BootScene,
+    MainMenuScene,
+    GameplayScene,
+    PauseScene,
+    SettingsScene,
+    HowToPlayScene,
+    SectorCompleteScene,
+    LevelSelectScene,
+  ],
 });
 
 new ScaleController(game);

@@ -8,9 +8,13 @@ import { LocaleState } from './Locale';
  */
 const UI_STRINGS = {
   play: { ru: 'Играть', en: 'Play' },
+  levels: { ru: 'Уровни', en: 'Levels' },
   settings: { ru: 'Настройки', en: 'Settings' },
   howToPlay: { ru: 'Как играть', en: 'How to play' },
   back: { ru: 'Назад', en: 'Back' },
+
+  levelSelectSector: { ru: 'СЕКТОР', en: 'SECTOR' },
+  levelSelectLevel: { ru: 'Уровень', en: 'Level' },
 
   pauseTitle: { ru: 'Пауза', en: 'Paused' },
   resume: { ru: 'Продолжить', en: 'Resume' },
