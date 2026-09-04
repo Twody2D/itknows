@@ -252,6 +252,14 @@ class SaveServiceController {
     this.persist();
   }
 
+  /** Resets only the shop fields (credits/inventory/processed tokens) back to a fresh save's defaults — level progress (`completedLevels`/`lastLevelId`) is untouched. Used by `ShopDevTools`; harmless enough to also back a future "reset purchases" settings option. */
+  resetShopState(): void {
+    this.data.credits = 0;
+    this.data.inventory = defaultInventory();
+    this.data.processedPurchaseTokens = [];
+    this.persist();
+  }
+
   /** Test-only reset — never called from gameplay/UI code. */
   resetForTests(): void {
     this.data = emptySave();

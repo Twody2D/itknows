@@ -101,11 +101,15 @@ new OrientationGate((blocked) => {
   else game.resume();
 });
 
-// Dev-only hook for local/CI verification scripts to jump straight to a
-// scene (e.g. a specific level) without scripting menu navigation and level
-// transition timing. Never ships: import.meta.env.DEV is statically false
-// in a production build, so bundlers dead-code-eliminate this block
-// (verified as part of the bundle-size audit — CLAUDE.md #Phase 0).
+// Dev-only hooks for local/CI verification scripts. Never ships:
+// import.meta.env.DEV is statically false in a production build, so
+// bundlers dead-code-eliminate this whole block — including the dynamic
+// import below, which is the only place `ShopDevTools` (and everything it
+// pulls in) is ever referenced (verified as part of the bundle-size audit —
+// CLAUDE.md #Phase 0).
 if (import.meta.env.DEV) {
   (window as unknown as { __game: Phaser.Game }).__game = game;
+  void import('@/dev/ShopDevTools').then(({ ShopDevTools }) => {
+    (window as unknown as { __shopDev: typeof ShopDevTools }).__shopDev = ShopDevTools;
+  });
 }
