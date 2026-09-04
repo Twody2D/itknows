@@ -219,7 +219,7 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[]): BuiltTraps {
             id: `${def.id}-${i}`,
             x,
             y,
-            shakeMs: def.shakeMs,
+            holdMs: def.holdMs,
             fallSpeed: def.fallSpeed,
             respawnMs: def.respawnMs,
           });

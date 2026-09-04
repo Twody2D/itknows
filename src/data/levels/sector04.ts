@@ -19,7 +19,7 @@ import type { LevelSectionConfig } from '@/gameplay/LevelSections';
  *    wide gap: keep moving, don't stop on any single one.
  * 04 FREEFALL — two falling platforms back to back across a gap — the
  *    other "don't linger" mechanic, same safety margin, different tell
- *    (shake-then-drop instead of flicker-then-vanish).
+ *    (sink-then-drop instead of flicker-then-vanish).
  * 05 LOCKSTEP — moving-platform bypass (optional, proven pattern) then a
  *    timing gate (mandatory) further down the same level — two
  *    already-taught mechanics in sequence, not fused into one interaction.
@@ -173,9 +173,10 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     exitCol: 50,
     traps: [
       // Two falling platforms spanning the full gap — same "keep moving"
-      // safety margin as CRUMBLE RUN's disappearing platforms (350ms
-      // shake >> the ~360ms it takes to cross both at a walk), different
-      // visual tell (shake-then-drop, not flicker-then-vanish).
+      // safety margin as CRUMBLE RUN's disappearing platforms (each carries
+      // you ~320ms before it drops — comfortably more than the time it
+      // takes to walk across one), different visual tell (sink-then-drop,
+      // not flicker-then-vanish).
       { type: 'falling-platform', id: 'flp-01', col: 26, row: 22, width: 2 },
       { type: 'falling-platform', id: 'flp-02', col: 28, row: 22, width: 2 },
     ],

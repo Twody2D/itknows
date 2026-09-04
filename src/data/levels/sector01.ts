@@ -103,17 +103,27 @@ import type { LevelSectionConfig } from '@/gameplay/LevelSections';
  * Every level in this sector now carries a mix of ambush spikes (mspike-0N,
  * see `mspike-01`'s doc comment below for the full mechanism) and sudden
  * pits (`falling-platform` at ground level instead of its usual elevated-
- * bonus role — ordinary-looking ground, honest 350ms shake before it drops,
- * precedented by sector-04-level-04 FREEFALL already doing this as
- * mandatory content): 3 on level 01, ramping to 6 by level 06. Every single
- * one still obeys the same rules as `mspike-01` — honestly telegraphed,
- * `LevelValidator`-provable independent of whether the trap actually fires,
- * kept several tiles clear of every other hazard (never stacked on a static
- * spike cluster, an existing gap, a checkpoint, a laser, the fake exit, or
- * — level 04 specifically — the staircase). Verified live for all 27
- * placements across the sector: unreacted contact dies in the trap's own
- * honest lethal phase every time; stopping (ambush spikes) or crossing
- * without stopping (sudden pits) survives every time.
+ * bonus role — ordinary-looking ground that immediately starts sinking the
+ * instant you step on it, still carrying you for ~320ms (the honest
+ * telegraph) before it drops away, precedented by sector-04-level-04 FREEFALL
+ * already doing this as mandatory content): 3 on level 01, ramping to 7 by
+ * level 06. Every single one still obeys the same rules as `mspike-01` —
+ * honestly telegraphed, `LevelValidator`-provable independent of whether the
+ * trap actually fires, kept several tiles clear of every other hazard (never
+ * stacked on a static spike cluster, an existing gap, a checkpoint, a laser,
+ * the fake exit, or — level 04 specifically — the staircase).
+ *
+ * RIGHT-AT-THE-DOOR AMBUSHES. A second follow-up ask: some levels also drop
+ * one immediately before the exit itself — "relax, you made it" being
+ * exactly the wrong moment. Levels 02, 04 and 06 each land one there (01,
+ * 03, 05 don't — "sometimes", not "every level", is what keeps it a
+ * surprise rather than a pattern the player learns to expect at every exit).
+ * Level 01 didn't need a separate one added: `mspike-02` already lands 6
+ * tiles before that level's own exit.
+ *
+ * Verified live for every placement across the sector: unreacted contact
+ * dies in the trap's own honest lethal phase every time; stopping (ambush
+ * spikes) or crossing without stopping (sudden pits) survives every time.
  */
 export const SECTOR_01_LEVELS: LevelDef[] = [
   {
@@ -332,6 +342,31 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       // Second sudden pit, well before the platform bypass over the fourth
       // cluster starts.
       { type: 'falling-platform', id: 'flp-02', col: 76, row: 22, width: 2 },
+      // Right at the door: a third ambush spike landing one tile before the
+      // exit itself — "made it past everything, relax" is exactly the
+      // moment this punishes. Same honest mechanism as the other two, just
+      // placed to be a gotcha at the finish line instead of mid-level.
+      {
+        type: 'moving-spike',
+        id: 'mspike-03',
+        ambush: true,
+        fromCol: 133,
+        fromRow: 11,
+        toCol: 133,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-03-trigger',
+        col: 127,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-03',
+        visible: false,
+      },
     ],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 17, requiredMechanics: ['move'] },
@@ -545,6 +580,29 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       },
       { type: 'falling-platform', id: 'flp-02', col: 102, row: 22, width: 2 },
       { type: 'falling-platform', id: 'flp-03', col: 150, row: 22, width: 2 },
+      // Right at the door, same as level 02's closer — lands well clear of
+      // both the gap at 176-177 and the exit itself (col 184).
+      {
+        type: 'moving-spike',
+        id: 'mspike-03',
+        ambush: true,
+        fromCol: 180,
+        fromRow: 11,
+        toCol: 180,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-03-trigger',
+        col: 174,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-03',
+        visible: false,
+      },
     ],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 17, requiredMechanics: ['move'] },
@@ -777,9 +835,11 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       // player briefly think they're done, not that it's unfair.
       { type: 'fake-exit', id: 'fake-exit-01', col: 238, row: 22 },
       // Sixth and final campaign level with the ambush spike / sudden pit
-      // vocabulary in sector 01 — the finale gets the most of them (6, the
+      // vocabulary in sector 01 — the finale gets the most of them (7, the
       // sector's peak), still every one several tiles clear of a laser, the
-      // wide bridged pit, the fake exit, and both checkpoints.
+      // wide bridged pit, the fake exit, and both checkpoints — except the
+      // very last one below, deliberately layered right against the fake
+      // exit on purpose (see its own comment).
       {
         type: 'moving-spike',
         id: 'mspike-01',
@@ -846,6 +906,35 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         visible: false,
       },
       { type: 'falling-platform', id: 'flp-03', col: 130, row: 22, width: 2 },
+      // The sector's last word: the trigger sits just before the fake exit
+      // (238), so the fall is already underway while the player is still
+      // dealing with "wait, is that it?" — and the spike itself lands three
+      // tiles past the fake exit, right before the *actual* one (244).
+      // Two independently honest threats overlapping in time, neither one
+      // lethal because of the other (the fake exit never kills by
+      // construction) — layered, not combined, same discipline sector 03's
+      // file doc comment lays out for PRESSURE VALVE.
+      {
+        type: 'moving-spike',
+        id: 'mspike-04',
+        ambush: true,
+        fromCol: 241,
+        fromRow: 11,
+        toCol: 241,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-04-trigger',
+        col: 235,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-04',
+        visible: false,
+      },
     ],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 15, requiredMechanics: ['move'] },

@@ -12,7 +12,7 @@ export const PHYSICS = {
   airAcceleration: 700,
   friction: 1200,
 
-  jumpVelocity: -240,
+  jumpVelocity: -250,
   jumpCutMultiplier: 0.45,
   // There is deliberately no dash. Run and jump are the whole vocabulary;
   // every level in the game is authored against that reach (`jumpPhysics.ts`),

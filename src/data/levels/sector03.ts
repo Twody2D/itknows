@@ -62,9 +62,11 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
     // after the spike lesson lands and before the sector's own laser
     // lesson starts, so nothing else is competing for attention when it
     // first appears. Visually identical to ordinary ground (`tile-ground`
-    // texture) until stepped on — same honest 350ms shake telegraph as
-    // every other falling-platform, comfortably above `MIN_WARNING_MS`.
-    // Keep moving off it and it never falls; loiter and it does.
+    // texture) until stepped on — contact starts the sink immediately, but
+    // it still carries you for ~320ms (comfortably above `MIN_WARNING_MS`)
+    // before it drops away, same honest hold as every other
+    // falling-platform. Stepping back off or jumping clear before that
+    // window expires is what survives it.
     gaps: [[24, 25]],
     spikeColumns: [18, 19],
     platforms: [],

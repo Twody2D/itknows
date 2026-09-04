@@ -377,7 +377,8 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
       // Optional elevated bypasses over the ground-spike hops — the ground
       // path underneath (jump the spikes, already-proven mechanic) is always
       // available; the platform is a faster but non-mandatory route, safe as
-      // long as it isn't lingered on past its 350ms shake telegraph.
+      // long as it isn't lingered on past the ~320ms it keeps carrying you
+      // before it drops away.
       { type: 'falling-platform', id: 'flp-01', col: 41, row: 20, width: 4 },
       { type: 'falling-platform', id: 'flp-02', col: 103, row: 20, width: 5 },
       { type: 'falling-platform', id: 'flp-03', col: 175, row: 20, width: 5 },

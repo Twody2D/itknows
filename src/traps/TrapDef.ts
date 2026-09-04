@@ -61,7 +61,7 @@ export type TrapDef =
       col: number;
       row: number;
       width: number;
-      shakeMs?: number;
+      holdMs?: number;
       fallSpeed?: number;
       respawnMs?: number;
     }
