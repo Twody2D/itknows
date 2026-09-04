@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { drawPlayerFrame } from './drawPlayer';
+import { SKIN_VISUALS, skinColorsFor } from '@/data/shop/skinVisuals';
 import {
   drawExitTile,
   drawFakePlatformTile,
@@ -46,20 +47,31 @@ function addOrReplaceCanvas(scene: Phaser.Scene, key: string, canvas: HTMLCanvas
   scene.textures.addCanvas(key, canvas);
 }
 
-export function generatePlayerTextures(scene: Phaser.Scene): void {
+/**
+ * `skinId: 'default'` (the only value every existing caller passes, via the
+ * omitted default) keeps today's exact unprefixed keys (`player-idle-0`,
+ * anim `player-idle`) — every existing reference (`Player.ts`'s hardcoded
+ * initial texture, `MainMenuScene`'s preview sprite) stays untouched. Any
+ * other skin id gets its own prefixed key set instead, generated once per
+ * catalog skin at boot (`BootScene`) — see `skinColorsFor`.
+ */
+export function generatePlayerTextures(scene: Phaser.Scene, skinId = 'default'): void {
+  const prefix = skinId === 'default' ? 'player' : `player-${skinId}`;
+  const colors = skinColorsFor(skinId);
+
   for (const state of PLAYER_ANIM_STATES) {
     const frameCount = PLAYER_FRAME_COUNTS[state] ?? 1;
     const frames: Phaser.Types.Animations.AnimationFrame[] = [];
 
     for (let f = 0; f < frameCount; f++) {
       const { canvas, ctx } = makeCanvas(PLAYER_SPRITE_W, PLAYER_SPRITE_H);
-      drawPlayerFrame(ctx, state, f);
-      const key = `player-${state}-${f}`;
+      drawPlayerFrame(ctx, state, f, colors);
+      const key = `${prefix}-${state}-${f}`;
       addOrReplaceCanvas(scene, key, canvas);
       frames.push({ key, frame: 0 });
     }
 
-    const animKey = `player-${state}`;
+    const animKey = `${prefix}-${state}`;
     if (scene.anims.exists(animKey)) scene.anims.remove(animKey);
     scene.anims.create({
       key: animKey,
@@ -139,7 +151,10 @@ export function generateTileTextures(scene: Phaser.Scene): void {
   addOrReplaceCanvas(scene, 'trap-pursuer', pursuer.canvas);
 }
 
+/** Every purchasable skin gets its texture/anim set generated once at boot — a small fixed cost (a handful of skins × ~11 already-cheap canvas draws), never a runtime one (CLAUDE.md #9). */
+const CATALOG_SKIN_IDS = ['default', ...Object.keys(SKIN_VISUALS)];
+
 export function generateAllTextures(scene: Phaser.Scene): void {
-  generatePlayerTextures(scene);
+  for (const skinId of CATALOG_SKIN_IDS) generatePlayerTextures(scene, skinId);
   generateTileTextures(scene);
 }

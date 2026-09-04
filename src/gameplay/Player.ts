@@ -4,6 +4,7 @@ import type { InputState } from '@/utils/input/InputState';
 import type { PlayerAnimState } from './PlayerAnimState';
 import { EventBus } from '@/core/EventBus';
 import type { DeathCause } from '@/core/EventBus';
+import { InventoryService } from '@/services/InventoryService';
 
 type LifeState = 'alive' | 'dead' | 'victory';
 
@@ -26,9 +27,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private currentAnim: PlayerAnimState = 'idle';
   private lifeState: LifeState = 'alive';
   private wasOnGround = true;
+  /** Resolved once at spawn from the equipped skin — matches `SpriteFactory.generatePlayerTextures`'s key scheme (`'player'` for `default`, `'player-{skinId}'` otherwise). A skin equipped mid-run only applies next attempt, same as every other cosmetic (CLAUDE.md "adaptation only between attempts" spirit). */
+  private readonly texPrefix: string;
 
   constructor(scene: Phaser.Scene, x: number, y: number, input: InputState) {
-    super(scene, x, y, 'player-idle-0');
+    const skinId = InventoryService.getEquipped('character');
+    const texPrefix = skinId === 'default' ? 'player' : `player-${skinId}`;
+    super(scene, x, y, `${texPrefix}-idle-0`);
+    this.texPrefix = texPrefix;
     this.inputState = input;
 
     scene.add.existing(this);
@@ -53,7 +59,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // drops the player into untelegraphed empty space with no ground tile.
     this.setCollideWorldBounds(true);
 
-    this.play('player-idle');
+    this.play(`${texPrefix}-idle`);
   }
 
   isAlive(): boolean {
@@ -173,6 +179,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private setAnim(state: PlayerAnimState): void {
     if (this.currentAnim === state && this.anims.isPlaying) return;
     this.currentAnim = state;
-    this.play(`player-${state}`, true);
+    this.play(`${this.texPrefix}-${state}`, true);
   }
 }

@@ -12,11 +12,22 @@ import { PLAYER_SPRITE_H, PLAYER_SPRITE_W } from './PLAYER_SPRITE';
  * antenna on the right) but every shape is big enough to read at arm's
  * length on a phone screen without zooming in.
  */
-export function drawPlayerFrame(ctx: CanvasRenderingContext2D, state: PlayerAnimState, frame: number): void {
+/** A skin's base look — `drawPlayerFrame` still overrides both on hurt/death/victory regardless (see its doc comment), so a skin can never mask those gameplay signals. */
+export interface PlayerColors {
+  body: number;
+  visor: number;
+}
+
+export function drawPlayerFrame(
+  ctx: CanvasRenderingContext2D,
+  state: PlayerAnimState,
+  frame: number,
+  colors?: PlayerColors,
+): void {
   ctx.clearRect(0, 0, PLAYER_SPRITE_W, PLAYER_SPRITE_H);
 
-  const bodyColor: number = state === 'hurt' ? PALETTE.danger : PALETTE.white;
-  let visorColor: number = PALETTE.cyan;
+  const bodyColor: number = state === 'hurt' ? PALETTE.danger : (colors?.body ?? PALETTE.white);
+  let visorColor: number = colors?.visor ?? PALETTE.cyan;
   if (state === 'hurt' || state === 'death') visorColor = PALETTE.danger;
   if (state === 'victory') visorColor = PALETTE.reward;
 
