@@ -17,6 +17,7 @@ import { getLevel, getNextLevelId } from '@/gameplay/LevelFactory';
 import { GameState } from '@/core/GameState';
 import { SaveService } from '@/services/SaveService';
 import { YandexGamesService } from '@/services/YandexGamesService';
+import { InventoryService } from '@/services/InventoryService';
 import { playSfx } from '@/audio/SfxManager';
 import { MusicSequencer } from '@/audio/MusicSequencer';
 import { EventBus } from '@/core/EventBus';
@@ -503,7 +504,7 @@ export class GameplayScene extends Phaser.Scene {
     this.resolving = true;
     GameState.registerDeath();
     this.hudDeathsText.setPixelText(`DEATHS ${GameState.run.deaths}`);
-    this.fx.deathBurst(payload.x, payload.y);
+    this.fx.deathBurst(payload.x, payload.y, InventoryService.getEquipped('death_fx') as 'static' | 'glitch');
     playSfx('death');
 
     const attemptElapsedMs = this.time.now - this.attemptStartMs;

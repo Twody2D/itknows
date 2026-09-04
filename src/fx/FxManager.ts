@@ -86,11 +86,22 @@ export class FxManager {
     this.landDustEmitter.explode(7, x, y - 3);
   }
 
-  /** Pixel-fragment scatter + flash + a short glitch slice — the whole thing settles within the death-restart budget (CLAUDE.md #5, < 700ms total). */
-  deathBurst(x: number, y: number): void {
+  /**
+   * Pixel-fragment scatter + flash + a short glitch slice — the whole thing
+   * settles within the death-restart budget (CLAUDE.md #5, < 700ms total).
+   * `variant` is a purely cosmetic shop unlock (`InventoryService`'s
+   * `death_fx` slot) — `static` is this exact effect, unchanged; `glitch`
+   * layers on two extra, wider glitch-slice passes. Neither variant touches
+   * timing or the death itself, only what it looks like.
+   */
+  deathBurst(x: number, y: number, variant: 'static' | 'glitch' = 'static'): void {
     if (FxSettings.particlesEnabled) this.deathEmitter.explode(14, x, y);
     this.flash(x, y, PALETTE.danger, 0.22);
     this.glitchSlice(x, y);
+    if (variant === 'glitch') {
+      this.glitchSlice(x, y - 4, 6);
+      this.glitchSlice(x, y + 4, 9);
+    }
     this.shake(140, 0.006);
   }
 
@@ -138,14 +149,14 @@ export class FxManager {
     });
   }
 
-  /** A cheap pixel-art stand-in for a digital glitch: a few thin slices that kick sideways and fade, no shader. */
-  private glitchSlice(x: number, y: number): void {
+  /** A cheap pixel-art stand-in for a digital glitch: a few thin slices that kick sideways and fade, no shader. `kick` widens the sideways offset — the `glitch` Death FX variant calls this twice more with a wider kick than the base effect uses. */
+  private glitchSlice(x: number, y: number, kick = 5): void {
     for (let i = 0; i < 3; i++) {
       const w = 10 + i * 4;
       const slice = this.scene.add.rectangle(x, y - 6 + i * 5, w, 1, PALETTE.cyan, 0.5).setDepth(145);
       this.scene.tweens.add({
         targets: slice,
-        x: x + (i % 2 === 0 ? 5 : -5),
+        x: x + (i % 2 === 0 ? kick : -kick),
         alpha: 0,
         duration: 140,
         delay: i * 20,
