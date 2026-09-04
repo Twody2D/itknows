@@ -7,7 +7,7 @@ import { SECTOR_05_LEVELS } from '@/data/levels/sector05';
 import { LEVEL_HEIGHT_TILES } from '@/gameplay/LevelDef';
 import type { LevelDef } from '@/gameplay/LevelDef';
 import { MAX_JUMP_RISE_PX } from '@/gameplay/jumpPhysics';
-import { TILE_SIZE } from '@/config/display';
+import { TILE_SIZE, MAX_VIRTUAL_WIDTH } from '@/config/display';
 
 /**
  * Cheap structural sanity checks. This is not the reachability solver
@@ -26,6 +26,14 @@ describe.each([
   ...SECTOR_04_LEVELS,
   ...SECTOR_05_LEVELS,
 ])('level def: $id', (level: LevelDef) => {
+  it('is at least as wide as the widest possible viewport', () => {
+    // A level narrower than the viewport can't fill it: the camera clamps to
+    // the world bounds and the rest of the screen is empty void — the black
+    // bar down the right-hand side. MAX_VIRTUAL_WIDTH is the widest the
+    // virtual viewport ever gets (`ScaleController`), so that's the floor.
+    expect(level.width * TILE_SIZE).toBeGreaterThanOrEqual(MAX_VIRTUAL_WIDTH);
+  });
+
   it('has a ground row within the playfield', () => {
     expect(level.groundRow).toBeGreaterThan(0);
     expect(level.groundRow).toBeLessThan(LEVEL_HEIGHT_TILES);
