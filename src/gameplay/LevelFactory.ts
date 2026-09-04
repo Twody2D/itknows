@@ -27,7 +27,7 @@ export function getLevel(id: string, variantId?: string): LevelDef {
   const level = ALL_LEVELS.find((l) => l.id === id);
   if (!level) throw new Error(`Unknown level id: ${id}`);
   if (!variantId || variantId === 'standard') return level;
-  const variant = LEVEL_VARIANTS[id]?.[variantId as 'gentle' | 'bold'];
+  const variant = LEVEL_VARIANTS[id]?.[variantId as 'gentle' | 'bold' | 'troll'];
   return variant ?? level;
 }
 

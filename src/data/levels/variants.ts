@@ -1,14 +1,20 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
+import { SECTOR_01_LEVELS } from './sector01';
 import { SECTOR_02_LEVELS } from './sector02';
 
-function findBase(id: string): LevelDef {
-  const found = SECTOR_02_LEVELS.find((l) => l.id === id);
+function findIn(levels: LevelDef[], id: string): LevelDef {
+  const found = levels.find((l) => l.id === id);
   if (!found) throw new Error(`variants.ts: unknown base level id "${id}"`);
   return found;
 }
 
+function findBase(id: string): LevelDef {
+  return findIn(SECTOR_02_LEVELS, id);
+}
+
 const GRID_ENTRY = findBase('sector-02-level-01');
 const PURSUIT = findBase('sector-02-level-03');
+const GAP_AND_SPIKE = findIn(SECTOR_01_LEVELS, 'sector-01-level-03');
 
 /**
  * `DifficultyDirector` demo content (Phase 3): two levels with real
@@ -27,8 +33,19 @@ const PURSUIT = findBase('sector-02-level-03');
  * Full 2-4 variants across all 30 levels is content-authoring scope, not
  * engineering scope — tracked in TODO.md, same "system complete, content
  * partial" split Phase 2 left for level count.
+ *
+ * `troll` is a separate axis from `gentle`/`bold` (master-prompt §15): it
+ * doesn't change difficulty, it subverts a habit the player's own profile
+ * shows they've formed — `DifficultyDirector.selectVariant()` only reaches
+ * for it once neither struggling nor thriving already picked something.
+ * `GAP_AND_SPIKE`'s troll variant is the first master-prompt §15 example
+ * played straight: after two sectors' worth of gaps trained "there's always
+ * a gap here, jump it", its first gap narrows from 2 tiles to 1 — walkable
+ * at a run, no jump required. Never adds danger (still `LevelValidator`-
+ * checked like every other variant), so it can never be an unfair surprise,
+ * only a redundant one.
  */
-export const LEVEL_VARIANTS: Record<string, { gentle?: LevelDef; bold?: LevelDef }> = {
+export const LEVEL_VARIANTS: Record<string, { gentle?: LevelDef; bold?: LevelDef; troll?: LevelDef }> = {
   [GRID_ENTRY.id]: {
     // More visible warning, less time actually lethal — same corridor, same wait-then-go idea.
     gentle: {
@@ -68,6 +85,15 @@ export const LEVEL_VARIANTS: Record<string, { gentle?: LevelDef; bold?: LevelDef
     bold: {
       ...PURSUIT,
       traps: [{ type: 'pursuer', id: 'pursuer-01', col: 1, row: 21, speedFactor: 0.75 }],
+    },
+  },
+  [GAP_AND_SPIKE.id]: {
+    // Only the first gap's width changes — every other gap, spike and the
+    // bridged-platform gaps later in the level stay exactly as
+    // `LevelValidator`-checked in the base level.
+    troll: {
+      ...GAP_AND_SPIKE,
+      gaps: [[16, 16], ...GAP_AND_SPIKE.gaps.slice(1)],
     },
   },
 };

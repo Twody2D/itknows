@@ -32,6 +32,7 @@ function memory(overrides: Partial<SystemMemoryData> = {}): SystemMemoryData {
 
 const LEVEL_WITH_VARIANTS = 'sector-02-level-01';
 const LEVEL_WITHOUT_VARIANTS = 'sector-01-level-01';
+const LEVEL_WITH_TROLL_VARIANT = 'sector-01-level-03';
 
 describe('DifficultyDirector.selectVariant', () => {
   it('always returns "standard" for a level with no authored variants', () => {
@@ -65,5 +66,36 @@ describe('DifficultyDirector.selectVariant', () => {
       memory({ repeatDeathCount: 2, currentStreak: 3 }),
     );
     expect(id).toBe('gentle');
+  });
+
+  it('picks "troll" for a habitual jumper once neither struggling nor thriving applies', () => {
+    const id = selectVariant(LEVEL_WITH_TROLL_VARIANT, profile({ jumpFrequency: 0.5 }), memory());
+    expect(id).toBe('troll');
+  });
+
+  it('does not pick "troll" for a fresh profile with no established jump habit', () => {
+    const id = selectVariant(LEVEL_WITH_TROLL_VARIANT, profile({ jumpFrequency: 0 }), memory());
+    expect(id).toBe('standard');
+  });
+
+  it('struggling still takes priority over a habitual-jumper troll variant', () => {
+    const id = selectVariant(
+      LEVEL_WITH_TROLL_VARIANT,
+      profile({ jumpFrequency: 0.5 }),
+      memory({ repeatDeathCount: 2 }),
+    );
+    // This level has no `gentle` variant authored, so struggling falls through to "standard" —
+    // it must not fall through further into the unrelated troll branch.
+    expect(id).toBe('standard');
+  });
+
+  it('a hot streak still takes priority over a habitual-jumper troll variant', () => {
+    const id = selectVariant(
+      LEVEL_WITH_TROLL_VARIANT,
+      profile({ jumpFrequency: 0.5, recentFailures: 0 }),
+      memory({ currentStreak: 3 }),
+    );
+    // No `bold` variant authored here either — same "must not fall through" guarantee as above.
+    expect(id).toBe('standard');
   });
 });
