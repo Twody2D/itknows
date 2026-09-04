@@ -77,7 +77,22 @@ describe('SaveService', () => {
     it('pushes the local save to the cloud after completing a level', () => {
       SaveService.markCompleted('sector-01-level-01');
       expect(YandexGamesService.setPlayerData).toHaveBeenCalledWith({
-        save: JSON.stringify({ version: 1, completedLevels: ['sector-01-level-01'], lastLevelId: null }),
+        save: JSON.stringify({
+          version: 2,
+          completedLevels: ['sector-01-level-01'],
+          lastLevelId: null,
+          credits: 0,
+          inventory: {
+            ownedSkins: ['default'],
+            ownedDeathFx: ['static'],
+            ownedSystemPacks: ['standard'],
+            ownedPremium: [],
+            equippedSkin: 'default',
+            equippedDeathFx: 'static',
+            equippedSystemPack: 'standard',
+          },
+          processedPurchaseTokens: [],
+        }),
       });
     });
 
@@ -93,6 +108,75 @@ describe('SaveService', () => {
       vi.mocked(YandexGamesService.getPlayerData).mockClear();
       await SaveService.syncWithCloud();
       expect(YandexGamesService.getPlayerData).not.toHaveBeenCalled();
+    });
+
+    it('migrates a v1 cloud save forward with fresh shop defaults instead of dropping it', async () => {
+      vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
+        save: JSON.stringify({ version: 1, completedLevels: ['sector-01-level-01'], lastLevelId: 'sector-01-level-02' }),
+      });
+      await SaveService.syncWithCloud();
+      expect(SaveService.getCompletedLevels()).toEqual(['sector-01-level-01']);
+      expect(SaveService.getCredits()).toBe(0);
+      expect(SaveService.getInventory().equippedSkin).toBe('default');
+    });
+
+    it('never lets a merge regress credits or owned cosmetics', async () => {
+      SaveService.setCredits(50);
+      SaveService.setInventory({ ...SaveService.getInventory(), ownedSkins: ['default', 'void'] });
+      vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
+        save: JSON.stringify({
+          version: 2,
+          completedLevels: [],
+          lastLevelId: null,
+          credits: 20,
+          inventory: {
+            ownedSkins: ['default', 'signal'],
+            ownedDeathFx: ['static'],
+            ownedSystemPacks: ['standard'],
+            ownedPremium: ['remove_ads'],
+            equippedSkin: 'default',
+            equippedDeathFx: 'static',
+            equippedSystemPack: 'standard',
+          },
+          processedPurchaseTokens: ['tok-1'],
+        }),
+      });
+      await SaveService.syncWithCloud();
+      expect(SaveService.getCredits()).toBe(50);
+      expect(SaveService.getInventory().ownedSkins.slice().sort()).toEqual(['default', 'signal', 'void']);
+      expect(SaveService.getInventory().ownedPremium).toEqual(['remove_ads']);
+      expect(SaveService.hasProcessedPurchase('tok-1')).toBe(true);
+    });
+  });
+
+  describe('shop fields', () => {
+    it('starts a fresh save with zero credits and only the free defaults owned/equipped', () => {
+      expect(SaveService.getCredits()).toBe(0);
+      expect(SaveService.getInventory()).toEqual({
+        ownedSkins: ['default'],
+        ownedDeathFx: ['static'],
+        ownedSystemPacks: ['standard'],
+        ownedPremium: [],
+        equippedSkin: 'default',
+        equippedDeathFx: 'static',
+        equippedSystemPack: 'standard',
+      });
+    });
+
+    it('round-trips credits and inventory writes', () => {
+      SaveService.setCredits(120);
+      expect(SaveService.getCredits()).toBe(120);
+
+      const inventory = { ...SaveService.getInventory(), ownedSkins: ['default', 'void'], equippedSkin: 'void' };
+      SaveService.setInventory(inventory);
+      expect(SaveService.getInventory()).toEqual(inventory);
+    });
+
+    it('tracks processed purchase tokens without duplicates', () => {
+      SaveService.markPurchaseProcessed('tok-abc');
+      SaveService.markPurchaseProcessed('tok-abc');
+      expect(SaveService.hasProcessedPurchase('tok-abc')).toBe(true);
+      expect(SaveService.hasProcessedPurchase('tok-other')).toBe(false);
     });
   });
 });
