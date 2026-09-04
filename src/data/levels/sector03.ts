@@ -19,8 +19,16 @@ import type { LevelSectionConfig } from '@/gameplay/LevelSections';
  *    wait-then-cross hazards back to back ("layered", not "combined" —
  *    each still telegraphs and resolves on its own).
  * 06 CORE ACCESS — sector finale: laser (mandatory) + moving-platform
- *    bypass (optional) over a longer spike cluster.
+ *    bypass (optional) over a longer spike cluster, plus one `laser-decoy`
+ *    before it — master-prompt §15's "waited for the trap, it wasn't there
+ *    / stopped waiting, it appears," landed as fixed campaign content
+ *    rather than a `DifficultyDirector` variant (every player hits both
+ *    halves of this beat once, in order, not just players matching some
+ *    measured habit). Only placed here, after 5 levels of "every laser you
+ *    see is real" — subverting an expectation the sector spent that long
+ *    actually earning is what makes it land as a trick and not a mystery.
  *
+
  * Every elevated bonus platform sits at `row 20` (2 tiles above
  * `groundRow`), never `row 18` — see sector 02's file doc comment and
  * `docs/technical-architecture.md` for why `row 18` is physically
@@ -190,6 +198,18 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
     playerStartCol: 2,
     exitCol: 56,
     traps: [
+      // A laser that never arms — `loop: false` starts a trap disarmed
+      // (`Trap`'s constructor: `this.armed = this.loop`), and nothing here
+      // ever calls `.trigger()` on it, so it structurally *cannot* ever
+      // leave `idle` (not "very unlikely to", a provable guarantee, not a
+      // long timer standing in for one). Same idle-phase visual as every
+      // other laser this sector (`LaserTrap`'s dim rectangle) — a player who
+      // has learned every laser cue means real danger sees this one, waits
+      // or watches for it exactly as trained, and it simply never fires.
+      // The real one, unchanged below, is what master-prompt §15's "stopped
+      // waiting for the trap → it appears" is actually testing: right after
+      // the sector taught "this shape can be a bluff," `laser-01` is not.
+      { type: 'laser', id: 'laser-decoy', col: 24, topRow: 16, bottomRow: 21, loop: false },
       {
         type: 'moving-platform',
         id: 'bridge-01',
