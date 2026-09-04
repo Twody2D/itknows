@@ -6,6 +6,7 @@ import { blockBrowserGestures } from '@/utils/input/blockBrowserGestures';
 import { AudioEngine } from '@/audio/AudioEngine';
 import { YandexGamesService } from '@/services/YandexGamesService';
 import { SaveService } from '@/services/SaveService';
+import { PurchaseManager } from '@/services/PurchaseManager';
 import { ScaleController } from '@/core/ScaleController';
 import { OrientationGate } from '@/ui/OrientationGate';
 import { BootScene } from '@/scenes/BootScene';
@@ -23,14 +24,23 @@ if (!root) throw new Error('#app root element not found');
 
 blockBrowserGestures(root);
 
+// Reflects whatever entitlement this save already owns into AdsService
+// before anything in the boot sequence could possibly ask for an ad — pure
+// local-save read, no network wait needed for this part.
+PurchaseManager.init();
+
 // Started as early as possible — the SDK script is a network fetch, slower
 // than generating textures in BootScene, so this races the boot sequence
 // rather than blocking it (CLAUDE.md #8 — the game works fully without it).
-// Cloud save sync only makes sense once we know whether the SDK/an
-// authorized player is actually there, hence chained after `init()` instead
-// of also firing immediately — `SaveService`'s own localStorage-backed API
-// already works synchronously before this ever resolves.
-void YandexGamesService.init().then(() => SaveService.syncWithCloud());
+// Cloud save sync and purchase restoration only make sense once we know
+// whether the SDK/an authorized player is actually there, hence chained
+// after `init()` instead of also firing immediately — `SaveService`'s own
+// localStorage-backed API already works synchronously before any of this
+// ever resolves. Cloud sync runs first so restorePurchases() replays
+// against the already-merged save, not a stale local-only one.
+void YandexGamesService.init()
+  .then(() => SaveService.syncWithCloud())
+  .then(() => PurchaseManager.restorePurchases());
 
 // Audio focus (master-prompt §32): a hidden tab suspends the context outright
 // instead of letting scheduled nodes play into nothing, and picks back up on

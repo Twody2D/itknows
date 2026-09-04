@@ -14,5 +14,5 @@ export const EARN_AMOUNTS = {
   rewardedAd: 20,
 } as const;
 
-export type CreditEarnReason = 'level_complete' | 'sector_complete' | 'zero_deaths' | 'rewarded_ad' | 'dev';
+export type CreditEarnReason = 'level_complete' | 'sector_complete' | 'zero_deaths' | 'rewarded_ad' | 'purchase' | 'dev';
 export type CreditSpendReason = 'shop_item' | 'dev';
