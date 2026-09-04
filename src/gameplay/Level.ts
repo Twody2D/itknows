@@ -5,6 +5,7 @@ import { LEVEL_HEIGHT_TILES } from './LevelDef';
 import type { TrapDef } from '@/traps/TrapDef';
 import { LaserTrap } from '@/traps/LaserTrap';
 import { MovingSpikeTrap } from '@/traps/MovingSpikeTrap';
+import { AmbushSpikeTrap } from '@/traps/AmbushSpikeTrap';
 import { FakePlatformTrap } from '@/traps/FakePlatformTrap';
 import { DisappearingPlatformTrap } from '@/traps/DisappearingPlatformTrap';
 import { FallingPlatformTrap } from '@/traps/FallingPlatformTrap';
@@ -17,6 +18,7 @@ import { TimingGate } from '@/traps/TimingGate';
 import { FakeExit } from '@/traps/FakeExit';
 import { hash01, stringHash } from '@/art/hash';
 import { PALETTE } from '@/config/palette';
+import { EXIT_VISUAL_HEIGHT_TILES } from '@/art/drawTiles';
 
 export interface LethalHazard {
   id: string;
@@ -133,9 +135,28 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[]): BuiltTraps {
         continue;
 
       case 'moving-spike': {
+        if (def.ambush) {
+          const { x } = tileCenter(def.fromCol, def.fromRow);
+          const trap = new AmbushSpikeTrap(scene, {
+            id: def.id,
+            x,
+            yHidden: tileCenter(def.fromCol, def.fromRow).y,
+            yLanded: tileCenter(def.fromCol, def.toRow).y,
+            timing: def.timing,
+            initialIdleMs: def.initialIdleMs,
+            loop: def.loop,
+          });
+          result.updatable.push(trap);
+          result.lethalHazards.push(trap);
+          result.all.push(trap);
+          triggerable.set(def.id, trap);
+          break;
+        }
         const from = tileCenter(def.fromCol, def.fromRow);
         const to = tileCenter(def.toCol, def.toRow);
-        const trap = new MovingSpikeTrap(scene, { id: def.id, from, to, travelMs: def.travelMs });
+        // `travelMs` is only optional in `TrapDef` to accommodate `ambush`
+        // mode (handled above) — every non-ambush level def supplies it.
+        const trap = new MovingSpikeTrap(scene, { id: def.id, from, to, travelMs: def.travelMs ?? 0 });
         result.lethalHazards.push(trap);
         result.all.push(trap);
         break;
@@ -284,6 +305,7 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[]): BuiltTraps {
       width: def.width * TILE_SIZE,
       height: def.height * TILE_SIZE,
       target,
+      visible: def.visible,
     });
     result.triggers.push(trap);
     result.all.push(trap);
@@ -332,6 +354,12 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
         .setOrigin(0, 0);
     }
 
+    // One bright rim spanning the whole run, on top of the per-column seam
+    // lines — a run of ground has to read as a single big "safe to stand"
+    // platform from a distance, not a dotted line you only see up close
+    // (VISUAL RESET v1 #8).
+    scene.add.rectangle(runLeft + runWidth / 2, surfaceTop, runWidth, 2, PALETTE.cyan, 0.85).setOrigin(0.5, 0);
+
     const runHeight = (LEVEL_HEIGHT_TILES - def.groundRow) * TILE_SIZE;
     const collider = scene.add.rectangle(runLeft + runWidth / 2, surfaceTop + runHeight / 2, runWidth, runHeight, 0, 0);
     scene.physics.add.existing(collider, true);
@@ -357,13 +385,26 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
     }
   }
 
+  // Physics zone stays at the original 2x3-tile footprint (`LevelValidator`
+  // checks exactly `exitCol`/`exitCol+1` sit on solid ground) — only the
+  // sprite drawn on top of it is bigger, bottom-anchored to the same ground
+  // line, the same way the player's sprite overflows its own hitbox.
   const exitWidth = 2 * TILE_SIZE;
   const exitHeight = 3 * TILE_SIZE;
   const exitX = def.exitCol * TILE_SIZE + exitWidth / 2;
   const exitY = def.groundRow * TILE_SIZE - exitHeight / 2;
 
-  const exitSprite = scene.add.image(exitX, exitY, 'exit-active');
-  exitSprite.postFX.addGlow(PALETTE.cyan, 0, 0, false, 0.25, 4);
+  const exitVisualHeight = EXIT_VISUAL_HEIGHT_TILES * TILE_SIZE;
+  const exitSprite = scene.add.image(exitX, def.groundRow * TILE_SIZE - exitVisualHeight / 2, 'exit-active');
+  exitSprite.postFX.addGlow(PALETTE.cyan, 0, 0, false, 0.3, 6);
+  scene.tweens.add({
+    targets: exitSprite,
+    scale: { from: 1, to: 1.04 },
+    duration: 1400,
+    yoyo: true,
+    repeat: -1,
+    ease: 'Sine.easeInOut',
+  });
   const exitZone = scene.add.zone(exitX, exitY, exitWidth, exitHeight);
   scene.physics.add.existing(exitZone, true);
 

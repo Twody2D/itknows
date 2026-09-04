@@ -6,6 +6,71 @@ import type { LevelSectionConfig } from '@/gameplay/LevelSections';
  * trap, then progressively combines gaps, spikes and one-way platforms
  * (master-prompt §24: first ten minutes / §66: teach → practice → combine).
  *
+ * FIRST MANDATORY DYNAMIC HAZARD (`sector-01-level-01`, `mspike-01`, right
+ * after the first gap — 34 tiles from spawn). Direct request from the
+ * project owner, refined twice in the asking: the campaign needed a moment,
+ * near the very start, where the player actually dies to something and
+ * remembers the spot — not just static geometry you eyeball once and never
+ * think about again — and specifically wanted it *invisible* until it
+ * ambushes, not another slow visible patrol. This reverses two things that
+ * were true before: (1) sector 01 was pure static hazards, the first
+ * dynamic threat was level 05's laser; (2) `moving-spike` (see sector 05's
+ * file doc comment) had only ever guarded an *optional* bonus path and
+ * never had a warning phase at all, because CLAUDE.md #4 rules out shipping
+ * an unverified mandatory dynamic-timed crossing "on a guess". Both are
+ * deliberate, approved reversals, not oversights.
+ *
+ * `ambush: true` (`TrapDef.ts`/`AmbushSpikeTrap.ts`) is *not* the ordinary
+ * `moving-spike` — it's a genuinely new, separately-verified variant built
+ * specifically for this request: invisible while idle, then it visibly
+ * drops fast (`Cubic.easeIn`, "sudden" on purpose) and lands lethal. What
+ * makes "invisible until it ambushes" still honest under CLAUDE.md #4.2
+ * (≥250ms visible warning before anything can kill you) is where the line
+ * between "visible" and "lethal" actually falls: the entire fall itself —
+ * from the moment it appears to the moment it lands — *is* the honest
+ * warning phase (`timing.warningMs: 500`, double the `MIN_WARNING_MS`
+ * floor); `isLethal()` only turns true once `active` begins, timed to start
+ * right as the drop tween finishes. It looks like it's already falling on
+ * you the instant you see it — it isn't lethal yet until it's actually
+ * there. Placed right after the level's first gap rather than at spawn: the
+ * player has already been taught to jump by the time they reach it, so it's
+ * the first thing new *since* that lesson landed, not stacked underneath it.
+ *
+ * TRIGGERED BY POSITION, NOT BY A TIMER. The first working version ran its
+ * own independent idle/warning/active/cooldown cycle regardless of where the
+ * player was — verified live across 12 sampled arrival times, it only
+ * actually caught the player once. That's a coin flip wearing a trap
+ * costume, not the moment the project owner asked for: something that
+ * lands "right above me as I pass" and punishes not reacting, not one that
+ * depends on when you happen to walk by. Fixed by reusing the existing
+ * trigger-zone mechanism (`TriggerTrap`, already established by every
+ * `trig-0N`/`laser-0N` pair in sectors 02-05): `mspike-01` is now
+ * `loop: false` (inert, waiting) and only starts its fall when
+ * `mspike-01-trigger` fires on contact. The trigger sits 55px before the
+ * landing column — moveSpeed (110px/s) × warningMs (500ms) — so a player who
+ * keeps running at normal speed with zero reaction arrives exactly as it
+ * lands; stopping or stepping back during the visible fall is what survives
+ * it. This is still gap-jump-cost-free RNG-free determinism (CLAUDE.md #6):
+ * the same input sequence always produces the same outcome, it's just gated
+ * on player position instead of wall-clock time.
+ *
+ * Dying here still costs almost nothing (32 tiles of running plus one jump,
+ * no checkpoint needed) — that's what makes the very first, genuinely
+ * surprising encounter forgivable; the honest warning phase is what makes
+ * every encounter after it fair. A death here routes through the existing
+ * `early_death` Commentator category unchanged (attempts this brief always
+ * qualify) — no new dialogue plumbing needed.
+ *
+ * Verified live, not assumed fair by analogy with sector 05's optional-path
+ * uses (headless browser), on the real death→restart cycle
+ * (`this.scene.restart(...)`), not a test-only reload: invisible and
+ * harmless throughout `idle`, waiting for `mspike-01-trigger`; visible and
+ * still harmless for the entire `warning`/fall; lethal only once landed
+ * (`active`); three consecutive real attempts that cross the trigger and
+ * keep running with no reaction die three times, every time in `active`,
+ * with no state carried over between restarts; stopping right after the
+ * trigger survives every time — the honest point of putting it here at all.
+ *
  * LENGTH. These levels used to be 40-70 tiles — six or seven seconds of
  * running each, which is why the whole sector could be cleared in one sitting
  * without dying. They now run 120-250 tiles, structured as
@@ -37,9 +102,18 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     name: 'BOOT',
     width: 120,
     groundRow: 22,
-    // Nothing but gaps, widening from 2 to 3 tiles and back. The only lesson
-    // is "move, jump, keep going" — no spike, no trap, no timing anywhere in
-    // the level, so the tutorial hints have room to land.
+    // Pure gaps through the first two thirds — the only lesson is "move,
+    // jump, keep going", so the tutorial hints have room to land with
+    // nothing else competing for attention. The back third breaks that
+    // silence on purpose: a level that's still 100% gaps at tile 120 read as
+    // empty no matter how long it ran (player feedback — first danger felt
+    // too far away). A small pair, then a proper 3-wide cluster, right
+    // before the closing run: the first "wait, there's something new here"
+    // beat built from the sector's own gap/spike vocabulary, still jumped
+    // rather than timed, still on obviously solid ground with room to land
+    // on both sides. (`mspike-01` below, right after the first gap, is the
+    // level's actual first surprise — this later cluster is the second, and
+    // an ordinary one.)
     gaps: [
       [26, 27],
       [44, 46],
@@ -48,18 +122,83 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       [88, 89],
       [98, 100],
     ],
-    spikeColumns: [],
+    spikeColumns: [64, 65, 80, 81, 82],
     platforms: [],
     playerStartCol: 2,
     exitCol: 114,
-    // No checkpoints: nothing in this level can kill you but a pit, and the
-    // longest stretch back to one is a few seconds of running.
+    traps: [
+      // The campaign's first death that isn't "you mistimed a jump" —
+      // deliberately as close to free as a death can be (see the file's top
+      // doc comment for the full reasoning and the honesty argument). Placed
+      // right after the level's first gap (col 26-27), not before it: the
+      // player has already been taught to jump by the time they reach it,
+      // so this is the first thing new *since* the jump lesson landed, not
+      // one more thing stacked on top of it. Clear flat ground on both
+      // sides, nothing else competing for attention when it first appears.
+      //
+      // `loop: false` — this does NOT free-run its own idle/warning/active
+      // cycle. It sits inert until `mspike-01-trigger` below fires, so it
+      // falls exactly when the player is actually there, every single time,
+      // instead of on an independent timer the player might walk past on
+      // either side of (verified live: an untimed independent cycle only
+      // caught a passing player in 1 of 12 sampled arrival times — pure
+      // timing luck, not a real threat). Positioned to make ordinary,
+      // unreacting running the losing move: `mspike-01-trigger`'s center
+      // sits 55px (moveSpeed 110px/s × warningMs 500ms) before the landing
+      // column, so a player who crosses the trigger and just keeps running
+      // at normal speed with no reaction arrives right as it lands. Stopping
+      // during the visible fall is what survives it — the gap right behind
+      // this trigger means stepping back isn't a safe option here, only
+      // holding still is (verified live) — reaction speed and caution
+      // decide the outcome, not luck. `mspike-01-trigger` also sets
+      // `visible: false`: every other trigger in the campaign (sectors
+      // 02-05's `trig-0N`) shows a faint ground marker, but this one hides
+      // even that — no tell exists anywhere before the fall itself.
+      {
+        type: 'moving-spike',
+        id: 'mspike-01',
+        ambush: true,
+        fromCol: 34,
+        fromRow: 11,
+        toCol: 34,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      // `visible: false` — every other trigger in the campaign (sectors
+      // 02-05's `trig-0N`) shows a faint ground marker, but this one is
+      // built to be a true ambush: nothing on the ground gives away where
+      // the fall starts, only the fall itself. Doesn't touch honesty
+      // (CLAUDE.md #4.2 requires telegraphing the lethal state, not the
+      // existence of a trigger) — `mspike-01`'s own warning phase still
+      // fires before it's lethal.
+      {
+        type: 'trigger',
+        id: 'mspike-01-trigger',
+        col: 28,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-01',
+        visible: false,
+      },
+    ],
+    // No checkpoints: the spikes are static and clearly jumpable, same as
+    // level 02's much bigger spike content — nothing here is a stretch you
+    // can't re-run in a few seconds. `mspike-01` costs even less: a death
+    // there is 32 tiles of running plus one jump, not even a full section.
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 25, requiredMechanics: ['move'] },
-      { id: 'first-gap', type: 'challenge', fromCol: 26, toCol: 43, requiredMechanics: ['gap-jump'] },
+      { id: 'first-gap', type: 'challenge', fromCol: 26, toCol: 43, requiredMechanics: ['gap-jump', 'moving-spike'] },
       { id: 'wider-gap', type: 'challenge', fromCol: 44, toCol: 51, requiredMechanics: ['gap-jump'] },
-      { id: 'rhythm', type: 'variation', fromCol: 52, toCol: 83, requiredMechanics: ['gap-jump'] },
-      { id: 'closing-run', type: 'combination', fromCol: 84, toCol: 101, requiredMechanics: ['gap-jump'] },
+      { id: 'rhythm', type: 'variation', fromCol: 52, toCol: 83, requiredMechanics: ['gap-jump', 'spike-jump'] },
+      {
+        id: 'closing-run',
+        type: 'combination',
+        fromCol: 84,
+        toCol: 101,
+        requiredMechanics: ['gap-jump', 'spike-jump'],
+      },
       { id: 'exit', type: 'final', fromCol: 102, toCol: 119 },
     ] satisfies LevelSectionConfig[],
   },

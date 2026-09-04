@@ -19,4 +19,10 @@ export const EARLY_DEATH_LINES: DialogueLine[] = [
   { id: 'early_death-11', ru: 'Полсекунды. Личный рекорд.', en: 'Half a second. Personal best.' },
   { id: 'early_death-12', ru: 'Кнопки работают, я проверил.', en: 'The buttons work, I checked.' },
   { id: 'early_death-13', ru: 'Смерть до титров.', en: 'Dead before the intro finished.' },
+  // Deliberately vague about *what* got them — this category fires for any
+  // fast death (static or dynamic hazard alike), so a line naming a specific
+  // mechanism would sometimes be flatly wrong. "Didn't look" is true either
+  // way.
+  { id: 'early_death-14', ru: 'Ты вообще смотрел на экран?', en: 'Were you even looking at the screen?' },
+  { id: 'early_death-15', ru: 'Первый шаг. И последний.', en: 'First step. Also the last.' },
 ];

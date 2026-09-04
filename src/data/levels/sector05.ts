@@ -5,10 +5,13 @@ import type { LevelSectionConfig } from '@/gameplay/LevelSections';
  * SECTOR 05 — SYSTEM CORE. Campaign finale (master-prompt §23): "комбинирование
  * механик" — no new mandatory mechanic of its own, this sector composes the
  * mechanics sectors 02-04 already taught individually. Teach → practice →
- * combine (§66) is applied one level up: level 01-02 teach the one genuinely
- * new-in-content trap type (`moving-spike` — defined since Phase 2 but never
- * placed in a level until now), then every level after that composes it and
- * everything else with what's already proven.
+ * combine (§66) is applied one level up: level 01-02 teach `moving-spike`'s
+ * *optional-path* use in depth, then every level after that composes it and
+ * everything else with what's already proven. (`moving-spike` itself is no
+ * longer campaign-first here — sector 01 now has one, deliberately, on its
+ * *mandatory* path; see that file's doc comment for why that's a distinct,
+ * separately-verified special case rather than a precedent this sector
+ * follows.)
  *
  * `moving-spike` (`MovingSpikeTrap.ts`) has no warning phase by design — its
  * own continuous, always-visible motion IS the telegraph, not a timed cue.

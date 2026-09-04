@@ -12,6 +12,15 @@ export interface TriggerConfig {
   width: number;
   height: number;
   target: Triggerable;
+  /**
+   * Default true: draws the faint ground marker every other trigger in the
+   * campaign uses (sectors 02-05's `trig-0N`). Set false when the trigger
+   * itself must stay hidden — e.g. `mspike-01`, where the whole point is an
+   * unmarked ambush; the target trap still owns its own honest warning phase,
+   * so hiding the marker doesn't hide the kill, only the tell that a trigger
+   * exists here at all.
+   */
+  visible?: boolean | undefined;
 }
 
 /**
@@ -27,15 +36,17 @@ export class TriggerTrap {
   private marker: Phaser.GameObjects.Rectangle;
   private fired = false;
   private readonly target: Triggerable;
+  private readonly visible: boolean;
 
   constructor(scene: Phaser.Scene, config: TriggerConfig) {
     this.id = config.id;
     this.target = config.target;
+    this.visible = config.visible ?? true;
 
     this.gameObject = scene.add.zone(config.x, config.y, config.width, config.height);
     scene.physics.add.existing(this.gameObject, true);
 
-    this.marker = scene.add.rectangle(config.x, config.y, config.width, 2, PALETTE.system, 0.5);
+    this.marker = scene.add.rectangle(config.x, config.y, config.width, 2, PALETTE.system, this.visible ? 0.5 : 0);
   }
 
   /** Called by the scene's overlap handler on player contact. */
@@ -43,7 +54,7 @@ export class TriggerTrap {
     if (this.fired) return;
     this.fired = true;
     this.target.trigger();
-    this.marker.setFillStyle(PALETTE.system, 0.15);
+    if (this.visible) this.marker.setFillStyle(PALETTE.system, 0.15);
   }
 
   destroy(): void {
