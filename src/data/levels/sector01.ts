@@ -95,6 +95,25 @@ import type { LevelSectionConfig } from '@/gameplay/LevelSections';
  * are explicitly bridged by a platform mid-pit, and both are proven by
  * `LevelValidator` in tests, not by eye. Platform steps stay at a 2-row
  * (20px) rise per hop.
+ *
+ * SURPRISE DENSITY, RAMPING PER LEVEL. Direct playtest feedback: a single
+ * ambush spike on level 01 alone wasn't enough — "ran through everything,
+ * nothing killed me except the one ship at the start" — and the ask was
+ * explicit: 3 from the very first level, more with each level after that.
+ * Every level in this sector now carries a mix of ambush spikes (mspike-0N,
+ * see `mspike-01`'s doc comment below for the full mechanism) and sudden
+ * pits (`falling-platform` at ground level instead of its usual elevated-
+ * bonus role — ordinary-looking ground, honest 350ms shake before it drops,
+ * precedented by sector-04-level-04 FREEFALL already doing this as
+ * mandatory content): 3 on level 01, ramping to 6 by level 06. Every single
+ * one still obeys the same rules as `mspike-01` — honestly telegraphed,
+ * `LevelValidator`-provable independent of whether the trap actually fires,
+ * kept several tiles clear of every other hazard (never stacked on a static
+ * spike cluster, an existing gap, a checkpoint, a laser, the fake exit, or
+ * — level 04 specifically — the staircase). Verified live for all 27
+ * placements across the sector: unreacted contact dies in the trap's own
+ * honest lethal phase every time; stopping (ambush spikes) or crossing
+ * without stopping (sudden pits) survives every time.
  */
 export const SECTOR_01_LEVELS: LevelDef[] = [
   {
@@ -118,6 +137,7 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       [26, 27],
       [44, 46],
       [58, 59],
+      [70, 71],
       [74, 76],
       [88, 89],
       [98, 100],
@@ -182,11 +202,42 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         targetId: 'mspike-01',
         visible: false,
       },
+      // Second surprise: a sudden pit (`FallingPlatformTrap`, see
+      // sector03-level-01's doc comment for the full mechanism) in the
+      // middle of the long clear "rhythm" stretch between the two static
+      // spike clusters — visually ordinary ground until stepped on, 350ms
+      // honest shake before it drops.
+      { type: 'falling-platform', id: 'flp-01', col: 70, row: 22, width: 2 },
+      // Third surprise: a second ambush spike, in the open runway right
+      // before the exit — the level's closing "one more thing," same
+      // honest position-triggered mechanism as `mspike-01`.
+      {
+        type: 'moving-spike',
+        id: 'mspike-02',
+        ambush: true,
+        fromCol: 108,
+        fromRow: 11,
+        toCol: 108,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-02-trigger',
+        col: 102,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-02',
+        visible: false,
+      },
     ],
     // No checkpoints: the spikes are static and clearly jumpable, same as
     // level 02's much bigger spike content — nothing here is a stretch you
-    // can't re-run in a few seconds. `mspike-01` costs even less: a death
-    // there is 32 tiles of running plus one jump, not even a full section.
+    // can't re-run in a few seconds. The three surprises above cost the same
+    // little as `mspike-01` alone did — a handful of tiles of re-running,
+    // never a whole section.
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 25, requiredMechanics: ['move'] },
       { id: 'first-gap', type: 'challenge', fromCol: 26, toCol: 43, requiredMechanics: ['gap-jump', 'moving-spike'] },
@@ -207,9 +258,13 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     name: 'FIRST WARNING',
     width: 140,
     groundRow: 22,
-    // Gaps only reappear in the last block — the first two thirds are the
-    // spike lesson on its own, uncomplicated.
+    // Gaps only reappear in the last block for the STATIC ones — the first
+    // two thirds are the spike lesson on its own, uncomplicated. The 4 gaps
+    // below (46-47, 76-77) belong to the two sudden-pit falling-platforms in
+    // `traps`, not the static-gap lesson proper.
     gaps: [
+      [46, 47],
+      [76, 77],
       [110, 111],
       [124, 126],
     ],
@@ -220,7 +275,64 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     playerStartCol: 2,
     exitCol: 134,
     // Still no checkpoints — spikes are jumped, not timed, and the level has
-    // no stretch you can't re-run in seconds.
+    // no stretch you can't re-run in seconds; the same is true of the 4
+    // surprises below (see sector01-level-01's doc comment for the general
+    // reasoning) — each one costs a few seconds of re-running, never a
+    // whole section.
+    traps: [
+      // Second campaign level with an ambush spike, first one placed twice
+      // in a single level — right after the first static-spike cluster,
+      // well clear of it (CLAUDE.md #4: never stack a dynamic timed thing
+      // directly on another obstacle).
+      {
+        type: 'moving-spike',
+        id: 'mspike-01',
+        ambush: true,
+        fromCol: 32,
+        fromRow: 11,
+        toCol: 32,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-01-trigger',
+        col: 26,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-01',
+        visible: false,
+      },
+      // Sudden pit between the second and third static-spike clusters.
+      { type: 'falling-platform', id: 'flp-01', col: 46, row: 22, width: 2 },
+      // Second ambush spike, between the third and fourth clusters.
+      {
+        type: 'moving-spike',
+        id: 'mspike-02',
+        ambush: true,
+        fromCol: 64,
+        fromRow: 11,
+        toCol: 64,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-02-trigger',
+        col: 58,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-02',
+        visible: false,
+      },
+      // Second sudden pit, well before the platform bypass over the fourth
+      // cluster starts.
+      { type: 'falling-platform', id: 'flp-02', col: 76, row: 22, width: 2 },
+    ],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 17, requiredMechanics: ['move'] },
       { id: 'first-spikes', type: 'challenge', fromCol: 18, toCol: 27, requiredMechanics: ['spike-jump'] },
@@ -253,9 +365,11 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       [34, 36],
       [62, 63],
       [78, 80],
+      [82, 83],
       [104, 105],
       [120, 122],
       [140, 141],
+      [146, 147],
     ],
     spikeColumns: [26, 27, 46, 47, 48, 70, 71, 92, 93, 112, 113, 132, 133, 134, 152, 153],
     // Each bridge sits directly over a spike cluster — an alternate route, not
@@ -269,6 +383,57 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     exitCol: 159,
     // One, just past the midpoint.
     checkpoints: [88],
+    // Third campaign level with the ambush spike / sudden pit vocabulary
+    // (see sector01-level-01's doc comment) — always in a generously clear
+    // stretch (10+ tiles), never stacked on the level's own gap/spike/bridge
+    // geometry.
+    traps: [
+      {
+        type: 'moving-spike',
+        id: 'mspike-01',
+        ambush: true,
+        fromCol: 56,
+        fromRow: 11,
+        toCol: 56,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-01-trigger',
+        col: 50,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-01',
+        visible: false,
+      },
+      // Right after the checkpoint (88), well clear of it.
+      { type: 'falling-platform', id: 'flp-01', col: 82, row: 22, width: 2 },
+      {
+        type: 'moving-spike',
+        id: 'mspike-02',
+        ambush: true,
+        fromCol: 100,
+        fromRow: 11,
+        toCol: 100,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-02-trigger',
+        col: 94,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-02',
+        visible: false,
+      },
+      { type: 'falling-platform', id: 'flp-02', col: 146, row: 22, width: 2 },
+    ],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 15, requiredMechanics: ['move'] },
       { id: 'gaps', type: 'challenge', fromCol: 16, toCol: 41, requiredMechanics: ['gap-jump'] },
@@ -306,13 +471,16 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     gaps: [
       [18, 19],
       [40, 42],
+      [57, 58],
       [64, 65],
       // The first pit too wide to clear in one jump (6 tiles / 60px against a
       // ~55px reach) — the platform mid-pit below is the crossing, and the
       // level's whole point: a platform can be the route, not a bonus.
       [84, 89],
+      [102, 103],
       [110, 112],
       [134, 135],
+      [150, 151],
       [156, 158],
       [176, 177],
     ],
@@ -328,6 +496,56 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     exitCol: 184,
     // One, right after the wide bridged pit — the level's one real gate.
     checkpoints: [94],
+    // Fourth campaign level with the ambush spike / sudden pit vocabulary —
+    // none placed anywhere near the staircase (116-139, already a delicate
+    // hand-tuned combination) or the checkpoint.
+    traps: [
+      {
+        type: 'moving-spike',
+        id: 'mspike-01',
+        ambush: true,
+        fromCol: 36,
+        fromRow: 11,
+        toCol: 36,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-01-trigger',
+        col: 30,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-01',
+        visible: false,
+      },
+      { type: 'falling-platform', id: 'flp-01', col: 57, row: 22, width: 2 },
+      {
+        type: 'moving-spike',
+        id: 'mspike-02',
+        ambush: true,
+        fromCol: 81,
+        fromRow: 11,
+        toCol: 81,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-02-trigger',
+        col: 75,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-02',
+        visible: false,
+      },
+      { type: 'falling-platform', id: 'flp-02', col: 102, row: 22, width: 2 },
+      { type: 'falling-platform', id: 'flp-03', col: 150, row: 22, width: 2 },
+    ],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 17, requiredMechanics: ['move'] },
       { id: 'gaps', type: 'challenge', fromCol: 18, toCol: 45, requiredMechanics: ['gap-jump'] },
@@ -365,8 +583,10 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     gaps: [
       [14, 15],
       [36, 38],
+      [43, 44],
       [60, 61],
       [82, 84],
+      [89, 90],
       [108, 109],
       [130, 132],
       [154, 155],
@@ -396,6 +616,74 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       { type: 'laser', id: 'laser-01', col: 100, topRow: 16, bottomRow: 21 },
       { type: 'laser', id: 'laser-02', col: 148, topRow: 16, bottomRow: 21 },
       { type: 'laser', id: 'laser-03', col: 196, topRow: 16, bottomRow: 21 },
+      // Fifth campaign level with the ambush spike / sudden pit vocabulary
+      // — every one kept several tiles clear of a laser, same discipline as
+      // the lasers themselves (never stacked on another dynamic hazard).
+      {
+        type: 'moving-spike',
+        id: 'mspike-01',
+        ambush: true,
+        fromCol: 57,
+        fromRow: 11,
+        toCol: 57,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-01-trigger',
+        col: 51,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-01',
+        visible: false,
+      },
+      { type: 'falling-platform', id: 'flp-01', col: 43, row: 22, width: 2 },
+      {
+        type: 'moving-spike',
+        id: 'mspike-02',
+        ambush: true,
+        fromCol: 79,
+        fromRow: 11,
+        toCol: 79,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-02-trigger',
+        col: 73,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-02',
+        visible: false,
+      },
+      { type: 'falling-platform', id: 'flp-02', col: 89, row: 22, width: 2 },
+      {
+        type: 'moving-spike',
+        id: 'mspike-03',
+        ambush: true,
+        fromCol: 162,
+        fromRow: 11,
+        toCol: 162,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-03-trigger',
+        col: 156,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-03',
+        visible: false,
+      },
     ],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
@@ -448,11 +736,14 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     gaps: [
       [16, 17],
       [38, 40],
+      [45, 46],
       [62, 63],
       // Second wide pit — same bridged crossing RISE taught, now with the
       // rest of the sector's vocabulary around it.
+      [80, 81],
       [86, 91],
       [112, 113],
+      [130, 131],
       [136, 138],
       [160, 161],
       [184, 186],
@@ -485,6 +776,76 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       // trick is that it looks identical enough at a glance to make a careless
       // player briefly think they're done, not that it's unfair.
       { type: 'fake-exit', id: 'fake-exit-01', col: 238, row: 22 },
+      // Sixth and final campaign level with the ambush spike / sudden pit
+      // vocabulary in sector 01 — the finale gets the most of them (6, the
+      // sector's peak), still every one several tiles clear of a laser, the
+      // wide bridged pit, the fake exit, and both checkpoints.
+      {
+        type: 'moving-spike',
+        id: 'mspike-01',
+        ambush: true,
+        fromCol: 35,
+        fromRow: 11,
+        toCol: 35,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-01-trigger',
+        col: 29,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-01',
+        visible: false,
+      },
+      { type: 'falling-platform', id: 'flp-01', col: 45, row: 22, width: 2 },
+      {
+        type: 'moving-spike',
+        id: 'mspike-02',
+        ambush: true,
+        fromCol: 71,
+        fromRow: 11,
+        toCol: 71,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-02-trigger',
+        col: 65,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-02',
+        visible: false,
+      },
+      { type: 'falling-platform', id: 'flp-02', col: 80, row: 22, width: 2 },
+      {
+        type: 'moving-spike',
+        id: 'mspike-03',
+        ambush: true,
+        fromCol: 121,
+        fromRow: 11,
+        toCol: 121,
+        toRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'mspike-03-trigger',
+        col: 115,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'mspike-03',
+        visible: false,
+      },
+      { type: 'falling-platform', id: 'flp-03', col: 130, row: 22, width: 2 },
     ],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 15, requiredMechanics: ['move'] },
