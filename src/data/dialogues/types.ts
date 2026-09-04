@@ -20,3 +20,6 @@ export type CommentCategory =
   | 'successful_adaptation'
   | 'multiple_deaths'
   | 'general';
+
+/** SYSTEM commentary packs (shop `system` category) — an alternate line set for the same categories/cascade, never a new category (`Commentator`'s tested cascade logic is untouched). */
+export type SystemPackId = 'standard' | 'cold';

@@ -1,7 +1,8 @@
-import { DIALOGUE_POOLS } from '@/data/dialogues';
-import type { CommentCategory, DialogueLine } from '@/data/dialogues';
+import { PACKS } from '@/data/dialogues';
+import type { CommentCategory, DialogueLine, SystemPackId } from '@/data/dialogues';
 import { LocaleState } from '@/i18n/Locale';
 import { EventBus } from '@/core/EventBus';
+import { InventoryService } from '@/services/InventoryService';
 
 const EARLY_DEATH_MS = 2500;
 const NEAR_EXIT_FRACTION = 0.85;
@@ -78,7 +79,8 @@ class CommentatorStore {
   }
 
   private emitFrom(category: CommentCategory, rng: () => number): DialogueLine {
-    const pool = DIALOGUE_POOLS[category];
+    const packId = InventoryService.getEquipped('system') as SystemPackId;
+    const pool = (PACKS[packId] ?? PACKS.standard)[category];
     let used = this.usedIdsByCategory.get(category);
     if (!used || used.size >= pool.length) {
       used = new Set<string>();
