@@ -11,6 +11,8 @@ import {
   drawPlatformSlab,
   drawPursuerIcon,
   drawSpikeTile,
+  EXIT_VISUAL_HEIGHT_TILES,
+  EXIT_VISUAL_WIDTH_TILES,
 } from './drawTiles';
 import { PLAYER_FRAME_COUNTS, PLAYER_SPRITE_H, PLAYER_SPRITE_W } from './PLAYER_SPRITE';
 import { PLAYER_ANIM_STATES } from '@/gameplay/PlayerAnimState';
@@ -113,8 +115,8 @@ export function generateTileTextures(scene: Phaser.Scene): void {
   drawSpikeTile(spike.ctx);
   addOrReplaceCanvas(scene, 'tile-spike', spike.canvas);
 
-  const exitW = TILE_SIZE * 2;
-  const exitH = TILE_SIZE * 3;
+  const exitW = Math.round(TILE_SIZE * EXIT_VISUAL_WIDTH_TILES);
+  const exitH = Math.round(TILE_SIZE * EXIT_VISUAL_HEIGHT_TILES);
   const exitActive = makeCanvas(exitW, exitH);
   drawExitTile(exitActive.ctx, exitW, exitH, true);
   addOrReplaceCanvas(scene, 'exit-active', exitActive.canvas);

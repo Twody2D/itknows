@@ -4,12 +4,13 @@ import type { PlayerAnimState } from '@/gameplay/PlayerAnimState';
 import { PLAYER_SPRITE_H, PLAYER_SPRITE_W } from './PLAYER_SPRITE';
 
 /**
- * A small asymmetric drone-android, not a stack of centered rectangles: a
- * narrow head sits on a wider torso (a real shoulder-line silhouette), the
- * single visor-lens sits left-of-center, the antenna and the side data-port
- * sit on the right — the shape reads correctly even in flat silhouette,
- * without relying on the visor to sell "this is a character" (art-direction
- * reset, CLAUDE.md #3 — primitives only, no raster art).
+ * VISUAL RESET v1 (master-prompt "big character" rule): the android is
+ * redrawn at ~2.4x the old frame size and built from a handful of large,
+ * chunky blocks — head, torso, two arms, two legs — instead of a small
+ * silhouette that only reads up close. Same asymmetric-silhouette idea as
+ * before (narrow head on a wider torso, one bright lens off-center, an
+ * antenna on the right) but every shape is big enough to read at arm's
+ * length on a phone screen without zooming in.
  */
 export function drawPlayerFrame(ctx: CanvasRenderingContext2D, state: PlayerAnimState, frame: number): void {
   ctx.clearRect(0, 0, PLAYER_SPRITE_W, PLAYER_SPRITE_H);
@@ -21,32 +22,34 @@ export function drawPlayerFrame(ctx: CanvasRenderingContext2D, state: PlayerAnim
 
   let squash = 0;
   let legSpread = 0;
+  let armSwing = 0;
   let bob = 0;
-  let visorWidth = 2;
+  let visorWidth = 6;
   let showPort = true;
 
   switch (state) {
     case 'idle':
-      bob = frame === 1 ? 1 : 0;
+      bob = frame === 1 ? 2 : 0;
       break;
     case 'run':
-      legSpread = frame % 2 === 0 ? 2 : -2;
-      bob = frame % 2 === 0 ? 0 : 1;
+      legSpread = frame % 2 === 0 ? 4 : -4;
+      armSwing = frame % 2 === 0 ? -3 : 3;
+      bob = frame % 2 === 0 ? 0 : 2;
       break;
     case 'jump':
-      squash = -1;
-      visorWidth = 3;
+      squash = -3;
+      visorWidth = 8;
       break;
     case 'fall':
-      legSpread = 1;
-      visorWidth = 1;
+      legSpread = 2;
+      visorWidth = 4;
       break;
     case 'land':
-      squash = 2;
-      legSpread = 3;
+      squash = 5;
+      legSpread = 6;
       break;
     case 'hurt':
-      visorWidth = 1;
+      visorWidth = 3;
       showPort = false;
       break;
     case 'death':
@@ -54,59 +57,69 @@ export function drawPlayerFrame(ctx: CanvasRenderingContext2D, state: PlayerAnim
       showPort = false;
       break;
     case 'victory':
-      bob = frame === 1 ? -1 : 0;
-      visorWidth = 3;
+      bob = frame === 1 ? -2 : 0;
+      visorWidth = 8;
       break;
   }
 
-  const headTop = 1 + squash - bob;
-  const headLeft = 2;
-  const headWidth = 6;
-  const headHeight = 4;
+  const baseHeadTop = 2;
+  const headHeight = 10;
+  const legHeight = 8;
+
+  const headTop = baseHeadTop + squash - bob;
+  const headLeft = 6;
+  const headWidth = 12;
 
   const bodyTop = headTop + headHeight;
-  const bodyLeft = 1;
-  const bodyWidth = 8;
-  const bodyHeight = PLAYER_SPRITE_H - headHeight - 4 - squash;
+  const bodyLeft = 4;
+  const bodyWidth = 16;
+  const bodyHeight = PLAYER_SPRITE_H - baseHeadTop - headHeight - legHeight - squash;
 
   const legY = bodyTop + bodyHeight;
+  const armTop = bodyTop + 2;
+  const armHeight = 10;
 
-  // Legs — planted asymmetrically (left leg inset less than right), not a mirrored pair.
-  ctx.fillStyle = hexToCss(bodyColor, 0.9);
-  ctx.fillRect(bodyLeft - legSpread * 0.3, legY, 3, 3);
-  ctx.fillRect(bodyLeft + bodyWidth - 3 + legSpread * 0.3, legY, 3, 3);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = hexToCss(PALETTE.outline, 0.5);
 
-  // Torso — the wide block; its width vs. the head creates the shoulder-line silhouette.
+  // Legs — planted asymmetrically, one wider stance than the other.
+  ctx.fillStyle = hexToCss(bodyColor, 0.92);
+  ctx.fillRect(bodyLeft + 1 - legSpread * 0.4, legY, 6, legHeight);
+  ctx.fillRect(bodyLeft + bodyWidth - 7 + legSpread * 0.4, legY, 6, legHeight);
+
+  // Arms — flank the torso, swing opposite the legs while running.
+  ctx.fillStyle = hexToCss(bodyColor, 0.85);
+  ctx.fillRect(bodyLeft - 4, armTop + armSwing * 0.5, 4, armHeight);
+  ctx.fillRect(bodyLeft + bodyWidth, armTop - armSwing * 0.5, 4, armHeight);
+
+  // Torso — the wide block that creates the shoulder-line silhouette against the narrower head.
   ctx.fillStyle = hexToCss(bodyColor);
   ctx.fillRect(bodyLeft, bodyTop, bodyWidth, bodyHeight);
-  ctx.strokeStyle = hexToCss(PALETTE.outline, 0.6);
-  ctx.lineWidth = 1;
-  ctx.strokeRect(bodyLeft + 0.5, bodyTop + 0.5, bodyWidth - 1, bodyHeight - 1);
+  ctx.strokeRect(bodyLeft + 0.75, bodyTop + 0.75, bodyWidth - 1.5, bodyHeight - 1.5);
 
-  // Side data-port — small, asymmetric, only "on" while healthy: reads as a status light.
+  // Side data-port — only lit while healthy, reads as a status light.
   if (showPort) {
-    ctx.fillStyle = hexToCss(PALETTE.cyan, 0.8);
-    ctx.fillRect(bodyLeft + bodyWidth - 1, bodyTop + 2, 1, 1);
+    ctx.fillStyle = hexToCss(PALETTE.cyan, 0.85);
+    ctx.fillRect(bodyLeft + bodyWidth - 1, bodyTop + 4, 2, 3);
   }
 
-  // Head — narrower than the torso, sits centered on it (not on the sprite).
+  // Head — narrower than the torso, sits centered on it.
   ctx.fillStyle = hexToCss(bodyColor);
   ctx.fillRect(headLeft, headTop, headWidth, headHeight);
-  ctx.strokeStyle = hexToCss(PALETTE.outline, 0.6);
-  ctx.strokeRect(headLeft + 0.5, headTop + 0.5, headWidth - 1, headHeight - 1);
+  ctx.strokeRect(headLeft + 0.75, headTop + 0.75, headWidth - 1.5, headHeight - 1.5);
 
-  // Visor — a single lens, left-of-head-center, not a centered horizontal slit.
+  // Visor — one big lens, left-of-center, the brightest thing on the character.
   if (visorWidth > 0) {
-    const visorX = headLeft + 1;
-    const visorY = headTop + 1;
+    const visorX = headLeft + 2;
+    const visorY = headTop + 3;
     ctx.fillStyle = hexToCss(visorColor);
     ctx.shadowColor = hexToCss(visorColor, 0.9);
-    ctx.shadowBlur = 2;
-    ctx.fillRect(visorX, visorY, visorWidth, 2);
+    ctx.shadowBlur = 4;
+    ctx.fillRect(visorX, visorY, visorWidth, 4);
     ctx.shadowBlur = 0;
   }
 
-  // Antenna — offset to the right, not centered: the single most asymmetric silhouette cue.
-  ctx.fillStyle = hexToCss(visorColor, 0.85);
-  ctx.fillRect(headLeft + headWidth - 2, headTop - 2, 1, 2);
+  // Antenna — offset to the right, the single most asymmetric silhouette cue.
+  ctx.fillStyle = hexToCss(visorColor, 0.9);
+  ctx.fillRect(headLeft + headWidth - 3, headTop - 3, 2, 3);
 }

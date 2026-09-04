@@ -157,6 +157,12 @@ export class PixelButton extends Phaser.GameObjects.Container {
     }
 
     this.label.setPosition(0, offsetY);
-    this.label.setPixelColor(hexToCss(press ? PALETTE.white : PALETTE.cyan));
+    // `primary` (PLAY) carries its own pulsing cyan glow behind it (see
+    // MainMenuScene) — cyan text on top of a cyan halo that keeps breathing
+    // in and out washed out to unreadable at the glow's brightest point.
+    // White holds full contrast against that glow at every phase; `secondary`
+    // buttons have no such glow and keep the cyan idle/hover accent.
+    const labelColor = press ? PALETTE.white : this.variant === 'primary' ? PALETTE.white : PALETTE.cyan;
+    this.label.setPixelColor(hexToCss(labelColor));
   }
 }

@@ -10,8 +10,8 @@ import type { InputState } from '@/utils/input/InputState';
 import type { Player } from '@/gameplay/Player';
 
 /** How long a hint stays up after the player first performs it. */
-const LINGER_MS = 1100;
-const FADE_MS = 450;
+const LINGER_MS = 1900;
+const FADE_MS = 550;
 
 /**
  * A phone player has thumb buttons, not a keyboard, so they're shown the
@@ -68,7 +68,10 @@ class Hint {
     if (!this.root.active) return;
     const view = camera.worldView;
     const x = Phaser.Math.Clamp(player.x, view.x + 44, view.x + view.width - 44);
-    this.root.setPosition(Math.round(x), Math.round(player.y - 26));
+    // Clears the top of the player's head (sprite is 36px tall, bottom-
+    // anchored at player.y) with room to spare — VISUAL RESET v1 made the
+    // character much taller, and this hint used to sit right on top of it.
+    this.root.setPosition(Math.round(x), Math.round(player.y - 50));
   }
 
   /** True once the taught input has happened — the hint is fading out or gone. */
@@ -86,6 +89,13 @@ class Hint {
       duration: FADE_MS,
       onComplete: () => this.destroy(),
     });
+  }
+
+  /** Cuts the linger/fade short and removes the hint immediately — used when the player has moved into the next hint's zone and the two would otherwise overlap on screen. */
+  forceDismiss(): void {
+    if (!this.root.active) return;
+    this.scene.tweens.killTweensOf(this.root);
+    this.destroy();
   }
 
   destroy(): void {
@@ -120,10 +130,14 @@ export class TutorialHints {
       if (this.input.left || this.input.right) this.moveHint.dismiss();
     }
 
-    // The jump hint waits for the move hint to have been earned, so the two
-    // never stack on top of each other over the player.
-    if (!this.jumpHintArmed && this.moveHint?.done && this.player.x >= this.jumpTriggerX) {
+    // The jump hint's zone starts at `jumpTriggerX` — crossing into it force-
+    // dismisses whatever's left of the move hint on the spot instead of
+    // waiting out its linger/fade, which is what let the two overlap on
+    // screen (the move hint could still be mid-fade when the jump hint spawned).
+    if (!this.jumpHintArmed && this.player.x >= this.jumpTriggerX) {
       this.jumpHintArmed = true;
+      this.moveHint?.forceDismiss();
+      this.moveHint = undefined;
       this.jumpHint = new Hint(this.scene, t('hintJump'), jumpHintKeys());
     }
 

@@ -3,6 +3,17 @@ import { hexToCss } from '@/utils/color';
 import { TILE_SIZE } from '@/config/display';
 
 /**
+ * The exit's *visual* footprint (VISUAL RESET v1 #10) — noticeably bigger
+ * than its `exitCol`/`exitCol+1` gameplay footprint, the same way the
+ * player's sprite overflows its own hitbox. `Level.ts` keeps the physics
+ * zone at the original 2x3-tile size (`LevelValidator` checks exactly those
+ * two ground columns); only the sprite drawn on top of it is this large,
+ * bottom-anchored to the same ground line.
+ */
+export const EXIT_VISUAL_WIDTH_TILES = 3.4;
+export const EXIT_VISUAL_HEIGHT_TILES = 5;
+
+/**
  * Modular ground/platform materials (art-direction reset, gameplay-screen
  * pass): the top surface is composited from a handful of deterministic 10x10
  * tiles whose seam position, tone, and lights vary by column-derived hash
@@ -16,13 +27,15 @@ export function drawGroundTop(ctx: CanvasRenderingContext2D, seam: 0 | 1 | 2 | 3
   ctx.fillStyle = hexToCss(PALETTE.metalDark);
   ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
   ctx.fillStyle = hexToCss(PALETTE.metalMid);
-  ctx.fillRect(0, 2, TILE_SIZE, TILE_SIZE - 2);
+  ctx.fillRect(0, 3, TILE_SIZE, TILE_SIZE - 3);
 
-  // Top edge cap — the readable "this is a surface" line.
+  // Top edge cap — thicker and brighter than the old 1px hairline so a run
+  // of ground reads as one bright "safe to stand" edge from a distance,
+  // not a dotted seam you have to get close to see (VISUAL RESET v1 #8).
   ctx.fillStyle = hexToCss(PALETTE.metalEdge);
+  ctx.fillRect(0, 0, TILE_SIZE, 3);
+  ctx.fillStyle = hexToCss(PALETTE.cyanDim, 0.9);
   ctx.fillRect(0, 0, TILE_SIZE, 2);
-  ctx.fillStyle = hexToCss(PALETTE.cyanDim, 0.8);
-  ctx.fillRect(0, 0, TILE_SIZE, 1);
 
   // Panel seam(s) — position varies by variant so consecutive tiles don't all
   // look like their own tiny panel; seam 3 has none (mid-panel), the rest cut
@@ -39,9 +52,9 @@ export function drawGroundTop(ctx: CanvasRenderingContext2D, seam: 0 | 1 | 2 | 3
 
   if (light) {
     ctx.fillStyle = hexToCss(PALETTE.cyan);
-    ctx.shadowColor = hexToCss(PALETTE.cyan, 0.9);
-    ctx.shadowBlur = 3;
-    ctx.fillRect(TILE_SIZE / 2 - 1, 1, 2, 1);
+    ctx.shadowColor = hexToCss(PALETTE.cyan, 0.95);
+    ctx.shadowBlur = 4;
+    ctx.fillRect(TILE_SIZE / 2 - 1.5, 0, 3, 2);
     ctx.shadowBlur = 0;
   }
 }
@@ -57,9 +70,19 @@ export function drawGroundDamaged(ctx: CanvasRenderingContext2D, notchX: number)
 
 export function drawGroundEdge(ctx: CanvasRenderingContext2D): void {
   drawGroundTop(ctx, 0, false);
-  // A darker drop-off cap facing the gap — reads as "this is where it ends".
-  ctx.fillStyle = hexToCss(PALETTE.outline, 0.5);
-  ctx.fillRect(TILE_SIZE - 2, 0, 2, TILE_SIZE);
+  // A dark drop-off cap plus a warm warning sliver right at the lip — a gap
+  // must read as a hazard boundary at a glance, not just a slightly darker
+  // pixel (VISUAL RESET v1 #9: danger has to be legible to a kid, not just
+  // technically telegraphed).
+  ctx.fillStyle = hexToCss(PALETTE.outline, 0.6);
+  ctx.fillRect(TILE_SIZE - 3, 0, 3, TILE_SIZE);
+  // Sits just below Level.ts's full-run cyan rim (2px) so it isn't painted
+  // over by it — the rim says "safe surface", this says "except right here".
+  ctx.fillStyle = hexToCss(PALETTE.dangerAlt, 0.85);
+  ctx.shadowColor = hexToCss(PALETTE.dangerAlt, 0.85);
+  ctx.shadowBlur = 3;
+  ctx.fillRect(TILE_SIZE - 3, 2, 3, 3);
+  ctx.shadowBlur = 0;
 }
 
 export function drawGroundFill(ctx: CanvasRenderingContext2D): void {
@@ -151,62 +174,92 @@ export function drawPursuerIcon(ctx: CanvasRenderingContext2D, size: number): vo
 }
 
 /**
- * The exit is a gate, not a glowing rectangle: two side struts, a lintel,
- * a dark portal recess, and a beacon on top that only lights up when the
- * exit is real — a fake exit keeps the same silhouette but a dark beacon
- * (master-prompt's honesty rule: distinguishable, never a trick you can't see).
+ * The exit is a big portal, not a small door (VISUAL RESET v1 #10): thick
+ * struts, a deep glowing recess and a large beacon that only lights up when
+ * the exit is real — a fake exit keeps the same silhouette but a dark
+ * beacon (master-prompt's honesty rule: distinguishable, never a trick you
+ * can't see). Proportions are ratios of `w`/`h` so the same drawing scales
+ * cleanly onto a canvas noticeably bigger than the gameplay collision zone
+ * (`Level.ts` centers the sprite on a smaller physics zone, same idea as
+ * the player's sprite overflowing its own hitbox).
  */
 export function drawExitTile(ctx: CanvasRenderingContext2D, w: number, h: number, active: boolean): void {
   ctx.clearRect(0, 0, w, h);
   const accent = active ? PALETTE.cyan : PALETTE.system;
-  const strutW = 3;
+  const strutW = Math.round(w * 0.16);
+  const lintelH = Math.round(h * 0.1);
 
-  // Side struts.
+  // Outer halo — a big soft glow behind the whole frame, the first thing a
+  // player notices about the exit from across the screen.
+  if (active) {
+    ctx.fillStyle = hexToCss(accent, 0.16);
+    ctx.shadowColor = hexToCss(accent, 0.9);
+    ctx.shadowBlur = w * 0.35;
+    ctx.fillRect(strutW, lintelH, w - strutW * 2, h - lintelH);
+    ctx.shadowBlur = 0;
+  }
+
+  // Side struts — thick, chamfered top corners for a machined-not-web look.
   ctx.fillStyle = hexToCss(PALETTE.metalEdge);
-  ctx.fillRect(0, 3, strutW, h - 3);
-  ctx.fillRect(w - strutW, 3, strutW, h - 3);
-  ctx.fillStyle = hexToCss(accent, 0.55);
-  ctx.fillRect(0, 3, 1, h - 3);
-  ctx.fillRect(w - 1, 3, 1, h - 3);
+  ctx.beginPath();
+  ctx.moveTo(0, lintelH + strutW * 0.6);
+  ctx.lineTo(strutW * 0.6, lintelH);
+  ctx.lineTo(strutW, lintelH);
+  ctx.lineTo(strutW, h);
+  ctx.lineTo(0, h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(w, lintelH + strutW * 0.6);
+  ctx.lineTo(w - strutW * 0.6, lintelH);
+  ctx.lineTo(w - strutW, lintelH);
+  ctx.lineTo(w - strutW, h);
+  ctx.lineTo(w, h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = hexToCss(accent, 0.65);
+  ctx.fillRect(0, lintelH + strutW, Math.max(1, strutW * 0.25), h - lintelH - strutW);
+  ctx.fillRect(w - Math.max(1, strutW * 0.25), lintelH + strutW, Math.max(1, strutW * 0.25), h - lintelH - strutW);
 
   // Lintel.
   ctx.fillStyle = hexToCss(PALETTE.metalEdge);
-  ctx.fillRect(0, 0, w, 4);
-  ctx.fillStyle = hexToCss(accent, 0.5);
-  ctx.fillRect(0, 3, w, 1);
+  ctx.fillRect(0, 0, w, lintelH);
+  ctx.fillStyle = hexToCss(accent, 0.6);
+  ctx.fillRect(0, lintelH - 2, w, 2);
 
-  // SYSTEM marker — a small rune off-center on the lintel (clear of the
-  // beacon), tying the gateway to THE SYSTEM's visual language rather than
-  // reading as a plain UI door (art-direction reset §7). Present whether the
-  // exit is real or fake.
+  // SYSTEM marker — a rune off-center on the lintel (clear of the beacon),
+  // tying the gateway to THE SYSTEM's visual language rather than reading
+  // as a plain UI door. Present whether the exit is real or fake.
   ctx.save();
-  ctx.translate(w * 0.22, 1.5);
+  ctx.translate(w * 0.24, lintelH * 0.5);
   ctx.rotate(Math.PI / 4);
-  ctx.fillStyle = hexToCss(PALETTE.system, 0.85);
-  ctx.fillRect(-1, -1, 2, 2);
+  const runeSize = Math.max(2, w * 0.06);
+  ctx.fillStyle = hexToCss(PALETTE.system, 0.9);
+  ctx.fillRect(-runeSize / 2, -runeSize / 2, runeSize, runeSize);
   ctx.restore();
 
   // Dark portal recess.
   ctx.fillStyle = hexToCss(PALETTE.bgVoid);
-  ctx.fillRect(strutW, 4, w - strutW * 2, h - 4);
+  ctx.fillRect(strutW, lintelH, w - strutW * 2, h - lintelH);
   if (active) {
-    ctx.fillStyle = hexToCss(accent, 0.22);
-    ctx.shadowColor = hexToCss(accent, 0.8);
-    ctx.shadowBlur = 5;
-    ctx.fillRect(strutW + 1, 5, w - strutW * 2 - 2, h - 6);
+    ctx.fillStyle = hexToCss(accent, 0.3);
+    ctx.shadowColor = hexToCss(accent, 0.9);
+    ctx.shadowBlur = w * 0.18;
+    ctx.fillRect(strutW + 2, lintelH + 2, w - strutW * 2 - 4, h - lintelH - 4);
     ctx.shadowBlur = 0;
   }
 
-  // Beacon — the honest tell: lit only on the real exit.
-  const beaconX = w / 2 - 1;
+  // Beacon — the honest tell: big and lit only on the real exit.
+  const beaconSize = Math.max(3, w * 0.16);
+  const beaconX = w / 2 - beaconSize / 2;
   if (active) {
     ctx.fillStyle = hexToCss(PALETTE.cyan);
-    ctx.shadowColor = hexToCss(PALETTE.cyan, 0.9);
-    ctx.shadowBlur = 4;
-    ctx.fillRect(beaconX, 0, 2, 2);
+    ctx.shadowColor = hexToCss(PALETTE.cyan, 0.95);
+    ctx.shadowBlur = beaconSize * 1.4;
+    ctx.fillRect(beaconX, 0, beaconSize, lintelH * 0.9);
     ctx.shadowBlur = 0;
   } else {
     ctx.fillStyle = hexToCss(PALETTE.outline, 0.8);
-    ctx.fillRect(beaconX, 0, 2, 2);
+    ctx.fillRect(beaconX, 0, beaconSize, lintelH * 0.9);
   }
 }

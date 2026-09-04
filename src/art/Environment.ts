@@ -44,11 +44,15 @@ interface SectorTheme {
   dataTicks: boolean;
 }
 
+// VISUAL RESET v1 #7: fewer, bigger shapes — the background has to read as
+// atmosphere from across the screen, not compete with gameplay up close.
+// Wider width/gap ranges mean roughly half as many silhouettes as before
+// for the same worldWidth, each one large enough to actually register.
 const BASE_THEME: SectorTheme = {
   signalColor: PALETTE.cyanDim,
-  signalAlpha: 0.5,
+  signalAlpha: 0.6,
   farHeavyChance: 0.22,
-  farWidthRange: [16, 48],
+  farWidthRange: [28, 70],
   farHeightRange: [46, 120],
   midHeightRange: [24, 70],
   midPipeChance: 0.4,
@@ -183,7 +187,7 @@ export function buildEnvironmentLayers(
     const w = hashRange(s, theme.farWidthRange[0], theme.farWidthRange[1]);
     const h = hashRange(s + 1, theme.farHeightRange[0], theme.farHeightRange[1]);
     farShapes.push({ x: cursor, w, h });
-    cursor += w + hashRange(s + 2, 8, 40);
+    cursor += w + hashRange(s + 2, 20, 64);
     i++;
   }
 
@@ -216,12 +220,14 @@ export function buildEnvironmentLayers(
     far.fillStyle(heavy ? PALETTE.layerNear : PALETTE.layerFar, 1);
     far.fillRect(shape.x, towerBaseY - shape.h, shape.w, shape.h);
 
-    // Sparse lit windows — a handful of buildings, not every one.
-    if (hash01(seed + k * 613) < 0.35 && shape.h > 60) {
+    // Sparse lit windows — a handful of buildings, not every one. Bigger and
+    // rarer than before: a few clear accents read better at a glance than
+    // many 1px dots (VISUAL RESET v1 #7).
+    if (hash01(seed + k * 613) < 0.22 && shape.h > 60) {
       const wx = shape.x + hashRange(seed + k * 71, 2, Math.max(3, shape.w - 2));
       const wy = towerBaseY - hashRange(seed + k * 53, 8, shape.h - 6);
       signals.fillStyle(theme.signalColor, theme.signalAlpha);
-      signals.fillRect(wx, wy, 1, 1);
+      signals.fillRect(wx, wy, 2, 2);
     }
   }
 
@@ -246,10 +252,10 @@ export function buildEnvironmentLayers(
   const midShapes: Silhouette[] = [];
   while (cursor < worldWidth + 30) {
     const s = seed + 5000 + i * 92821;
-    const w = hashRange(s, 20, 46);
+    const w = hashRange(s, 34, 68);
     const h = hashRange(s + 1, theme.midHeightRange[0], theme.midHeightRange[1]);
     midShapes.push({ x: cursor, w, h });
-    cursor += w + hashRange(s + 2, 18, 60);
+    cursor += w + hashRange(s + 2, 30, 84);
     i++;
   }
   mid.fillStyle(PALETTE.layerMid, 1);
