@@ -8,9 +8,11 @@
 (с pitch-вариациями) и музыкальный секвенсор (calm/tension/victory)
 готовы; `critical`-настроение отложено до появления честного сигнала для
 него. Phase 6 (Yandex Games) — продолжается: `YandexGamesService` реально
-подключён к SDK (init/LoadingAPI/GameplayAPI/реклама/player data),
+подключён к SDK (init/LoadingAPI/GameplayAPI/реклама/player data/платежи),
 `SaveService` синхронизируется с облаком для авторизованных игроков;
-лидерборды, Daily Challenge, ghost-система и магазин — следующие шаги.**
+магазин (CREDITS, инвентарь, покупки, SYSTEM ARCHIVE) реализован как
+вертикальный срез (`docs/SHOP.md`); лидерборды, Daily Challenge и
+ghost-система — следующие шаги.**
 Правила работы — в `CLAUDE.md`. Полное ТЗ — `docs/master-prompt.md`.
 
 ---
@@ -710,21 +712,38 @@
       `YandexGamesService.isAvailable()` теперь реально подключён к SDK (см.
       пункт `YandexGamesService` выше) — вне Yandex Games (dev/CI/локально)
       честно остаётся `false`, внутри реального хостинга станет `true`.
-      **Осталось для реальной Phase 6**: rewarded (x2 DATA, continue в
-      Daily) — сама SDK-обвязка (`showRewarded`) уже реальная, не хватает
-      только точек вызова в UI; `remove_ads`-покупку →
-      `AdsService.setAdsDisabled`.
+      **Осталось для реальной Phase 6**: rewarded continue в Daily
+      Challenge — сама SDK-обвязка (`showRewarded`) уже реальная, не хватает
+      только точки вызова в UI (Daily Challenge сам ещё не реализован).
+      `remove_ads`-покупка → `AdsService.setAdsDisabled` теперь реально
+      подключена через `PurchaseManager` (см. пункт «Магазин/монетизация»
+      ниже) — добровольный rewarded за 20 CREDITS в магазине тоже сделан
+      (не x2 DATA — DATA как отдельная механика так и не заводилась, её
+      место заняла экономика CREDITS целиком).
 - [ ] Daily Challenge: детерминированный seed от даты, серверное время если доступно
 - [ ] Тесты сценариев: SDK нет / SDK медленный / авторизация отклонена / лидерборд недоступен
 - [ ] Ghost-система: компактные сэмплы инпута, привязка к `variantId`, отключаемая
-- [ ] **Магазин/монетизация** (получен отдельный мастер-промпт: CREDITS,
-      CurrencyService, InventoryService, скины/Death FX/SYSTEM-паки, No Ads,
-      SYSTEM ARCHIVE UI, Yandex-покупки) — **сознательно не начато**.
-      Экономика/инвентарь без надёжного сохранения (`SaveService` выше в
-      этой же фазе) означает купленное пропадает при перезагрузке — то есть
-      обратный порядок. Начинать после `SaveService`+`YandexGamesService`,
-      вертикальным срезом (Credits + 3 скина + 2 Death FX + No Ads),
-      как и требует сам промпт («не масштабируй систему преждевременно»).
+- [x] **Магазин/монетизация — вертикальный срез** (получен отдельный
+      мастер-промпт: CREDITS, CurrencyService, InventoryService,
+      скины/Death FX/SYSTEM-паки, No Ads, SYSTEM ARCHIVE UI, Yandex-покупки).
+      Полное описание — `docs/SHOP.md`. Кратко: `SaveService` v2 (credits,
+      инвентарь, обработанные токены покупок в том же файле, с миграцией
+      v1→v2 и merge, не откатывающим прогресс); `CurrencyService`/
+      `InventoryService`; каталог — 3 скина, 2+1(бандл) Death FX, 2+1(бандл)
+      SYSTEM-пака, `remove_ads` + бандл `system_access`, 5 пакетов кредитов
+      (цена только из реального каталога Yandex); `YandexGamesService`
+      получил facade платежей (`getCatalog/purchase/getPurchases/
+      consumePurchase`, формы сверены с документацией); `PurchaseManager` —
+      whitelist, идемпотентная выдача, `restorePurchases()` при загрузке
+      (покрывает «закрыли приложение во время покупки»); `AdsService`
+      теперь реально отключается по `remove_ads`/`system_access`; экран
+      `ShopScene` (SYSTEM ARCHIVE); dev-режим (`window.__shopDev`,
+      подтверждено grep'ом — ноль вхождений в прод-сборке). Тесты:
+      `currency-service`, `inventory-service`, `purchase-manager`,
+      `shop-items-sanity`, `dialogue-packs`, расширенный `save-service`.
+      **Осознанно отложено** (см. `docs/SHOP.md`): secret/locked-item UI,
+      доп. скины/FX/паки сверх среза, серверная подпись покупок
+      (`signed: true`), Achievements/Daily Challenge как источники CREDITS.
 
 ## PHASE 7 — Мобильная полировка → `v0.8.0-mobile-polish`
 
