@@ -30,6 +30,11 @@ const game = new Phaser.Game({
     width: MIN_VIRTUAL_WIDTH,
     height: VIRTUAL_HEIGHT,
   },
+  // Default is a single touch pointer — the floating move joystick and the
+  // jump zone need to be held down by two fingers at once (TouchControls.ts).
+  input: {
+    activePointers: 2,
+  },
   physics: {
     default: 'arcade',
     arcade: {
