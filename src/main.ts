@@ -16,6 +16,7 @@ import { SettingsScene } from '@/scenes/SettingsScene';
 import { HowToPlayScene } from '@/scenes/HowToPlayScene';
 import { SectorCompleteScene } from '@/scenes/SectorCompleteScene';
 import { LevelSelectScene } from '@/scenes/LevelSelectScene';
+import '@/shop/EconomyRewards';
 
 const root = document.getElementById('app');
 if (!root) throw new Error('#app root element not found');

@@ -10,6 +10,8 @@ import { fadeIn } from '@/ui/SceneFade';
 import { personalityTag } from '@/ai/SystemPersonality';
 import { sectorNumberOf } from '@/gameplay/sectors';
 import { AdsService } from '@/services/AdsService';
+import { CurrencyService } from '@/services/CurrencyService';
+import { EARN_AMOUNTS } from '@/data/shop/economy';
 
 export interface SectorCompleteData {
   completedLevelId: string;
@@ -42,6 +44,7 @@ export class SectorCompleteScene extends Phaser.Scene {
     // yet), but every future caller of AdsService only ever has to change
     // this file, not hunt for scattered ad calls.
     AdsService.requestInterstitial('SECTOR_COMPLETE');
+    CurrencyService.earnCredits(EARN_AMOUNTS.sectorComplete, 'sector_complete');
 
     const { width, height } = this.scale;
     this.cameras.main.setBackgroundColor(PALETTE.bgVoid);
@@ -49,7 +52,7 @@ export class SectorCompleteScene extends Phaser.Scene {
     buildDimBackdrop(this);
 
     const panelW = Math.min(260, width - 40);
-    const panelH = 168;
+    const panelH = 190;
     const panelX = width / 2 - panelW / 2;
     const panelY = height / 2 - panelH / 2;
     const g = this.add.graphics();
@@ -65,6 +68,7 @@ export class SectorCompleteScene extends Phaser.Scene {
     const stats = [
       `${t('resultTime')}: ${formatMmSs(this.sectorData.timeMs)}`,
       `${t('resultDeaths')}: ${this.sectorData.deaths}`,
+      `+${EARN_AMOUNTS.sectorComplete} CREDITS`,
     ];
     let y = panelY + 44;
     for (const line of stats) {
@@ -100,8 +104,20 @@ export class SectorCompleteScene extends Phaser.Scene {
       }).setOrigin(0.5, 0);
     }
 
-    new PixelButton(this, width / 2, panelY + panelH - 22, t('next'), {
-      width: panelW - 24,
+    const shopWidth = 64;
+    const gap = 8;
+    const nextWidth = panelW - 24 - shopWidth - gap;
+    const buttonY = panelY + panelH - 22;
+
+    new PixelButton(this, width / 2 - nextWidth / 2 - gap / 2, buttonY, t('shop'), {
+      width: shopWidth,
+      height: 20,
+      textScale: 1,
+      onClick: () => this.scene.launch('ShopScene'),
+    });
+
+    new PixelButton(this, width / 2 + shopWidth / 2 + gap / 2, buttonY, t('next'), {
+      width: nextWidth,
       height: 20,
       textScale: 1,
       onClick: () => {
