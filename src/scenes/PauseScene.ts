@@ -5,6 +5,7 @@ import { t } from '@/i18n/ui';
 import { PixelLabel } from '@/ui/PixelLabel';
 import { PixelButton } from '@/ui/PixelButton';
 import { drawPanel, buildDimBackdrop } from '@/ui/Panel';
+import { GameState } from '@/core/GameState';
 
 interface PauseSceneData {
   gameplaySceneKey: string;
@@ -84,6 +85,13 @@ export class PauseScene extends Phaser.Scene {
 
   private restart(): void {
     this.scene.stop();
+    // A manual restart is a fresh attempt at this level, same as arriving on
+    // it for the first time — `GameplayScene.create()` only calls
+    // `GameState.startRun()` when `currentLevelId` actually changes, which it
+    // doesn't here (same level), so the deaths counter and run timer would
+    // otherwise silently carry over. Without this the HUD looks unchanged
+    // after "Заново", which is what made it read as identical to "Продолжить".
+    GameState.startRun();
     this.scene.start(this.pauseData.gameplaySceneKey, { levelId: this.pauseData.levelId });
   }
 
