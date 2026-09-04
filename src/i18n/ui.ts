@@ -53,6 +53,61 @@ const UI_STRINGS = {
   resultSystemUpdate: { ru: 'Обновление SYSTEM', en: 'SYSTEM update' },
   resultCampaignDone: { ru: 'SYSTEM изучил тебя полностью', en: 'SYSTEM has fully profiled you' },
   next: { ru: 'Дальше', en: 'Next' },
+
+  // SYSTEM ARCHIVE (shop) — master-prompt §18. Product/category names stay
+  // in-world English tokens on purpose (CLAUDE.md #7 — technical SYSTEM
+  // tokens are never translated), the same treatment "SYSTEM ONLINE"/
+  // "SECTOR 01" already get; everything actionable around them is localized.
+  shopTitle: { ru: 'СИСТЕМНЫЙ АРХИВ', en: 'SYSTEM ARCHIVE' },
+  shop: { ru: 'Магазин', en: 'Shop' },
+  shopCategoryCharacter: { ru: 'ПЕРСОНАЖ', en: 'CHARACTER' },
+  shopCategoryDeathFx: { ru: 'ЭФФЕКТ СМЕРТИ', en: 'DEATH FX' },
+  shopCategorySystem: { ru: 'SYSTEM', en: 'SYSTEM' },
+  shopCategoryPremium: { ru: 'PREMIUM', en: 'PREMIUM' },
+  shopBuy: { ru: 'Купить', en: 'Buy' },
+  shopEquip: { ru: 'Экипировать', en: 'Equip' },
+  shopEquipped: { ru: 'Экипировано', en: 'Equipped' },
+  shopOwned: { ru: 'Уже получено', en: 'Owned' },
+  shopInsufficientCredits: { ru: 'Недостаточно кредитов', en: 'Insufficient credits' },
+  shopGetCredits: { ru: 'Получить кредиты', en: 'Get credits' },
+  shopWatchAd: { ru: 'Смотреть сигнал', en: 'Watch signal' },
+  shopPurchaseFailed: { ru: 'Покупка не удалась', en: 'Purchase failed' },
+  shopTryAgain: { ru: 'Попробовать снова', en: 'Try again' },
+  shopCatalogUnavailable: { ru: 'Каталог недоступен', en: 'Catalog unavailable' },
+  shopRestoring: { ru: 'Восстановление покупок…', en: 'Restoring purchases…' },
+  shopAdsDisabled: { ru: 'Реклама отключена', en: 'Ads disabled' },
+  shopNoAdsOwned: { ru: 'РЕКЛАМА ОТКЛЮЧЕНА', en: 'ADS DISABLED' },
+
+  shopSkinDefault: { ru: 'DEFAULT', en: 'DEFAULT' },
+  shopSkinDefaultDesc: { ru: 'Базовый корпус android.', en: 'The android’s stock chassis.' },
+  shopSkinVoid: { ru: 'VOID', en: 'VOID' },
+  shopSkinVoidDesc: { ru: 'Тёмный корпус, лиловый визор.', en: 'A darkened chassis, a violet visor.' },
+  shopSkinSignal: { ru: 'SIGNAL', en: 'SIGNAL' },
+  shopSkinSignalDesc: { ru: 'Тот же корпус, предупреждающий сигнальный визор.', en: 'The stock chassis, a warning-signal visor.' },
+  shopSkinError404: { ru: 'ERROR 404', en: 'ERROR 404' },
+  shopSkinError404Desc: { ru: 'Тебе не должно быть это доступно.', en: 'You should not have access to this.' },
+
+  shopFxStatic: { ru: 'STATIC', en: 'STATIC' },
+  shopFxStaticDesc: { ru: 'Стандартный эффект отключения.', en: 'The standard shutdown effect.' },
+  shopFxGlitch: { ru: 'GLITCH', en: 'GLITCH' },
+  shopFxGlitchDesc: { ru: 'Более резкий цифровой сбой.', en: 'A sharper digital breakdown.' },
+  shopFxDataWipe: { ru: 'DATA WIPE', en: 'DATA WIPE' },
+  shopFxDataWipeDesc: { ru: 'Полное стирание — эксклюзив SYSTEM ACCESS.', en: 'A full wipe — SYSTEM ACCESS exclusive.' },
+
+  shopPackStandard: { ru: 'STANDARD', en: 'STANDARD' },
+  shopPackStandardDesc: { ru: 'Обычный тон SYSTEM.', en: 'SYSTEM’s usual tone.' },
+  shopPackCold: { ru: 'COLD', en: 'COLD' },
+  shopPackColdDesc: { ru: 'SYSTEM без тёплых ноток.', en: 'SYSTEM with the warmth removed.' },
+  shopPackCorrupted: { ru: 'CORRUPTED', en: 'CORRUPTED' },
+  shopPackCorruptedDesc: { ru: 'Нестабильный тон — эксклюзив SYSTEM ACCESS.', en: 'An unstable tone — SYSTEM ACCESS exclusive.' },
+
+  shopNoAds: { ru: 'NO ADS', en: 'NO ADS' },
+  shopNoAdsDesc: { ru: 'Полностью отключает рекламу навсегда.', en: 'Disables advertising completely, forever.' },
+  shopSystemAccess: { ru: 'SYSTEM ACCESS', en: 'SYSTEM ACCESS' },
+  shopSystemAccessDesc: {
+    ru: 'NO ADS + эксклюзивные персонаж, эффект смерти и тон SYSTEM.',
+    en: 'NO ADS + an exclusive character, death FX and SYSTEM tone.',
+  },
 } as const;
 
 export type UiStringKey = keyof typeof UI_STRINGS;
