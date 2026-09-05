@@ -445,6 +445,14 @@ export class MainMenuScene extends Phaser.Scene {
     // player came for, and commentary there would only slow it down.
     const commentKind = key === 'play' ? undefined : (key as MenuCommentKind);
 
+    // PLAY is wide enough (spans the whole grid, `menuLayout.ts`) that
+    // left-aligning its icon+label at the primary variant's fixed 22+16
+    // inset left a lopsided gap of empty cyan on the right — centred like
+    // `buildChangeSkinTile`'s compact tile, for the same reason: only the
+    // DOM knows the label's actual width. The grid tiles stay left-aligned;
+    // at 120px wide with a short word, the fixed inset already reads fine.
+    const contentWidth = spec.variant === 'primary' ? 22 + 16 + label.width : undefined;
+
     const tile: MenuTile = new MenuTile(this, {
       x: box.x,
       y: box.y,
@@ -457,6 +465,7 @@ export class MainMenuScene extends Phaser.Scene {
       iconAccent: spec.iconAccent,
       onClick: spec.onClick,
       onLabelState: (state) => this.syncLabel(label, tile, state, commentKind),
+      ...(contentWidth !== undefined ? { contentWidth } : {}),
     });
     label.setPosition(tile.labelX, tile.labelY);
 
