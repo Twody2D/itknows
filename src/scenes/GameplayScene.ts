@@ -53,6 +53,8 @@ interface GameplaySceneData {
   respawnCol?: number;
   /** Fade in from black on entry — only for deliberate navigation (main menu → gameplay, sector complete → next sector), never death-retry or a same-level restart (`ui/SceneFade.ts`). */
   entryTransition?: boolean;
+  /** Skips `DifficultyDirector`'s adaptive pick entirely — Daily Challenge's only door in, since every player must land on the exact same variant for the same date for the seed (and any future shared leaderboard) to mean anything (CLAUDE.md #6). */
+  forceVariantId?: string;
 }
 
 /** Pixels of leeway when deciding whether the player was already above a one-way platform. */
@@ -103,7 +105,7 @@ export class GameplayScene extends Phaser.Scene {
   init(data: GameplaySceneData): void {
     // THE SYSTEM only ever picks a variant here, before the level is built —
     // never mid-attempt (CLAUDE.md #4.1, see DifficultyDirector's doc comment).
-    this.variantId = selectVariant(data.levelId, PlayerProfile.snapshot(), SystemMemory.snapshot());
+    this.variantId = data.forceVariantId ?? selectVariant(data.levelId, PlayerProfile.snapshot(), SystemMemory.snapshot());
     this.levelDef = getLevel(data.levelId, this.variantId);
     SaveService.setLastLevelId(this.levelDef.id);
     this.resolving = false;

@@ -181,13 +181,54 @@ no-op вне реального SDK или для гостя, никогда н�
   собственной через фейковые `getEntries`/`getPlayerEntry` возвращает
   ожидаемые данные. Ноль ошибок консоли на всех путях.
 
+## Server time + Daily Challenge — реализовано
+
+`ysdk.serverTime()` (сверено против
+`yandex.com/dev/games/doc/en/sdk/sdk-server-time`) — синхронный метод,
+возвращает ms-timestamp, устойчивый к переведённым часам устройства.
+`YandexGamesService.getServerTime()` — `null` вне реального SDK, вызывающий
+код сам решает fallback.
+
+`src/gameplay/DailyChallenge.ts` — детерминированный выбор (master-prompt
+§72/§73): `dailyChallengeDateKey` берёт **UTC**-дату (не локальную — иначе
+игроки в разных часовых поясах получили бы разные испытания в один и тот же
+момент), `getDailyChallenge()` хеширует эту строку тем же FNV-1a, что уже
+используется для декоративной геометрии (`art/hash.ts`), и берёт уровень
+кампании по остатку от деления — один и тот же день всегда даёт один и тот
+же уровень, для всех игроков. `currentChallengeTimeMs()` берёт
+`getServerTime()`, если он есть, иначе `Date.now()`.
+
+Играется всегда в каноничном (`'standard'`) варианте — тем же обоснованием,
+что и в `LeaderboardService`: адаптивный вариант подбирается под конкретного
+игрока и не был бы одним и тем же испытанием для всех. Точка входа —
+кнопка «Испытание дня» в `LevelSelectScene`; `GameplayScene` получила
+`forceVariantId`, который полностью обходит `DifficultyDirector`.
+
+**Осознанно не в этой правке** (это MVP-архитектура из §73, полноценный
+экран из §74 — следующий шаг): отдельный экран результата
+(«TODAY'S CHALLENGE»/лучшее время/«Can you do better?»), rewarded-continue
+при смерти (разрешён только здесь, не в кампании — «Решённые вопросы» #3),
+отдельная таблица лидерборда для Daily Challenge (`LeaderboardService`
+сейчас пишет каноничное прохождение любого уровня, включая пройденный как
+испытание дня, в его обычную таблицу `level-<id>` — это корректно и честно
+само по себе, отдельная таблица «кто лучше прошёл именно сегодняшнее
+испытание» — часть будущего экрана, не этой правки).
+
+Подтверждено вживую headless-браузером: вне SDK — `getServerTime()` null,
+клик по кнопке в `LevelSelectScene` запускает ожидаемый (посчитанный тем же
+модулем) уровень в варианте `standard`, причём даже когда `SystemMemory`
+намеренно приведена в состояние «в состоянии проигрывать» (что для этого
+уровня штатно дало бы `gentle`) — `forceVariantId` реально побеждает
+`DifficultyDirector`, а не просто случайно с ним совпадает. Отдельно, с
+фейковым `serverTime()` внутри настоящего вложенного iframe — дата
+испытания реально вычисляется от значения SDK, а не от часов браузера. Ноль
+ошибок консоли на обоих путях.
+
 ## Что сверено, но не реализовано (следующие инкременты Phase 6)
 
 - **Ghost-система** — отдельный пункт, не завязан на SDK напрямую.
-- **Daily Challenge** — использует то же `LeaderboardService`
-  (`leaderboardNameFor` пока покрывает только обычные уровни кампании;
-  отдельное имя таблицы для Daily Challenge — часть самой задачи Daily
-  Challenge, а не этой правки).
+- **Daily Challenge — полный экран** (§74): результат, rewarded-continue,
+  собственная таблица лидерборда — см. предыдущий раздел.
 
 ## Формальные лимиты API (на случай будущих багов из-за квот)
 
@@ -206,5 +247,6 @@ no-op вне реального SDK или для гостя, никогда н�
 - [Game loading and gameplay markup](https://yandex.com/dev/games/doc/en/sdk/sdk-game-events)
 - [Player data](https://yandex.com/dev/games/doc/en/sdk/sdk-player)
 - [Leaderboards](https://yandex.com/dev/games/doc/en/sdk/sdk-leaderboard)
+- [Server time](https://yandex.com/dev/games/doc/en/sdk/sdk-server-time)
 - [Advertising](https://yandex.com/dev/games/doc/en/sdk/sdk-adv)
 - [Install and use the SDK](https://yandex.com/dev/games/doc/en/sdk/sdk-about)

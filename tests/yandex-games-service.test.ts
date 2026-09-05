@@ -52,4 +52,8 @@ describe('YandexGamesService', () => {
   it('getPlayerLeaderboardEntry() degrades to null without a real SDK', async () => {
     await expect(YandexGamesService.getPlayerLeaderboardEntry('level-sector-01-level-01')).resolves.toBeNull();
   });
+
+  it('getServerTime() is null without a real SDK — callers fall back to Date.now()', () => {
+    expect(YandexGamesService.getServerTime()).toBeNull();
+  });
 });

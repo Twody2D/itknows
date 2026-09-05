@@ -22,6 +22,7 @@ const UI_STRINGS = {
 
   levelSelectSector: { ru: 'СЕКТОР', en: 'SECTOR' },
   levelSelectLevel: { ru: 'Уровень', en: 'Level' },
+  dailyChallenge: { ru: 'Испытание дня', en: 'Daily challenge' },
 
   pauseTitle: { ru: 'Пауза', en: 'Paused' },
   resume: { ru: 'Продолжить', en: 'Resume' },

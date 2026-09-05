@@ -85,6 +85,8 @@ interface Ysdk {
   getPayments?(options?: { signed?: boolean }): Promise<YsdkPayments>;
   leaderboards?: YsdkLeaderboards;
   auth?: YsdkAuth;
+  /** Synchronous — verified against `yandex.com/dev/games/doc/en/sdk/sdk-server-time`. Returns a ms timestamp resistant to a tampered device clock, the same for every device. */
+  serverTime?(): number;
 }
 
 interface YaGamesGlobal {
@@ -274,6 +276,19 @@ class YandexGamesServiceController {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * `ysdk.serverTime()` — resistant to a tampered device clock (verified
+   * against the docs), used by `DailyChallenge` so "the same seed gives the
+   * same challenge" (master-prompt §72) actually holds even for a player who
+   * moves their own clock. `null` outside a real SDK — callers fall back to
+   * `Date.now()`, same degrade contract as the rest of this facade; a guest
+   * cheating their own clock in that fallback only ever affects their own
+   * leaderboard entry, never anyone else's.
+   */
+  getServerTime(): number | null {
+    return this.ysdk?.serverTime?.() ?? null;
   }
 
   /**
