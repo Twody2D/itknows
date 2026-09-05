@@ -10,3 +10,6 @@ coverage/
 
 current-main-menu.svg
 current-first-level.svg
+
+# Экспорт макетов из Claude Design — референс композиции, а не исходник игры.
+design/
