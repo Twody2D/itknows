@@ -10,6 +10,10 @@ import { isTouchDevice } from '@/utils/input/isTouchDevice';
 import { buildEnvironmentLayers } from '@/art/Environment';
 import { FxManager } from '@/fx/FxManager';
 import { Player } from '@/gameplay/Player';
+import { GhostRecorder } from '@/gameplay/GhostRecorder';
+import { GhostSprite } from '@/gameplay/GhostSprite';
+import { GhostSettings } from '@/gameplay/GhostSettings';
+import { GhostService } from '@/services/GhostService';
 import { buildLevel } from '@/gameplay/Level';
 import type { BuiltLevel, CheckpointZone } from '@/gameplay/Level';
 import type { LevelDef } from '@/gameplay/LevelDef';
@@ -79,8 +83,20 @@ export class GameplayScene extends Phaser.Scene {
   private touchControls?: TouchControls;
   private behaviorTracker!: BehaviorTracker;
   private variantId!: string;
-  private attemptStartMs = 0;
+  /**
+   * Sentinel until the first `update()` tick: a scene's own `this.time.now`
+   * reads 0 during `create()` — its per-scene clock hasn't stepped yet, even
+   * on a scene reused via `restart()`/`start()` after the game has been
+   * running a while — so capturing it here instead of in `create()` is the
+   * only way this (and `attemptElapsedMs` in `handlePlayerDeath`) reads
+   * correctly on a session's very first level. Found live while verifying
+   * the ghost recorder: its first sample landed at `t ≈ this.time.now` for
+   * that one case instead of near 0.
+   */
+  private attemptStartMs = -1;
   private hesitationCommented = false;
+  private readonly ghostRecorder = new GhostRecorder();
+  private ghostSprite: GhostSprite | null = null;
 
   private hudDeathsText!: PixelLabel;
   private hudSystemText!: PixelLabel;
@@ -135,7 +151,10 @@ export class GameplayScene extends Phaser.Scene {
     buildEnvironmentLayers(this, this.level.worldWidth, this.level.spawn.y, this.levelDef.id);
     this.setupInput();
     this.behaviorTracker = new BehaviorTracker();
-    this.attemptStartMs = this.time.now;
+    // Real capture happens on the first `update()` tick — see the field's
+    // doc comment for why `this.time.now` can't be trusted here.
+    this.attemptStartMs = -1;
+    this.ghostRecorder.reset();
     EventBus.emit('level:loaded', { levelId: this.levelDef.id, variantId: this.variantId });
     MusicSequencer.start();
     YandexGamesService.notifyGameplayStart();
@@ -143,6 +162,12 @@ export class GameplayScene extends Phaser.Scene {
 
     const spawnX =
       this.activeRespawnCol !== undefined ? this.activeRespawnCol * TILE_SIZE + TILE_SIZE / 2 : this.level.spawn.x;
+
+    // Ghost is a pure visual overlay — created before the player so draw
+    // order never lets it cover the real character (master-prompt §40).
+    const ghostRecord = GhostSettings.enabled ? GhostService.getGhost(this.levelDef.id, this.variantId) : null;
+    this.ghostSprite = ghostRecord ? new GhostSprite(this, ghostRecord.samples) : null;
+
     this.player = new Player(this, spawnX, this.level.spawn.y, this.inputState);
 
     this.physics.world.setBounds(0, -400, this.level.worldWidth, this.level.worldHeight + 800);
@@ -196,6 +221,7 @@ export class GameplayScene extends Phaser.Scene {
       YandexGamesService.notifyGameplayStop();
       this.touchControls?.destroy();
       this.behaviorTracker.destroy();
+      this.ghostSprite?.destroy();
       this.fx.destroy();
       this.tutorialHints?.destroy();
       for (const trap of this.level.traps.all) trap.destroy();
@@ -353,6 +379,8 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   override update(time: number, delta: number): void {
+    if (this.attemptStartMs < 0) this.attemptStartMs = time;
+
     if (this.player.isAlive() && this.player.y > this.level.worldHeight + 40) {
       this.player.kill('fall');
     }
@@ -362,7 +390,12 @@ export class GameplayScene extends Phaser.Scene {
     this.carryOnMovingPlatforms();
     this.tutorialHints?.update();
 
+    const attemptElapsedMs = time - this.attemptStartMs;
     this.behaviorTracker.sample(time, delta, this.inputState, this.player.isAlive());
+    if (this.player.isAlive()) {
+      this.ghostRecorder.sample(attemptElapsedMs, this.player.x, this.player.y, this.player.flipX);
+    }
+    this.ghostSprite?.update(attemptElapsedMs);
     if (!this.hesitationCommented) {
       const line = Commentator.commentOnHesitation(this.behaviorTracker.hesitationSoFarMs);
       if (line) this.hesitationCommented = true;
@@ -568,6 +601,7 @@ export class GameplayScene extends Phaser.Scene {
     const timeMs = GameState.elapsedMs();
     const deaths = GameState.run.deaths;
     EventBus.emit('level:completed', { levelId: this.levelDef.id, timeMs, deaths });
+    GhostService.recordAttempt(this.levelDef.id, this.variantId, timeMs, this.ghostRecorder.finish());
 
     const wasStruggling = SystemMemory.snapshot().repeatDeathCount >= 2;
     SystemMemory.registerClear(this.levelDef.id, wasStruggling);

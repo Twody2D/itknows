@@ -33,6 +33,7 @@ const UI_STRINGS = {
   sound: { ru: 'Звук', en: 'Sound' },
   particles: { ru: 'Частицы', en: 'Particles' },
   screenShake: { ru: 'Тряска экрана', en: 'Screen shake' },
+  ghostReplay: { ru: 'Призрак', en: 'Ghost' },
   language: { ru: 'Язык', en: 'Language' },
   on: { ru: 'Вкл', en: 'On' },
   off: { ru: 'Выкл', en: 'Off' },

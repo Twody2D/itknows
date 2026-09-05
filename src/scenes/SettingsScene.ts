@@ -5,6 +5,7 @@ import { t } from '@/i18n/ui';
 import { LocaleState } from '@/i18n/Locale';
 import { FxSettings } from '@/fx/FxSettings';
 import { AudioSettings } from '@/audio/AudioSettings';
+import { GhostSettings } from '@/gameplay/GhostSettings';
 import { PixelLabel } from '@/ui/PixelLabel';
 import { PixelButton } from '@/ui/PixelButton';
 import { drawPanel, buildDimBackdrop } from '@/ui/Panel';
@@ -22,6 +23,7 @@ export class SettingsScene extends Phaser.Scene {
   private soundButton!: PixelButton;
   private particlesButton!: PixelButton;
   private shakeButton!: PixelButton;
+  private ghostButton!: PixelButton;
   private authButton: PixelButton | null = null;
   private authorized = false;
 
@@ -41,7 +43,7 @@ export class SettingsScene extends Phaser.Scene {
     const showAuthRow = YandexGamesService.isAvailable();
 
     const panelW = 190;
-    const panelH = 176 + (showAuthRow ? 28 : 0);
+    const panelH = 204 + (showAuthRow ? 28 : 0);
     const panelX = width / 2 - panelW / 2;
     const panelY = height / 2 - panelH / 2;
     const g = this.add.graphics();
@@ -87,6 +89,17 @@ export class SettingsScene extends Phaser.Scene {
       onClick: () => {
         FxSettings.shakeEnabled = !FxSettings.shakeEnabled;
         this.shakeButton.setLabelText(this.shakeLabel());
+      },
+    });
+    y += rowH + gap;
+
+    this.ghostButton = new PixelButton(this, width / 2, y, this.ghostLabel(), {
+      width: rowW,
+      height: rowH,
+      textScale: 1,
+      onClick: () => {
+        GhostSettings.toggle();
+        this.ghostButton.setLabelText(this.ghostLabel());
       },
     });
     y += rowH + gap;
@@ -149,6 +162,10 @@ export class SettingsScene extends Phaser.Scene {
 
   private shakeLabel(): string {
     return `${t('screenShake')}: ${FxSettings.shakeEnabled ? t('on') : t('off')}`;
+  }
+
+  private ghostLabel(): string {
+    return `${t('ghostReplay')}: ${GhostSettings.enabled ? t('on') : t('off')}`;
   }
 
   private languageLabel(): string {

@@ -78,7 +78,7 @@ describe('SaveService', () => {
       SaveService.markCompleted('sector-01-level-01');
       expect(YandexGamesService.setPlayerData).toHaveBeenCalledWith({
         save: JSON.stringify({
-          version: 2,
+          version: 3,
           completedLevels: ['sector-01-level-01'],
           lastLevelId: null,
           credits: 0,
@@ -92,6 +92,7 @@ describe('SaveService', () => {
             equippedSystemPack: 'standard',
           },
           processedPurchaseTokens: [],
+          ghosts: {},
         }),
       });
     });
@@ -125,7 +126,7 @@ describe('SaveService', () => {
       SaveService.setInventory({ ...SaveService.getInventory(), ownedSkins: ['default', 'void'] });
       vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
         save: JSON.stringify({
-          version: 2,
+          version: 3,
           completedLevels: [],
           lastLevelId: null,
           credits: 20,
@@ -139,6 +140,7 @@ describe('SaveService', () => {
             equippedSystemPack: 'standard',
           },
           processedPurchaseTokens: ['tok-1'],
+          ghosts: {},
         }),
       });
       await SaveService.syncWithCloud();
@@ -177,6 +179,109 @@ describe('SaveService', () => {
       SaveService.markPurchaseProcessed('tok-abc');
       expect(SaveService.hasProcessedPurchase('tok-abc')).toBe(true);
       expect(SaveService.hasProcessedPurchase('tok-other')).toBe(false);
+    });
+  });
+
+  describe('ghosts', () => {
+    it('has no ghost for a level that has never been beaten', () => {
+      expect(SaveService.getGhost('sector-01-level-01::standard')).toBeNull();
+    });
+
+    it('stores the first recorded run as the best', () => {
+      SaveService.saveGhostIfBest('sector-01-level-01::standard', 5000, [0, 10, 20, 0]);
+      expect(SaveService.getGhost('sector-01-level-01::standard')).toEqual({ timeMs: 5000, samples: [0, 10, 20, 0] });
+    });
+
+    it('replaces the stored ghost with a strictly faster run', () => {
+      SaveService.saveGhostIfBest('sector-01-level-01::standard', 5000, [0, 10, 20, 0]);
+      SaveService.saveGhostIfBest('sector-01-level-01::standard', 4000, [0, 11, 21, 1]);
+      expect(SaveService.getGhost('sector-01-level-01::standard')).toEqual({ timeMs: 4000, samples: [0, 11, 21, 1] });
+    });
+
+    it('keeps the existing ghost when a new run is not faster', () => {
+      SaveService.saveGhostIfBest('sector-01-level-01::standard', 4000, [0, 11, 21, 1]);
+      SaveService.saveGhostIfBest('sector-01-level-01::standard', 4000, [0, 99, 99, 0]);
+      SaveService.saveGhostIfBest('sector-01-level-01::standard', 6000, [0, 99, 99, 0]);
+      expect(SaveService.getGhost('sector-01-level-01::standard')).toEqual({ timeMs: 4000, samples: [0, 11, 21, 1] });
+    });
+
+    it('keeps ghosts for different variants of the same level independent', () => {
+      SaveService.saveGhostIfBest('sector-01-level-01::standard', 4000, [0, 1, 2, 0]);
+      SaveService.saveGhostIfBest('sector-01-level-01::gentle', 9000, [0, 3, 4, 1]);
+      expect(SaveService.getGhost('sector-01-level-01::standard')).toEqual({ timeMs: 4000, samples: [0, 1, 2, 0] });
+      expect(SaveService.getGhost('sector-01-level-01::gentle')).toEqual({ timeMs: 9000, samples: [0, 3, 4, 1] });
+    });
+
+    describe('cloud sync', () => {
+      beforeEach(() => {
+        vi.mocked(YandexGamesService.isAvailable).mockReturnValue(true);
+      });
+
+      it('adopts a cloud-only ghost this device has never recorded', async () => {
+        vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
+          save: JSON.stringify({
+            version: 3,
+            completedLevels: [],
+            lastLevelId: null,
+            credits: 0,
+            inventory: null,
+            processedPurchaseTokens: [],
+            ghosts: { 'sector-01-level-01::standard': { timeMs: 7000, samples: [0, 5, 5, 0] } },
+          }),
+        });
+        await SaveService.syncWithCloud();
+        expect(SaveService.getGhost('sector-01-level-01::standard')).toEqual({ timeMs: 7000, samples: [0, 5, 5, 0] });
+      });
+
+      it('keeps this device\'s faster ghost over a slower cloud one', async () => {
+        SaveService.saveGhostIfBest('sector-01-level-01::standard', 3000, [0, 1, 1, 0]);
+        vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
+          save: JSON.stringify({
+            version: 3,
+            completedLevels: [],
+            lastLevelId: null,
+            credits: 0,
+            inventory: null,
+            processedPurchaseTokens: [],
+            ghosts: { 'sector-01-level-01::standard': { timeMs: 7000, samples: [0, 5, 5, 0] } },
+          }),
+        });
+        await SaveService.syncWithCloud();
+        expect(SaveService.getGhost('sector-01-level-01::standard')).toEqual({ timeMs: 3000, samples: [0, 1, 1, 0] });
+      });
+
+      it('adopts the cloud ghost when it is faster than this device\'s own', async () => {
+        SaveService.saveGhostIfBest('sector-01-level-01::standard', 9000, [0, 1, 1, 0]);
+        vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
+          save: JSON.stringify({
+            version: 3,
+            completedLevels: [],
+            lastLevelId: null,
+            credits: 0,
+            inventory: null,
+            processedPurchaseTokens: [],
+            ghosts: { 'sector-01-level-01::standard': { timeMs: 4000, samples: [0, 5, 5, 0] } },
+          }),
+        });
+        await SaveService.syncWithCloud();
+        expect(SaveService.getGhost('sector-01-level-01::standard')).toEqual({ timeMs: 4000, samples: [0, 5, 5, 0] });
+      });
+
+      it('drops a corrupt ghost entry instead of ever returning it', async () => {
+        vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
+          save: JSON.stringify({
+            version: 3,
+            completedLevels: [],
+            lastLevelId: null,
+            credits: 0,
+            inventory: null,
+            processedPurchaseTokens: [],
+            ghosts: { 'sector-01-level-01::standard': { timeMs: -1, samples: [0, 1] } },
+          }),
+        });
+        await SaveService.syncWithCloud();
+        expect(SaveService.getGhost('sector-01-level-01::standard')).toBeNull();
+      });
     });
   });
 });
