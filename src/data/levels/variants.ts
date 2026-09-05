@@ -101,6 +101,130 @@ export const LEVEL_VARIANTS: Record<string, { gentle?: LevelDef; bold?: LevelDef
       ...GAP_AND_SPIKE,
       gaps: [[16, 16], ...GAP_AND_SPIKE.gaps.slice(1)],
     },
+    // gentle/bold retune the level's own ambush spikes and sudden pits —
+    // the same two knobs every ambush spike in the campaign already has
+    // (`timing.warningMs`, and the trigger's distance before the landing
+    // column). The trap only stays honest ("keep running unreacting = you
+    // get caught, stopping during the visible fall = you survive") if the
+    // travel time from trigger to landing at the player's own moveSpeed
+    // (110px/s, `config/physics.ts`) is at least `warningMs` — shorter and
+    // an unreacting player would clear the column *before* the spike turns
+    // lethal, which would make "bold" accidentally easier, not harder.
+    // Both triggers here sit in already-clear ground (checked against this
+    // level's own `spikeColumns`/`gaps`) rather than at a proportionally
+    // "ideal" distance that would land on the static spike cluster at
+    // 46-48 or 92-93 — which is also why the two ambushes end up with
+    // slightly different numbers instead of one uniform pair: each
+    // respects the clear room its own spot actually has.
+    // `flp-*`'s `holdMs` (the sudden pit's carry time before it drops)
+    // moves the same direction, floored at `MIN_REACTION_WINDOW_MS` (300).
+    gentle: {
+      ...GAP_AND_SPIKE,
+      traps: [
+        {
+          type: 'moving-spike',
+          id: 'mspike-01',
+          ambush: true,
+          fromCol: 56,
+          fromRow: 11,
+          toCol: 56,
+          toRow: 21,
+          // Trigger 7 tiles (70px) before landing — the full clear run
+          // after the 46-48 spike cluster. 636ms travel time comfortably
+          // covers a 600ms warning, so the sync still holds.
+          timing: { idleMs: 900, warningMs: 600, activeMs: 300, cooldownMs: 250 },
+          loop: false,
+        },
+        {
+          type: 'trigger',
+          id: 'mspike-01-trigger',
+          col: 49,
+          row: 19,
+          width: 2,
+          height: 3,
+          targetId: 'mspike-01',
+          visible: false,
+        },
+        { type: 'falling-platform', id: 'flp-01', col: 82, row: 22, width: 2, holdMs: 550 },
+        {
+          type: 'moving-spike',
+          id: 'mspike-02',
+          ambush: true,
+          fromCol: 100,
+          fromRow: 11,
+          toCol: 100,
+          toRow: 21,
+          // Only 6 tiles (60px) of clear ground exists after the 92-93
+          // cluster, so the honest ceiling here is a smaller bump than
+          // `mspike-01`'s — 545ms of travel against a 520ms warning.
+          timing: { idleMs: 900, warningMs: 520, activeMs: 300, cooldownMs: 250 },
+          loop: false,
+        },
+        {
+          type: 'trigger',
+          id: 'mspike-02-trigger',
+          col: 94,
+          row: 19,
+          width: 2,
+          height: 3,
+          targetId: 'mspike-02',
+          visible: false,
+        },
+        { type: 'falling-platform', id: 'flp-02', col: 146, row: 22, width: 2, holdMs: 550 },
+      ],
+    },
+    bold: {
+      ...GAP_AND_SPIKE,
+      traps: [
+        {
+          type: 'moving-spike',
+          id: 'mspike-01',
+          ambush: true,
+          fromCol: 56,
+          fromRow: 11,
+          toCol: 56,
+          toRow: 21,
+          // Trigger 4 tiles (40px) before landing — 364ms travel against a
+          // 300ms warning (MIN_WARNING_MS, never below it): tighter
+          // attention, still with the sync margin that keeps it honest.
+          timing: { idleMs: 900, warningMs: 300, activeMs: 300, cooldownMs: 250 },
+          loop: false,
+        },
+        {
+          type: 'trigger',
+          id: 'mspike-01-trigger',
+          col: 52,
+          row: 19,
+          width: 2,
+          height: 3,
+          targetId: 'mspike-01',
+          visible: false,
+        },
+        { type: 'falling-platform', id: 'flp-01', col: 82, row: 22, width: 2, holdMs: 300 },
+        {
+          type: 'moving-spike',
+          id: 'mspike-02',
+          ambush: true,
+          fromCol: 100,
+          fromRow: 11,
+          toCol: 100,
+          toRow: 21,
+          timing: { idleMs: 900, warningMs: 300, activeMs: 300, cooldownMs: 250 },
+          loop: false,
+        },
+        {
+          type: 'trigger',
+          id: 'mspike-02-trigger',
+          col: 96,
+          row: 19,
+          width: 2,
+          height: 3,
+          targetId: 'mspike-02',
+          visible: false,
+        },
+        { type: 'falling-platform', id: 'flp-02', col: 146, row: 22, width: 2, holdMs: 300 },
+      ],
+    },
   },
 
   // First real content for the five trap types added beyond master-prompt
@@ -119,6 +243,24 @@ export const LEVEL_VARIANTS: Record<string, { gentle?: LevelDef; bold?: LevelDef
   // follow that same precedent: a small bonus platform, always skippable by
   // the level's already-`LevelValidator`-proven ground route.
   [MOVING_BRIDGE.id]: {
+    // Not trigger-gated (unlike the ambush spikes above) — `spike-bank`
+    // loops on its own clock regardless of where the player is, so gentle/
+    // bold only ever tune `timing`, never a trigger distance.
+    gentle: {
+      ...MOVING_BRIDGE,
+      traps: [
+        ...MOVING_BRIDGE.traps!,
+        {
+          type: 'spike-bank',
+          id: 'sbank-01',
+          col: 34,
+          width: 3,
+          hiddenRow: 23,
+          lethalRow: 21,
+          timing: { idleMs: 1100, warningMs: 650, activeMs: 500, cooldownMs: 350 },
+        },
+      ],
+    },
     bold: {
       ...MOVING_BRIDGE,
       traps: [
@@ -134,11 +276,29 @@ export const LEVEL_VARIANTS: Record<string, { gentle?: LevelDef; bold?: LevelDef
           width: 3,
           hiddenRow: 23,
           lethalRow: 21,
+          // warningMs at the honest floor, longer activeMs and shorter
+          // idleMs than gentle — less safe time overall, same telegraph.
+          timing: { idleMs: 600, warningMs: 300, activeMs: 900, cooldownMs: 250 },
         },
       ],
     },
   },
   [FALSE_FLOOR.id]: {
+    gentle: {
+      ...FALSE_FLOOR,
+      traps: [
+        ...FALSE_FLOOR.traps!,
+        {
+          type: 'spike-wall',
+          id: 'swall-01',
+          col: 68,
+          topRow: 19,
+          bottomRow: 21,
+          extendTiles: 4,
+          timing: { idleMs: 1100, warningMs: 650, activeMs: 500, cooldownMs: 350 },
+        },
+      ],
+    },
     bold: {
       ...FALSE_FLOOR,
       traps: [
@@ -154,11 +314,28 @@ export const LEVEL_VARIANTS: Record<string, { gentle?: LevelDef; bold?: LevelDef
           topRow: 19,
           bottomRow: 21,
           extendTiles: 4,
+          timing: { idleMs: 600, warningMs: 300, activeMs: 900, cooldownMs: 250 },
         },
       ],
     },
   },
   [RISE.id]: {
+    // Slower, smaller sweep — comfortably timed around even on a first look.
+    gentle: {
+      ...RISE,
+      platforms: [...RISE.platforms, { col: 152, row: 20, width: 2 }],
+      traps: [
+        ...RISE.traps!,
+        {
+          type: 'orbit-spike',
+          id: 'orbit-01',
+          pivotCol: 153,
+          pivotRow: 17,
+          radiusTiles: 1.5,
+          periodMs: 2600,
+        },
+      ],
+    },
     bold: {
       ...RISE,
       // A single 2-tile bonus platform in the level's plainest stretch
@@ -180,6 +357,23 @@ export const LEVEL_VARIANTS: Record<string, { gentle?: LevelDef; bold?: LevelDef
     },
   },
   [PRESSURE.id]: {
+    // Narrower swing, slower period — easier to read and time around.
+    gentle: {
+      ...PRESSURE,
+      platforms: [...PRESSURE.platforms, { col: 106, row: 20, width: 2 }],
+      traps: [
+        ...PRESSURE.traps!,
+        {
+          type: 'swinging-spike',
+          id: 'swing-01',
+          pivotCol: 107,
+          pivotRow: 15,
+          lengthTiles: 3,
+          maxAngleDeg: 35,
+          periodMs: 2200,
+        },
+      ],
+    },
     bold: {
       ...PRESSURE,
       // Bonus platform between `laser-01` (100) and `laser-02` (148) — the
@@ -200,6 +394,29 @@ export const LEVEL_VARIANTS: Record<string, { gentle?: LevelDef; bold?: LevelDef
     },
   },
   [SHORT_CIRCUIT.id]: {
+    // Same circuit, slower per-leg travel — more time to read where it's headed.
+    gentle: {
+      ...SHORT_CIRCUIT,
+      platforms: [
+        ...SHORT_CIRCUIT.platforms,
+        { col: 57, row: 19, width: 2 },
+        { col: 62, row: 19, width: 2 },
+      ],
+      traps: [
+        ...SHORT_CIRCUIT.traps!,
+        {
+          type: 'loop-spike',
+          id: 'loop-01',
+          waypoints: [
+            { col: 57, row: 16 },
+            { col: 64, row: 16 },
+            { col: 64, row: 19 },
+            { col: 57, row: 19 },
+          ],
+          travelMs: 1400,
+        },
+      ],
+    },
     bold: {
       ...SHORT_CIRCUIT,
       // A small triangular bonus loop above the gap-run stretch (50-69,
