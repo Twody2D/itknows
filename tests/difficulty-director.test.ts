@@ -1,7 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { selectVariant } from '@/ai/DifficultyDirector';
 import type { PlayerProfileData } from '@/ai/PlayerProfile';
 import type { SystemMemoryData } from '@/ai/SystemMemory';
+
+// `selectVariant`'s priority ordering is a property of the algorithm, not
+// of any particular level's authored content — pinning it to a real
+// campaign level (as this file used to, via `sector-01-level-03`) broke
+// the moment that level legitimately grew a real `gentle`/`bold` pair
+// (`data/levels/variants.ts`), even though the ordering logic itself never
+// changed. A synthetic fixture keeps this test independent of what content
+// authors add next.
+vi.mock('@/data/levels/variants', () => ({
+  LEVEL_VARIANTS: {
+    'fixture-with-gentle-and-bold': { gentle: { id: 'fixture-gentle' }, bold: { id: 'fixture-bold' } },
+    'fixture-troll-only': { troll: { id: 'fixture-troll' } },
+  },
+}));
 
 function profile(overrides: Partial<PlayerProfileData> = {}): PlayerProfileData {
   return {
@@ -30,9 +44,9 @@ function memory(overrides: Partial<SystemMemoryData> = {}): SystemMemoryData {
   };
 }
 
-const LEVEL_WITH_VARIANTS = 'sector-02-level-01';
-const LEVEL_WITHOUT_VARIANTS = 'sector-01-level-01';
-const LEVEL_WITH_TROLL_VARIANT = 'sector-01-level-03';
+const LEVEL_WITH_VARIANTS = 'fixture-with-gentle-and-bold';
+const LEVEL_WITHOUT_VARIANTS = 'fixture-unknown-level';
+const LEVEL_WITH_TROLL_VARIANT = 'fixture-troll-only';
 
 describe('DifficultyDirector.selectVariant', () => {
   it('always returns "standard" for a level with no authored variants', () => {
