@@ -13,6 +13,13 @@ const UI_STRINGS = {
   howToPlay: { ru: 'Как играть', en: 'How to play' },
   back: { ru: 'Назад', en: 'Back' },
 
+  // Main menu. The showcase panel names the android as a unit rather than a
+  // character — the player is looking at SYSTEM's inventory, not a hero
+  // select screen.
+  menuUnit: { ru: 'ЮНИТ-07', en: 'UNIT-07' },
+  menuChangeSkin: { ru: 'Сменить облик', en: 'Change skin' },
+  menuItWatches: { ru: 'Оно смотрит', en: 'It watches' },
+
   levelSelectSector: { ru: 'СЕКТОР', en: 'SECTOR' },
   levelSelectLevel: { ru: 'Уровень', en: 'Level' },
 
