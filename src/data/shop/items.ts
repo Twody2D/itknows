@@ -1,7 +1,7 @@
 import type { UiStringKey } from '@/i18n/ui';
 
 /** Master-prompt §8 categories. `premium` covers both `remove_ads` and the `system_access` bundle — owned-only, never equipped. */
-export type ShopCategory = 'character' | 'death_fx' | 'system' | 'premium';
+export type ShopCategory = 'character' | 'death_fx' | 'system' | 'trail' | 'premium';
 
 export type ShopRarity = 'common' | 'rare' | 'premium';
 
@@ -54,6 +54,22 @@ export const SHOP_ITEMS: ShopItem[] = [
   },
   // Exclusive to the SYSTEM ACCESS bundle below — never independently purchasable.
   { id: 'error404', category: 'character', nameKey: 'shopSkinError404', descriptionKey: 'shopSkinError404Desc', rarity: 'premium' },
+  {
+    id: 'patrol',
+    category: 'character',
+    nameKey: 'shopSkinPatrol',
+    descriptionKey: 'shopSkinPatrolDesc',
+    priceCredits: 150,
+    rarity: 'rare',
+  },
+  {
+    id: 'echo',
+    category: 'character',
+    nameKey: 'shopSkinEcho',
+    descriptionKey: 'shopSkinEchoDesc',
+    priceCredits: 220,
+    rarity: 'premium',
+  },
 
   // DEATH FX
   { id: 'static', category: 'death_fx', nameKey: 'shopFxStatic', descriptionKey: 'shopFxStaticDesc', rarity: 'common' },
@@ -78,6 +94,33 @@ export const SHOP_ITEMS: ShopItem[] = [
     rarity: 'rare',
   },
   { id: 'corrupted', category: 'system', nameKey: 'shopPackCorrupted', descriptionKey: 'shopPackCorruptedDesc', rarity: 'premium' },
+
+  // TRAILS (`src/gameplay/TrailFx.ts` — design round 2, 2026-09-06)
+  { id: 'data_trail', category: 'trail', nameKey: 'shopTrailDataTrail', descriptionKey: 'shopTrailDataTrailDesc', rarity: 'common' },
+  {
+    id: 'launch',
+    category: 'trail',
+    nameKey: 'shopTrailLaunch',
+    descriptionKey: 'shopTrailLaunchDesc',
+    priceCredits: 130,
+    rarity: 'rare',
+  },
+  {
+    id: 'interference',
+    category: 'trail',
+    nameKey: 'shopTrailInterference',
+    descriptionKey: 'shopTrailInterferenceDesc',
+    priceCredits: 130,
+    rarity: 'rare',
+  },
+  {
+    id: 'beep7',
+    category: 'trail',
+    nameKey: 'shopTrailBeep7',
+    descriptionKey: 'shopTrailBeep7Desc',
+    priceCredits: 260,
+    rarity: 'premium',
+  },
 
   // PREMIUM
   {

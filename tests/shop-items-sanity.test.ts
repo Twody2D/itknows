@@ -3,7 +3,7 @@ import { SHOP_ITEMS, SYSTEM_ACCESS_BUNDLE } from '@/data/shop/items';
 import { CREDIT_PACKS } from '@/data/shop/creditPacks';
 import { UI_STRING_KEYS_FOR_TEST } from '@/i18n/ui';
 
-const VALID_CATEGORIES = new Set(['character', 'death_fx', 'system', 'premium']);
+const VALID_CATEGORIES = new Set(['character', 'death_fx', 'system', 'trail', 'premium']);
 
 describe('SHOP_ITEMS sanity', () => {
   it('has unique ids', () => {

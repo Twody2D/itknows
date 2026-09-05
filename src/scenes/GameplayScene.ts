@@ -14,6 +14,8 @@ import { GhostRecorder } from '@/gameplay/GhostRecorder';
 import { GhostSprite } from '@/gameplay/GhostSprite';
 import { GhostSettings } from '@/gameplay/GhostSettings';
 import { GhostService } from '@/services/GhostService';
+import { TrailFx } from '@/gameplay/TrailFx';
+import type { TrailKind } from '@/gameplay/TrailFx';
 import { buildLevel } from '@/gameplay/Level';
 import type { BuiltLevel, CheckpointZone } from '@/gameplay/Level';
 import type { LevelDef } from '@/gameplay/LevelDef';
@@ -64,6 +66,14 @@ interface GameplaySceneData {
 /** Pixels of leeway when deciding whether the player was already above a one-way platform. */
 const ONE_WAY_TOLERANCE = 4;
 
+const TRAIL_KINDS: readonly TrailKind[] = ['data_trail', 'launch', 'interference', 'beep7'];
+
+/** The equipped trail slot is always some valid id by construction (`InventoryService.equip` only accepts an already-owned id, and every fresh save starts on `data_trail`) — the guard exists only so a corrupted/legacy save value can't reach `TrailFx` untyped. */
+function equippedTrailKind(): TrailKind {
+  const id = InventoryService.getEquipped('trail');
+  return (TRAIL_KINDS as readonly string[]).includes(id) ? (id as TrailKind) : 'data_trail';
+}
+
 /**
  * Owns one attempt at one level: spawns the player, builds geometry and
  * traps, wires collisions, and resolves death/victory. Feeds THE SYSTEM
@@ -97,6 +107,7 @@ export class GameplayScene extends Phaser.Scene {
   private hesitationCommented = false;
   private readonly ghostRecorder = new GhostRecorder();
   private ghostSprite: GhostSprite | null = null;
+  private trailFx: TrailFx | null = null;
 
   private hudDeathsText!: PixelLabel;
   private hudSystemText!: PixelLabel;
@@ -163,10 +174,13 @@ export class GameplayScene extends Phaser.Scene {
     const spawnX =
       this.activeRespawnCol !== undefined ? this.activeRespawnCol * TILE_SIZE + TILE_SIZE / 2 : this.level.spawn.x;
 
-    // Ghost is a pure visual overlay — created before the player so draw
-    // order never lets it cover the real character (master-prompt §40).
+    // Ghost and trail are pure visual overlays — created before the player
+    // so draw order never lets either cover the real character (master-
+    // prompt §40 for the ghost; the trail is shop cosmetic content).
     const ghostRecord = GhostSettings.enabled ? GhostService.getGhost(this.levelDef.id, this.variantId) : null;
     this.ghostSprite = ghostRecord ? new GhostSprite(this, ghostRecord.samples) : null;
+
+    this.trailFx = new TrailFx(this, equippedTrailKind(), spawnX, this.level.spawn.y);
 
     this.player = new Player(this, spawnX, this.level.spawn.y, this.inputState);
 
@@ -222,6 +236,7 @@ export class GameplayScene extends Phaser.Scene {
       this.touchControls?.destroy();
       this.behaviorTracker.destroy();
       this.ghostSprite?.destroy();
+      this.trailFx?.destroy();
       this.fx.destroy();
       this.tutorialHints?.destroy();
       for (const trap of this.level.traps.all) trap.destroy();
@@ -396,6 +411,12 @@ export class GameplayScene extends Phaser.Scene {
       this.ghostRecorder.sample(attemptElapsedMs, this.player.x, this.player.y, this.player.flipX);
     }
     this.ghostSprite?.update(attemptElapsedMs);
+    this.trailFx?.update(
+      attemptElapsedMs,
+      delta,
+      { x: this.player.x, y: this.player.y, vx: this.player.body.velocity.x, vy: this.player.body.velocity.y, flipX: this.player.flipX },
+      this.player.isAlive(),
+    );
     if (!this.hesitationCommented) {
       const line = Commentator.commentOnHesitation(this.behaviorTracker.hesitationSoFarMs);
       if (line) this.hesitationCommented = true;
@@ -533,6 +554,7 @@ export class GameplayScene extends Phaser.Scene {
 
   private handlePlayerJumped(): void {
     this.fx.jumpDust(this.player.x, this.player.y);
+    this.trailFx?.onJump(this.player.x, this.player.y);
     playSfx('jump');
   }
 
@@ -547,6 +569,7 @@ export class GameplayScene extends Phaser.Scene {
     GameState.registerDeath();
     this.hudDeathsText.setPixelText(`DEATHS ${GameState.run.deaths}`);
     this.fx.deathBurst(payload.x, payload.y, InventoryService.getEquipped('death_fx') as 'static' | 'glitch');
+    this.trailFx?.onPlayerDeath(this);
     playSfx('death');
 
     const attemptElapsedMs = this.time.now - this.attemptStartMs;

@@ -4,17 +4,19 @@ import { YandexGamesService } from './YandexGamesService';
 
 const STORAGE_KEY = 'itknows.save.v1';
 const CLOUD_KEY = 'save';
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 
 /** Everything the shop grants/tracks — `default`/`static`/`standard` are owned+equipped from a fresh save (CurrencyService/InventoryService read this, never a second save file). */
 export interface InventoryData {
   ownedSkins: string[];
   ownedDeathFx: string[];
   ownedSystemPacks: string[];
+  ownedTrails: string[];
   ownedPremium: string[];
   equippedSkin: string;
   equippedDeathFx: string;
   equippedSystemPack: string;
+  equippedTrail: string;
 }
 
 /**
@@ -31,8 +33,8 @@ export interface GhostRecord {
   samples: number[];
 }
 
-interface SaveDataV3 {
-  version: 3;
+interface SaveDataV4 {
+  version: 4;
   completedLevels: string[];
   lastLevelId: string | null;
   credits: number;
@@ -48,14 +50,16 @@ function defaultInventory(): InventoryData {
     ownedSkins: ['default'],
     ownedDeathFx: ['static'],
     ownedSystemPacks: ['standard'],
+    ownedTrails: ['data_trail'],
     ownedPremium: [],
     equippedSkin: 'default',
     equippedDeathFx: 'static',
     equippedSystemPack: 'standard',
+    equippedTrail: 'data_trail',
   };
 }
 
-function emptySave(): SaveDataV3 {
+function emptySave(): SaveDataV4 {
   return {
     version: SAVE_VERSION,
     completedLevels: [],
@@ -83,16 +87,18 @@ function sanitizeInventory(raw: unknown): InventoryData {
     ownedSystemPacks: sanitizeStringArray(parsed.ownedSystemPacks).length
       ? sanitizeStringArray(parsed.ownedSystemPacks)
       : fallback.ownedSystemPacks,
+    ownedTrails: sanitizeStringArray(parsed.ownedTrails).length ? sanitizeStringArray(parsed.ownedTrails) : fallback.ownedTrails,
     ownedPremium: sanitizeStringArray(parsed.ownedPremium),
     equippedSkin: typeof parsed.equippedSkin === 'string' ? parsed.equippedSkin : fallback.equippedSkin,
     equippedDeathFx: typeof parsed.equippedDeathFx === 'string' ? parsed.equippedDeathFx : fallback.equippedDeathFx,
     equippedSystemPack:
       typeof parsed.equippedSystemPack === 'string' ? parsed.equippedSystemPack : fallback.equippedSystemPack,
+    equippedTrail: typeof parsed.equippedTrail === 'string' ? parsed.equippedTrail : fallback.equippedTrail,
   };
 }
 
-/** Loose shape covering a v1/v2/v3 payload — `version` is the only field whose type actually conflicts between them, so it's widened here rather than intersected. */
-type AnySaveShape = Partial<Omit<SaveDataV3, 'version'>> & { version?: unknown };
+/** Loose shape covering a v1/v2/v3/v4 payload — `version` is the only field whose type actually conflicts between them, so it's widened here rather than intersected. */
+type AnySaveShape = Partial<Omit<SaveDataV4, 'version'>> & { version?: unknown };
 
 /** Drops anything that isn't a plausible `[t,x,y,facing]×N` trace — a corrupt/truncated entry is dropped whole rather than replayed as a broken ghost. */
 function sanitizeGhostRecord(raw: unknown): GhostRecord | null {
@@ -115,7 +121,7 @@ function sanitizeGhosts(raw: unknown): Record<string, GhostRecord> {
 }
 
 /** A v1/v2 save (or anything unrecognized) migrates forward with sane shop defaults and no ghost data yet — never a hard failure, same "fall back to a clean save" posture v1 already had for a fully malformed payload. */
-function parseSave(raw: unknown): SaveDataV3 {
+function parseSave(raw: unknown): SaveDataV4 {
   const parsed = raw as AnySaveShape | null;
   if (!parsed || !Array.isArray(parsed.completedLevels)) return emptySave();
 
@@ -160,10 +166,12 @@ function mergeInventory(local: InventoryData, cloud: InventoryData): InventoryDa
     ownedSkins: unionArrays(local.ownedSkins, cloud.ownedSkins),
     ownedDeathFx: unionArrays(local.ownedDeathFx, cloud.ownedDeathFx),
     ownedSystemPacks: unionArrays(local.ownedSystemPacks, cloud.ownedSystemPacks),
+    ownedTrails: unionArrays(local.ownedTrails, cloud.ownedTrails),
     ownedPremium: unionArrays(local.ownedPremium, cloud.ownedPremium),
     equippedSkin: local.equippedSkin,
     equippedDeathFx: local.equippedDeathFx,
     equippedSystemPack: local.equippedSystemPack,
+    equippedTrail: local.equippedTrail,
   };
 }
 
@@ -177,7 +185,7 @@ function mergeGhosts(local: Record<string, GhostRecord>, cloud: Record<string, G
   return result;
 }
 
-function mergeSaves(local: SaveDataV3, cloud: SaveDataV3): SaveDataV3 {
+function mergeSaves(local: SaveDataV4, cloud: SaveDataV4): SaveDataV4 {
   return {
     version: SAVE_VERSION,
     completedLevels: unionArrays(local.completedLevels, cloud.completedLevels),
@@ -201,7 +209,7 @@ function mergeSaves(local: SaveDataV3, cloud: SaveDataV3): SaveDataV3 {
  * to sane defaults, field by field" is still an open `TODO.md` item.
  */
 class SaveServiceController {
-  private data: SaveDataV3 = parseSave(readJson(STORAGE_KEY));
+  private data: SaveDataV4 = parseSave(readJson(STORAGE_KEY));
   private cloudSyncStarted = false;
 
   private persist(): void {

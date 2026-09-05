@@ -50,6 +50,12 @@ export const PALETTE = {
   textMuted: 0xc9cee4,
   textDisabled: 0x4a5068,
 
+  /** Skin tones for `patrol`/`echo` (`data/shop/skinVisuals.ts`) — chosen to stay ≥24° apart in hue from every other visor and from the reserved danger red (design round 2, 2026-09-06). */
+  patrolBody: 0x3e5a7a,
+  patrolVisor: 0x5cff8a,
+  echoBody: 0xb8c4e0,
+  echoVisor: 0xff7de0,
+
   outline: 0x000000,
 } as const;
 

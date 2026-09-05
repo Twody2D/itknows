@@ -14,6 +14,8 @@ export const SKIN_VISUALS: Record<string, PlayerColors> = {
   void: { body: PALETTE.metalEdge, visor: PALETTE.system },
   signal: { body: PALETTE.white, visor: PALETTE.dangerAlt },
   error404: { body: PALETTE.metalDark, visor: PALETTE.reward },
+  patrol: { body: PALETTE.patrolBody, visor: PALETTE.patrolVisor },
+  echo: { body: PALETTE.echoBody, visor: PALETTE.echoVisor },
 };
 
 /** `default` (and anything unrecognized) means "use `drawPlayerFrame`'s own built-in colors" — no lookup miss ever changes the base skin's look. */

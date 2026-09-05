@@ -80,6 +80,7 @@ const UI_STRINGS = {
   shopCategoryCharacter: { ru: 'ПЕРСОНАЖ', en: 'CHARACTER' },
   shopCategoryDeathFx: { ru: 'ЭФФЕКТ СМЕРТИ', en: 'DEATH FX' },
   shopCategorySystem: { ru: 'SYSTEM', en: 'SYSTEM' },
+  shopCategoryTrail: { ru: 'ТРЕЙЛЫ', en: 'TRAILS' },
   shopCategoryPremium: { ru: 'PREMIUM', en: 'PREMIUM' },
   shopBuy: { ru: 'Купить', en: 'Buy' },
   shopEquip: { ru: 'Экипировать', en: 'Equip' },
@@ -105,6 +106,16 @@ const UI_STRINGS = {
   shopSkinSignalDesc: { ru: 'Тот же корпус, предупреждающий сигнальный визор.', en: 'The stock chassis, a warning-signal visor.' },
   shopSkinError404: { ru: 'ERROR 404', en: 'ERROR 404' },
   shopSkinError404Desc: { ru: 'Тебе не должно быть это доступно.', en: 'You should not have access to this.' },
+  shopSkinPatrol: { ru: 'ПАТРУЛЬ', en: 'PATROL' },
+  shopSkinPatrolDesc: {
+    ru: 'Служебный корпус ночного обхода — раньше он проверял камеры, теперь камеры проверяют его.',
+    en: 'A night-patrol service chassis — it used to check the cameras, now the cameras check it.',
+  },
+  shopSkinEcho: { ru: 'ЭХО', en: 'ECHO' },
+  shopSkinEchoDesc: {
+    ru: 'Копия сигнала, которую SYSTEM однажды отправила и забыла — она вернулась и решила остаться.',
+    en: 'A copy of a signal SYSTEM once sent and forgot about — it came back and decided to stay.',
+  },
 
   shopFxStatic: { ru: 'STATIC', en: 'STATIC' },
   shopFxStaticDesc: { ru: 'Стандартный эффект отключения.', en: 'The standard shutdown effect.' },
@@ -119,6 +130,27 @@ const UI_STRINGS = {
   shopPackColdDesc: { ru: 'SYSTEM без тёплых ноток.', en: 'SYSTEM with the warmth removed.' },
   shopPackCorrupted: { ru: 'CORRUPTED', en: 'CORRUPTED' },
   shopPackCorruptedDesc: { ru: 'Нестабильный тон — эксклюзив SYSTEM ACCESS.', en: 'An unstable tone — SYSTEM ACCESS exclusive.' },
+
+  shopTrailDataTrail: { ru: 'СЛЕД ДАННЫХ', en: 'DATA TRAIL' },
+  shopTrailDataTrailDesc: {
+    ru: 'Каждый твой шаг записывается — буквально, прямо в воздух за спиной.',
+    en: 'Every step you take gets logged — literally, right into the air behind you.',
+  },
+  shopTrailLaunch: { ru: 'ЗАПУСК', en: 'LAUNCH' },
+  shopTrailLaunchDesc: {
+    ru: 'Стартовые сопла в пятках — они не для полёта, а для того, чтобы было красиво.',
+    en: 'Launch thrusters in the heels — not for flight, just to look good doing it.',
+  },
+  shopTrailInterference: { ru: 'ПОМЕХА', en: 'INTERFERENCE' },
+  shopTrailInterferenceDesc: {
+    ru: 'На большой скорости картинка тебя не догоняет и рассыпается на строчки.',
+    en: 'At high speed the picture can\'t keep up and breaks into scan lines.',
+  },
+  shopTrailBeep7: { ru: 'БИП-7', en: 'BEEP-7' },
+  shopTrailBeep7Desc: {
+    ru: 'Дрон наблюдения, которому поручили следить за тобой — а он привязался.',
+    en: 'A surveillance drone assigned to watch you — it got attached instead.',
+  },
 
   shopNoAds: { ru: 'NO ADS', en: 'NO ADS' },
   shopNoAdsDesc: { ru: 'Полностью отключает рекламу навсегда.', en: 'Disables advertising completely, forever.' },

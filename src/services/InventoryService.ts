@@ -1,19 +1,21 @@
 import { SaveService } from './SaveService';
 import type { InventoryData } from './SaveService';
 
-/** The three cosmetic slots — each has exactly one equipped id at a time. Premium products (`remove_ads`/`system_access`) are owned-only, never "equipped". */
-export type InventoryCategory = 'character' | 'death_fx' | 'system';
+/** The four cosmetic slots — each has exactly one equipped id at a time. Premium products (`remove_ads`/`system_access`) are owned-only, never "equipped". */
+export type InventoryCategory = 'character' | 'death_fx' | 'system' | 'trail';
 
 const OWNED_FIELD: Record<InventoryCategory, keyof InventoryData> = {
   character: 'ownedSkins',
   death_fx: 'ownedDeathFx',
   system: 'ownedSystemPacks',
+  trail: 'ownedTrails',
 };
 
 const EQUIPPED_FIELD: Record<InventoryCategory, keyof InventoryData> = {
   character: 'equippedSkin',
   death_fx: 'equippedDeathFx',
   system: 'equippedSystemPack',
+  trail: 'equippedTrail',
 };
 
 /**

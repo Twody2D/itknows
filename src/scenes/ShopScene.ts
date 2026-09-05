@@ -24,11 +24,12 @@ import type { UiStringKey } from '@/i18n/ui';
 
 // `premium` first (§ user request: No Ads is the very first thing a player
 // sees opening the shop, not buried behind three other pages).
-const CATEGORIES: ShopCategory[] = ['premium', 'character', 'death_fx', 'system'];
+const CATEGORIES: ShopCategory[] = ['premium', 'character', 'death_fx', 'system', 'trail'];
 const CATEGORY_LABEL: Record<ShopCategory, UiStringKey> = {
   character: 'shopCategoryCharacter',
   death_fx: 'shopCategoryDeathFx',
   system: 'shopCategorySystem',
+  trail: 'shopCategoryTrail',
   premium: 'shopCategoryPremium',
 };
 /** `ShopItem.category` values that map onto an `InventoryService` equip slot — `premium` products are owned-only, never equipped. */
@@ -36,6 +37,7 @@ const INVENTORY_CATEGORY: Partial<Record<ShopCategory, InventoryCategory>> = {
   character: 'character',
   death_fx: 'death_fx',
   system: 'system',
+  trail: 'trail',
 };
 
 const SYSTEM_LINE_MS = 2600;
@@ -285,6 +287,16 @@ export class ShopScene extends Phaser.Scene {
         g.fillRect(cx + 2, cy - 6, 1, 2);
         g.fillRect(cx - 3, cy + 4, 1, 2);
         g.fillRect(cx + 2, cy + 4, 1, 2);
+        break;
+      case 'trail':
+        // Three shrinking, fading squares trailing off diagonally — the
+        // universal "motion trail" shorthand, same cyan as `data_trail`.
+        g.fillStyle(PALETTE.cyan, 1);
+        g.fillRect(cx + 2, cy - 2, 4, 4);
+        g.fillStyle(PALETTE.cyan, 0.55);
+        g.fillRect(cx - 3, cy + 1, 3, 3);
+        g.fillStyle(PALETTE.cyan, 0.25);
+        g.fillRect(cx - 6, cy + 3, 2, 2);
         break;
     }
   }

@@ -11,9 +11,11 @@ describe('InventoryService', () => {
     expect(InventoryService.isOwned('character', 'default')).toBe(true);
     expect(InventoryService.isOwned('death_fx', 'static')).toBe(true);
     expect(InventoryService.isOwned('system', 'standard')).toBe(true);
+    expect(InventoryService.isOwned('trail', 'data_trail')).toBe(true);
     expect(InventoryService.getEquipped('character')).toBe('default');
     expect(InventoryService.getEquipped('death_fx')).toBe('static');
     expect(InventoryService.getEquipped('system')).toBe('standard');
+    expect(InventoryService.getEquipped('trail')).toBe('data_trail');
   });
 
   it('does not own a purchasable cosmetic before it is unlocked', () => {

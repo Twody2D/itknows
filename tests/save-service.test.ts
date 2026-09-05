@@ -78,7 +78,7 @@ describe('SaveService', () => {
       SaveService.markCompleted('sector-01-level-01');
       expect(YandexGamesService.setPlayerData).toHaveBeenCalledWith({
         save: JSON.stringify({
-          version: 3,
+          version: 4,
           completedLevels: ['sector-01-level-01'],
           lastLevelId: null,
           credits: 0,
@@ -86,10 +86,12 @@ describe('SaveService', () => {
             ownedSkins: ['default'],
             ownedDeathFx: ['static'],
             ownedSystemPacks: ['standard'],
+            ownedTrails: ['data_trail'],
             ownedPremium: [],
             equippedSkin: 'default',
             equippedDeathFx: 'static',
             equippedSystemPack: 'standard',
+            equippedTrail: 'data_trail',
           },
           processedPurchaseTokens: [],
           ghosts: {},
@@ -126,7 +128,7 @@ describe('SaveService', () => {
       SaveService.setInventory({ ...SaveService.getInventory(), ownedSkins: ['default', 'void'] });
       vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
         save: JSON.stringify({
-          version: 3,
+          version: 4,
           completedLevels: [],
           lastLevelId: null,
           credits: 20,
@@ -134,10 +136,12 @@ describe('SaveService', () => {
             ownedSkins: ['default', 'signal'],
             ownedDeathFx: ['static'],
             ownedSystemPacks: ['standard'],
+            ownedTrails: ['data_trail'],
             ownedPremium: ['remove_ads'],
             equippedSkin: 'default',
             equippedDeathFx: 'static',
             equippedSystemPack: 'standard',
+            equippedTrail: 'data_trail',
           },
           processedPurchaseTokens: ['tok-1'],
           ghosts: {},
@@ -158,10 +162,12 @@ describe('SaveService', () => {
         ownedSkins: ['default'],
         ownedDeathFx: ['static'],
         ownedSystemPacks: ['standard'],
+        ownedTrails: ['data_trail'],
         ownedPremium: [],
         equippedSkin: 'default',
         equippedDeathFx: 'static',
         equippedSystemPack: 'standard',
+        equippedTrail: 'data_trail',
       });
     });
 
@@ -220,7 +226,7 @@ describe('SaveService', () => {
       it('adopts a cloud-only ghost this device has never recorded', async () => {
         vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
           save: JSON.stringify({
-            version: 3,
+            version: 4,
             completedLevels: [],
             lastLevelId: null,
             credits: 0,
@@ -237,7 +243,7 @@ describe('SaveService', () => {
         SaveService.saveGhostIfBest('sector-01-level-01::standard', 3000, [0, 1, 1, 0]);
         vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
           save: JSON.stringify({
-            version: 3,
+            version: 4,
             completedLevels: [],
             lastLevelId: null,
             credits: 0,
@@ -254,7 +260,7 @@ describe('SaveService', () => {
         SaveService.saveGhostIfBest('sector-01-level-01::standard', 9000, [0, 1, 1, 0]);
         vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
           save: JSON.stringify({
-            version: 3,
+            version: 4,
             completedLevels: [],
             lastLevelId: null,
             credits: 0,
@@ -270,7 +276,7 @@ describe('SaveService', () => {
       it('drops a corrupt ghost entry instead of ever returning it', async () => {
         vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
           save: JSON.stringify({
-            version: 3,
+            version: 4,
             completedLevels: [],
             lastLevelId: null,
             credits: 0,
