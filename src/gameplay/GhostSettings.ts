@@ -9,7 +9,11 @@ interface GhostSettingsDataV1 {
 }
 
 function defaults(): GhostSettingsDataV1 {
-  return { version: SETTINGS_VERSION, enabled: true };
+  // Off by default — owner feedback after trying it live: an unrequested
+  // second character running the level felt distracting rather than
+  // helpful. The recording itself is unconditional (see this file's own
+  // doc comment), so switching this on later loses nothing already earned.
+  return { version: SETTINGS_VERSION, enabled: false };
 }
 
 function parse(raw: unknown): GhostSettingsDataV1 {
