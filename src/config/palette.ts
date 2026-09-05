@@ -26,6 +26,30 @@ export const PALETTE = {
   white: 0xf5f5ff,
   reward: 0xffe14d,
 
+  /**
+   * Main-menu control tones. The menu's buttons are lit, physical objects —
+   * a gradient face over a darker "sole" that disappears when pressed — so
+   * each state needs its own step of the same hue rather than one accent
+   * re-used at different alphas, which is what the rest of the UI kit does.
+   */
+  cyanBright: 0x7ff6ff,
+  cyanGlow: 0xbffcff,
+  cyanPress: 0x35c7d6,
+  cyanSoleHover: 0x2c93a3,
+  cyanEdge: 0xc9fbff,
+  panelHover: 0x1f2140,
+
+  /** Gold is the money channel only — the credits counter and the shop tile's accent, never decoration. */
+  goldDim: 0x4a3d14,
+  goldEdge: 0xa8912b,
+
+  /** THE SYSTEM's quieter registers: version/technical text, and its spoken line. */
+  systemMuted: 0x8a6bb0,
+  systemLight: 0xd9a6ff,
+
+  textMuted: 0xc9cee4,
+  textDisabled: 0x4a5068,
+
   outline: 0x000000,
 } as const;
 
