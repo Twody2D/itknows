@@ -3,10 +3,14 @@ import Phaser from 'phaser';
 export interface DomTextOptions {
   color: string;
   scale?: number;
+  /** Type size in *virtual* px, taken literally. Overrides `scale`, for a design spec that names a size (13px) rather than a multiple of `BASE_SIZE`. */
+  sizePx?: number;
   strokeColor?: string;
   /** Max width in *virtual* px before the browser wraps to a new line. */
   wordWrapWidth?: number;
   bold?: boolean;
+  /** Uppercases visually only — so the i18n dictionary keeps ordinary sentence case ("Играть") and stays reusable by screens that don't shout. */
+  uppercase?: boolean;
 }
 
 export interface DomTextHandle {
@@ -51,7 +55,17 @@ export class DomTextOverlay {
   private items: Item[] = [];
   private resizeHandler = (): void => this.reposition();
 
-  constructor(private scene: Phaser.Scene) {
+  constructor(
+    private scene: Phaser.Scene,
+    /**
+     * Stacking order between overlays. Scenes run in parallel in Phaser, so
+     * two scenes can each own a layer at once — the menu's has to sit below
+     * an overlay screen's (see `MainMenuScene.openOverlay`, which also hides
+     * it outright, since a dim backdrop drawn into the canvas can't cover
+     * DOM text).
+     */
+    zIndex = 20,
+  ) {
     this.layer = document.createElement('div');
     Object.assign(this.layer.style, {
       position: 'fixed',
@@ -66,7 +80,7 @@ export class DomTextOverlay {
       width: '100vw',
       height: '100vh',
       pointerEvents: 'none',
-      zIndex: '20',
+      zIndex: String(zIndex),
     });
     document.body.appendChild(this.layer);
 
@@ -120,6 +134,16 @@ export class DomTextOverlay {
     return handle;
   }
 
+  /**
+   * Hides/shows every label at once, without touching each handle's own
+   * `setVisible` state — so a caller can black out the whole layer while
+   * another scene is on top and restore it afterwards, and whatever was
+   * individually hidden stays hidden.
+   */
+  setLayerVisible(visible: boolean): void {
+    this.layer.style.display = visible ? '' : 'none';
+  }
+
   destroy(): void {
     window.removeEventListener('resize', this.resizeHandler);
     window.removeEventListener('orientationchange', this.resizeHandler);
@@ -138,7 +162,7 @@ export class DomTextOverlay {
   private applyStyle(item: Item): void {
     const { el, opts, originX } = item;
     const { scaleY } = this.currentScale();
-    const virtualPx = Math.max(6, Math.round(BASE_SIZE * (opts.scale ?? 1)));
+    const virtualPx = Math.max(6, Math.round(opts.sizePx ?? BASE_SIZE * (opts.scale ?? 1)));
 
     el.style.position = 'absolute';
     el.style.display = 'inline-block';
@@ -147,6 +171,7 @@ export class DomTextOverlay {
     el.style.fontSize = `${virtualPx * scaleY}px`;
     el.style.lineHeight = '1.3';
     el.style.color = opts.color;
+    el.style.textTransform = opts.uppercase ? 'uppercase' : 'none';
     el.style.textAlign = originX === 0.5 ? 'center' : 'left';
     el.style.whiteSpace = opts.wordWrapWidth ? 'normal' : 'pre';
     el.style.wordBreak = 'break-word';
