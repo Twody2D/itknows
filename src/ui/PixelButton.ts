@@ -6,6 +6,15 @@ import { playSfx } from '@/audio/SfxManager';
 
 export type PixelButtonVariant = 'primary' | 'secondary';
 
+export interface PixelButtonLabelState {
+  hover: boolean;
+  press: boolean;
+  /** PALETTE hex the built-in label would have used — the pressed/hover/idle color logic lives here either way. */
+  color: number;
+  /** The 1px press-nudge the built-in label would have applied, for a caller positioning its own label to match. */
+  offsetY: number;
+}
+
 export interface PixelButtonOptions {
   onClick: () => void;
   /** Fixed width. Omit to size the button from its label plus padding — which is what keeps a long RU string from filling its own frame edge to edge. */
@@ -16,6 +25,15 @@ export interface PixelButtonOptions {
   textScale?: number;
   /** `primary` gets the heavier frame: double outline, side bar, corner brackets. Default `secondary`. */
   variant?: PixelButtonVariant;
+  /**
+   * Hides the built-in bitmap-font label and reports its color/press-offset
+   * via `onLabelState` instead — for a caller rendering its own text
+   * elsewhere (currently `ShopScene`'s `DomTextOverlay`, project owner's
+   * call to use a real OS font there). The button's own panel/hover/press
+   * chrome and hit zone are unaffected.
+   */
+  hideLabel?: boolean;
+  onLabelState?: (state: PixelButtonLabelState) => void;
 }
 
 const PAD_X = 14;
@@ -37,6 +55,7 @@ export class PixelButton extends Phaser.GameObjects.Container {
   private readonly panel: Phaser.GameObjects.Graphics;
   private readonly label: PixelLabel;
   private readonly variant: PixelButtonVariant;
+  private readonly opts: PixelButtonOptions;
   private btnWidth: number;
   private btnHeight: number;
   private readonly hitZone: Phaser.GameObjects.Zone;
@@ -46,6 +65,7 @@ export class PixelButton extends Phaser.GameObjects.Container {
     scene.add.existing(this);
 
     this.variant = opts.variant ?? 'secondary';
+    this.opts = opts;
 
     this.panel = scene.add.graphics();
     this.add(this.panel);
@@ -56,6 +76,7 @@ export class PixelButton extends Phaser.GameObjects.Container {
       strokeColor: hexToCss(PALETTE.outline),
     });
     this.label.setOrigin(0.5, 0.5);
+    this.label.setVisible(!opts.hideLabel);
     this.add(this.label);
 
     const sideBar = this.variant === 'primary' ? 8 : 0;
@@ -165,6 +186,11 @@ export class PixelButton extends Phaser.GameObjects.Container {
     // White holds full contrast against that glow at every phase; `secondary`
     // buttons have no such glow and keep the cyan idle/hover accent.
     const labelColor = press ? PALETTE.white : this.variant === 'primary' ? PALETTE.white : PALETTE.cyan;
-    this.label.setPixelColor(hexToCss(labelColor));
+
+    if (this.opts.hideLabel) {
+      this.opts.onLabelState?.({ hover, press, color: labelColor, offsetY });
+    } else {
+      this.label.setPixelColor(hexToCss(labelColor));
+    }
   }
 }
