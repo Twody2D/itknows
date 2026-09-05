@@ -48,22 +48,45 @@ export const MENU_LAYOUT = {
 } as const;
 
 /**
+ * Command-grid geometry, named once — PLAY's width is derived from these
+ * same numbers below instead of being a separately hand-picked value, which
+ * is what let it drift out of alignment with the grid in the first place
+ * (230px vs. the grid's actual 244px span, leaving a bare gap on the right
+ * that the project owner spotted on a screenshot).
+ */
+const GRID_LEFT = 166;
+const GRID_COL_W = 120;
+const GRID_GAP_X = 4;
+const GRID_RIGHT = GRID_LEFT + GRID_COL_W + GRID_GAP_X + GRID_COL_W;
+const GRID_ROW_H = 40;
+const GRID_ROW_GAP = 8;
+const GRID_ROW1_Y = 150;
+const GRID_ROW2_Y = GRID_ROW1_Y + GRID_ROW_H + GRID_ROW_GAP;
+
+/**
  * The controls, separated out because they carry the hard guarantee: each
  * must sit wholly inside the safe zone and none may overlap another.
+ *
+ * Row heights (46 -> 40) and PLAY's height (60 -> 50) were trimmed a second
+ * pass after the first live look — the design brief's own 46/60 numbers
+ * read as oversized once rendered at real size, not just in the spec sheet.
  */
 export const MENU_TILES = {
   changeSkin: { x: 26, y: 176, w: 98, h: 22 },
-  play: { x: 166, y: 88, w: 230, h: 60 },
-  levels: { x: 166, y: 160, w: 120, h: 46 },
-  shop: { x: 290, y: 160, w: 120, h: 46 },
-  help: { x: 166, y: 214, w: 120, h: 46 },
-  settings: { x: 290, y: 214, w: 120, h: 46 },
+  play: { x: GRID_LEFT, y: 88, w: GRID_RIGHT - GRID_LEFT, h: 50 },
+  levels: { x: GRID_LEFT, y: GRID_ROW1_Y, w: GRID_COL_W, h: GRID_ROW_H },
+  shop: { x: GRID_LEFT + GRID_COL_W + GRID_GAP_X, y: GRID_ROW1_Y, w: GRID_COL_W, h: GRID_ROW_H },
+  help: { x: GRID_LEFT, y: GRID_ROW2_Y, w: GRID_COL_W, h: GRID_ROW_H },
+  settings: { x: GRID_LEFT + GRID_COL_W + GRID_GAP_X, y: GRID_ROW2_Y, w: GRID_COL_W, h: GRID_ROW_H },
 } as const;
 
 export type MenuTileKey = keyof typeof MENU_TILES;
 
 /** Right edge of the command grid — the boundary anything right-anchored has to clear. */
 export const MENU_GRID_RIGHT = MENU_TILES.settings.x + MENU_TILES.settings.w;
+
+/** Horizontal centre of the PLAY+grid block — where the logo centres above it, instead of hanging off its own left edge. */
+export const COMMAND_COLUMN_CENTER_X = GRID_LEFT + (GRID_RIGHT - GRID_LEFT) / 2;
 
 /** Width the SYSTEM line gets on this canvas, or `0` when there isn't enough room to show it at all. */
 export function systemLineWidth(canvasWidth: number): number {

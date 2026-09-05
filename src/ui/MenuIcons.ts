@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
-import { hexToCss } from '@/utils/color';
-import { PixelLabel } from './PixelLabel';
+import { GLYPHS } from '@/art/font/glyphs';
 
 export type MenuIconKind = 'play' | 'levels' | 'shop' | 'help' | 'settings' | 'skin';
 
@@ -20,7 +19,6 @@ export type MenuIconKind = 'play' | 'levels' | 'shop' | 'help' | 'settings' | 's
  */
 export class MenuIcon extends Phaser.GameObjects.Container {
   private readonly g: Phaser.GameObjects.Graphics;
-  private readonly questionMark?: PixelLabel;
   private accent: number;
 
   constructor(scene: Phaser.Scene, x: number, y: number, private readonly kind: MenuIconKind, accent: number) {
@@ -31,21 +29,12 @@ export class MenuIcon extends Phaser.GameObjects.Container {
     this.g = scene.add.graphics();
     this.add(this.g);
 
-    if (kind === 'help') {
-      // The one glyph geometry can't carry: "?" is a letterform, so it comes
-      // from the project's own bitmap font rather than a hand-drawn path.
-      this.questionMark = new PixelLabel(scene, 0, 0, '?', { color: hexToCss(accent), scale: 2 });
-      this.questionMark.setOrigin(0.5, 0.5);
-      this.add(this.questionMark);
-    }
-
     this.redraw();
   }
 
   setAccent(accent: number): void {
     if (this.accent === accent) return;
     this.accent = accent;
-    this.questionMark?.setPixelColor(hexToCss(accent));
     this.redraw();
   }
 
@@ -118,10 +107,33 @@ export class MenuIcon extends Phaser.GameObjects.Container {
     g.strokePath();
   }
 
-  /** A ringed "?" — the most universally understood help mark there is. */
+  /**
+   * A ringed "?" — the most universally understood help mark there is.
+   *
+   * The mark itself reuses the bitmap font's own "?" shape (`art/font/
+   * glyphs.ts`) drawn as chunky blocks, not rendered through `PixelLabel`: a
+   * real glyph at a size that just fits the ring touched the ring's stroke
+   * on every side and the two blurred into one smudge (project owner
+   * feedback from a live screenshot) — a smaller, bolder block version
+   * drawn a size down leaves a clear gap from the ring and reads instantly,
+   * plus it's the exact "?" the player already recognizes from in-game text.
+   */
   private drawHelp(g: Phaser.GameObjects.Graphics): void {
+    const ringRadius = 8;
     g.lineStyle(2, this.accent, 1);
-    g.strokeCircle(0, 0, 8);
+    g.strokeCircle(0, 0, ringRadius);
+
+    const rows = GLYPHS['?'] ?? [];
+    const px = 1.3;
+    const cols = rows[rows.length - 1]?.length ?? 5;
+    const w = cols * px;
+    const h = rows.length * px;
+    g.fillStyle(this.accent, 1);
+    rows.forEach((row, ry) => {
+      for (let rx = 0; rx < row.length; rx++) {
+        if (row[rx] === '1') g.fillRect(-w / 2 + rx * px, -h / 2 + ry * px, px, px);
+      }
+    });
   }
 
   /** Three sliders at different positions — "things you can adjust", where a gear would blur. */

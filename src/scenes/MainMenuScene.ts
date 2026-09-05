@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { hexToCss } from '@/utils/color';
-import { MENU_LAYOUT, MENU_TILES, systemLineWidth } from '@/config/menuLayout';
+import { COMMAND_COLUMN_CENTER_X, MENU_LAYOUT, MENU_TILES, systemLineWidth } from '@/config/menuLayout';
 import { SaveService } from '@/services/SaveService';
 import { CurrencyService } from '@/services/CurrencyService';
 import { InventoryService } from '@/services/InventoryService';
@@ -310,13 +310,15 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private buildLogo(): void {
-    const { x, y } = MENU_LAYOUT.logo;
-    const title = new PixelLabel(this, x, y, 'IT KNOWS', {
+    const { y } = MENU_LAYOUT.logo;
+    // Centred over the PLAY+grid block below it, not hung off its own left
+    // edge — the block reads as one composed unit this way, logo included.
+    const title = new PixelLabel(this, COMMAND_COLUMN_CENTER_X, y, 'IT KNOWS', {
       color: hexToCss(PALETTE.white),
       strokeColor: hexToCss(PALETTE.systemDim),
       scale: 4,
     });
-    title.setOrigin(0, 0);
+    title.setOrigin(0.5, 0);
     title.postFX.addGlow(PALETTE.cyan, 0, 0, false, 0.3, 6);
     this.tweens.add({ targets: title, alpha: { from: 0, to: 1 }, duration: 500 });
   }
