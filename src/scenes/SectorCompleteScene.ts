@@ -113,7 +113,16 @@ export class SectorCompleteScene extends Phaser.Scene {
       width: shopWidth,
       height: 20,
       textScale: 1,
-      onClick: () => this.scene.launch('ShopScene'),
+      // `launch` runs ShopScene alongside this one rather than pausing it —
+      // its dim backdrop only paints over NEXT/SHOP, it doesn't stop this
+      // scene's own input plugin from still hitting them underneath.
+      onClick: () => {
+        this.input.enabled = false;
+        this.scene.launch('ShopScene');
+        this.scene.get('ShopScene').events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+          this.input.enabled = true;
+        });
+      },
     });
 
     new PixelButton(this, width / 2 + shopWidth / 2 + gap / 2, buttonY, t('next'), {

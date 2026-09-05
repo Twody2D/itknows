@@ -88,15 +88,22 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   /**
-   * Overlays (`scene.launch`) run alongside this scene, so its DOM labels
-   * would otherwise float above the overlay's panel — the one thing a
-   * canvas-drawn dim backdrop cannot cover. Hidden for the duration, restored
-   * when that scene shuts itself down.
+   * Overlays (`scene.launch`) run alongside this scene rather than pausing
+   * it, so its DOM labels would otherwise float above the overlay's panel —
+   * the one thing a canvas-drawn dim backdrop cannot cover — and, worse, its
+   * own buttons (PLAY included) stay live underneath: the backdrop only
+   * paints over them, it doesn't stop this scene's input plugin from still
+   * hitting them. Both are hidden/disabled for the duration and restored
+   * when the overlay shuts itself down.
    */
   private openOverlay(key: string): void {
     this.domText.setLayerVisible(false);
+    this.input.enabled = false;
     this.scene.launch(key);
-    this.scene.get(key).events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.domText.setLayerVisible(true));
+    this.scene.get(key).events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.domText.setLayerVisible(true);
+      this.input.enabled = true;
+    });
   }
 
   private buildBackground(width: number, height: number): void {
