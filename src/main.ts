@@ -19,6 +19,7 @@ import { SectorCompleteScene } from '@/scenes/SectorCompleteScene';
 import { LevelSelectScene } from '@/scenes/LevelSelectScene';
 import { ShopScene } from '@/scenes/ShopScene';
 import '@/shop/EconomyRewards';
+import '@/services/LeaderboardSubmission';
 
 const root = document.getElementById('app');
 if (!root) throw new Error('#app root element not found');

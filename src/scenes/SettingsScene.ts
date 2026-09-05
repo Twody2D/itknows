@@ -8,6 +8,7 @@ import { AudioSettings } from '@/audio/AudioSettings';
 import { PixelLabel } from '@/ui/PixelLabel';
 import { PixelButton } from '@/ui/PixelButton';
 import { drawPanel, buildDimBackdrop } from '@/ui/Panel';
+import { YandexGamesService } from '@/services/YandexGamesService';
 
 /**
  * Launched as an overlay from the main menu or from `PauseScene` — always
@@ -21,6 +22,8 @@ export class SettingsScene extends Phaser.Scene {
   private soundButton!: PixelButton;
   private particlesButton!: PixelButton;
   private shakeButton!: PixelButton;
+  private authButton: PixelButton | null = null;
+  private authorized = false;
 
   constructor() {
     super('SettingsScene');
@@ -31,8 +34,14 @@ export class SettingsScene extends Phaser.Scene {
 
     buildDimBackdrop(this);
 
+    // Outside a real Yandex Games hosting `isAvailable()` is always false
+    // (dev, CI, this game opened standalone — see `YandexGamesService`'s own
+    // doc comment on why), so the row simply never renders there rather than
+    // offering a sign-in button that could never do anything.
+    const showAuthRow = YandexGamesService.isAvailable();
+
     const panelW = 190;
-    const panelH = 176;
+    const panelH = 176 + (showAuthRow ? 28 : 0);
     const panelX = width / 2 - panelW / 2;
     const panelY = height / 2 - panelH / 2;
     const g = this.add.graphics();
@@ -93,12 +102,41 @@ export class SettingsScene extends Phaser.Scene {
     });
     y += rowH + gap;
 
+    if (showAuthRow) {
+      this.authButton = new PixelButton(this, width / 2, y, this.authLabel(), {
+        width: rowW,
+        height: rowH,
+        textScale: 1,
+        onClick: () => {
+          // No sign-out path exists (the SDK has none) — once signed in,
+          // the row is a status display, not a button, matching master
+          // prompt §41's "conscious action" gate having exactly one direction.
+          if (this.authorized) return;
+          void YandexGamesService.requestAuthorization().then((ok) => {
+            this.authorized = ok;
+            this.authButton?.setLabelText(this.authLabel());
+          });
+        },
+      });
+      y += rowH + gap;
+      void this.refreshAuthStatus();
+    }
+
     new PixelButton(this, width / 2, y, t('back'), {
       width: rowW,
       height: rowH,
       textScale: 1,
       onClick: () => this.scene.stop(),
     });
+  }
+
+  private authLabel(): string {
+    return this.authorized ? t('yandexIdSignedIn') : t('yandexIdGuest');
+  }
+
+  private async refreshAuthStatus(): Promise<void> {
+    this.authorized = await YandexGamesService.isPlayerAuthorized();
+    this.authButton?.setLabelText(this.authLabel());
   }
 
   private soundLabel(): string {

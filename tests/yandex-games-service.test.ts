@@ -32,4 +32,24 @@ describe('YandexGamesService', () => {
     YandexGamesService.showRewarded((g) => (granted = g));
     expect(granted).toBe(false);
   });
+
+  it('isPlayerAuthorized() is false without a real SDK', async () => {
+    await expect(YandexGamesService.isPlayerAuthorized()).resolves.toBe(false);
+  });
+
+  it('requestAuthorization() reports failure instead of hanging without a real SDK', async () => {
+    await expect(YandexGamesService.requestAuthorization()).resolves.toBe(false);
+  });
+
+  it('submitScore() resolves instead of hanging without a real SDK', async () => {
+    await expect(YandexGamesService.submitScore('level-sector-01-level-01', 1000)).resolves.toBeUndefined();
+  });
+
+  it('getLeaderboardEntries() degrades to an empty list without a real SDK', async () => {
+    await expect(YandexGamesService.getLeaderboardEntries('level-sector-01-level-01')).resolves.toEqual([]);
+  });
+
+  it('getPlayerLeaderboardEntry() degrades to null without a real SDK', async () => {
+    await expect(YandexGamesService.getPlayerLeaderboardEntry('level-sector-01-level-01')).resolves.toBeNull();
+  });
 });

@@ -28,6 +28,26 @@ interface YsdkPlayer {
   setData(data: Record<string, unknown>, flush?: boolean): Promise<void>;
 }
 
+/** Shape verified against `yandex.com/dev/games/doc/en/sdk/sdk-leaderboard` — see `docs/yandex-games.md`'s Leaderboards section. `score` is always a non-negative integer (ms, for our time-based boards); sort order/formatting is configured per board name in the Yandex Games console, not from the client. */
+export interface YsdkLeaderboardEntry {
+  score: number;
+  rank: number;
+  player: { publicName: string };
+}
+
+interface YsdkLeaderboards {
+  setScore(leaderboardName: string, score: number): Promise<void>;
+  getEntries(
+    leaderboardName: string,
+    options?: { quantityTop?: number; includeUser?: boolean },
+  ): Promise<{ entries: YsdkLeaderboardEntry[] }>;
+  getPlayerEntry(leaderboardName: string): Promise<YsdkLeaderboardEntry>;
+}
+
+interface YsdkAuth {
+  openAuthDialog(): Promise<void>;
+}
+
 /** Shapes verified against the real docs (`yandex.com/dev/games/doc/en/sdk/sdk-purchases`), not assumed — see `docs/yandex-games.md`'s Payments section. Client-side (unsigned) mode only; `signed: true`'s encrypted `ISign` response is out of scope this pass. */
 export interface YsdkProduct {
   id: string;
@@ -63,6 +83,8 @@ interface Ysdk {
   };
   getPlayer?(options?: { scopes?: boolean }): Promise<YsdkPlayer>;
   getPayments?(options?: { signed?: boolean }): Promise<YsdkPayments>;
+  leaderboards?: YsdkLeaderboards;
+  auth?: YsdkAuth;
 }
 
 interface YaGamesGlobal {
@@ -182,6 +204,75 @@ class YandexGamesServiceController {
       await player.setData(data, true);
     } catch {
       /* best-effort — a failed cloud push never breaks the local save */
+    }
+  }
+
+  /** `isAuthorized()` on the cached player — `false` for a guest, an unavailable SDK, or before the first `getPlayer()` call resolves (never blocks, never throws). */
+  async isPlayerAuthorized(): Promise<boolean> {
+    const player = await this.getPlayer();
+    return player?.isAuthorized() ?? false;
+  }
+
+  /**
+   * `ysdk.auth.openAuthDialog()` — the ONLY door into authorization in this
+   * game (master-prompt §41: guest mode is mandatory, auth only after a
+   * conscious action). Never call this automatically; it must sit behind an
+   * explicit UI action (`SettingsScene`'s "Yandex ID" row). Re-resolves the
+   * cached player afterward since the dialog changes auth state out from
+   * under whatever `getPlayer()` had already cached. Resolves `false` for
+   * "still not authorized" (dialog dismissed, SDK unavailable, or the call
+   * itself failed) — callers don't need to distinguish why, same contract
+   * as the rest of this facade.
+   */
+  async requestAuthorization(): Promise<boolean> {
+    if (!this.ysdk?.auth) return false;
+    try {
+      await this.ysdk.auth.openAuthDialog();
+    } catch {
+      return false;
+    }
+    this.player = null;
+    this.playerPromise = null;
+    return this.isPlayerAuthorized();
+  }
+
+  /**
+   * `leaderboards.setScore` requires an authorized player (verified against
+   * the docs, `docs/yandex-games.md`) — a guest submission is a silent
+   * no-op, exactly like `setPlayerData` for a guest. Callers decide *which*
+   * scores are worth submitting (see `LeaderboardService` — only the
+   * canonical variant, never an adaptive one); this facade only knows how to
+   * talk to the SDK, not the game's own rules about what counts.
+   */
+  async submitScore(leaderboardName: string, score: number): Promise<void> {
+    if (!this.ysdk?.leaderboards) return;
+    if (!(await this.isPlayerAuthorized())) return;
+    try {
+      await this.ysdk.leaderboards.setScore(leaderboardName, score);
+    } catch {
+      /* best-effort — see doc comments elsewhere in this facade */
+    }
+  }
+
+  /** `getEntries` needs no authorization (verified against the docs) — a guest can always read a leaderboard, only submitting to one requires signing in. */
+  async getLeaderboardEntries(leaderboardName: string, quantityTop = 10): Promise<YsdkLeaderboardEntry[]> {
+    if (!this.ysdk?.leaderboards) return [];
+    try {
+      const { entries } = await this.ysdk.leaderboards.getEntries(leaderboardName, { quantityTop, includeUser: true });
+      return entries;
+    } catch {
+      return [];
+    }
+  }
+
+  /** Requires an authorized player (verified against the docs) — `null` for a guest, same as every other "no result available" case here. */
+  async getPlayerLeaderboardEntry(leaderboardName: string): Promise<YsdkLeaderboardEntry | null> {
+    if (!this.ysdk?.leaderboards) return null;
+    if (!(await this.isPlayerAuthorized())) return null;
+    try {
+      return await this.ysdk.leaderboards.getPlayerEntry(leaderboardName);
+    } catch {
+      return null;
     }
   }
 

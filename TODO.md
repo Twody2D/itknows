@@ -9,8 +9,10 @@
 (init/LoadingAPI/GameplayAPI/реклама/player data/платежи), `SaveService`
 синхронизируется с облаком для авторизованных игроков; магазин (CREDITS,
 инвентарь, покупки, SYSTEM ARCHIVE) реализован как вертикальный срез
-(`docs/SHOP.md`); главное меню пересобрано по внешнему макету; лидерборды,
-Daily Challenge и ghost-система — следующие шаги.**
+(`docs/SHOP.md`); главное меню пересобрано по внешнему макету;
+`LeaderboardService` (гостевое чтение, авторизация по явному действию,
+счёт только по каноничной вариации) реализован; Daily Challenge, тесты
+сценариев SDK и ghost-система — следующие шаги.**
 Текущая версия — `0.6.2` (`package.json`, она же показывается в меню под
 SYSTEM ONLINE). Правила работы — в `CLAUDE.md`. Полное ТЗ —
 `docs/master-prompt.md`.
@@ -758,8 +760,33 @@ SYSTEM ONLINE). Правила работы — в `CLAUDE.md`. Полное Т�
       настоящего iframe: чистое устройство реально забрало сейв из облака
       (`completedLevels`/`lastLevelId` совпали 1:1), `markCompleted` реально
       запушил объединённый сейв обратно.
-- [ ] `LeaderboardService`: гостевой режим без авторизации, авторизация только по
-      осознанному действию, лидерборд по каноничным вариациям и Daily Challenge
+- [x] **`LeaderboardService`: гостевой режим без авторизации, авторизация
+      только по осознанному действию, лидерборд по каноничным вариациям**
+      (Daily Challenge своей вариации ещё не имеет — см. пункт ниже).
+      `YandexGamesService.ts` получил `leaderboards`/`auth` части фасада
+      (`submitScore`/`getLeaderboardEntries`/`getPlayerLeaderboardEntry`/
+      `requestAuthorization`/`isPlayerAuthorized`), той же деградацией, что
+      и весь остальной фасад. `src/services/LeaderboardService.ts` — тонкая
+      обёртка с игровым правилом: счёт уходит только для `'standard'`
+      варианта (`gentle`/`bold`/`troll` не сравнимы между игроками —
+      «Решённые вопросы» #4), имя таблицы `level-${levelId}`.
+      `src/services/LeaderboardSubmission.ts` — самоподключающийся модуль на
+      `level:completed`, тот же паттерн, что `shop/EconomyRewards.ts`.
+      Авторизация — новая строка «Yandex ID» в `SettingsScene`, рендерится
+      только когда `YandexGamesService.isAvailable()`, единственная дверь в
+      `requestAuthorization()` во всей игре; обратного пути нет (у SDK его
+      нет), после входа строка становится статусом. **Реальный,
+      задокументированный пробел**: сами таблицы (`level-<id>`, по одной на
+      уровень) должны быть заранее созданы в консоли Yandex Games — из кода
+      это не автоматизируется. Подтверждено вживую headless-браузером: вне
+      SDK — строка не рендерится, `level:completed` не кидает ошибок;
+      отдельно, с фейковым SDK внутри настоящего iframe — гость не
+      отправляет счёт, реальный клик по кнопке проводит через
+      `openAuthDialog` и меняет подпись, каноничное завершение отправляет
+      округлённое время под верным именем, `bold`-завершение того же уровня
+      счёт не шлёт, чтение чужой/своей записи работает. Подробности —
+      `docs/yandex-games.md`. Тесты: `tests/leaderboard-service.test.ts`,
+      расширенный `tests/yandex-games-service.test.ts`.
 - [x] **`AdsService` политика** (`src/services/AdsService.ts` +
       `YandexGamesService.ts`) — сделано раньше очереди по прямому запросу
       (план "level length & sectors"): единая точка входа

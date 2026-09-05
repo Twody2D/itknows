@@ -36,6 +36,14 @@ const UI_STRINGS = {
   on: { ru: 'Вкл', en: 'On' },
   off: { ru: 'Выкл', en: 'Off' },
 
+  // "Yandex ID" is a product name, kept as-is in both locales (same
+  // treatment as CREDITS/SYSTEM tokens, CLAUDE.md #7). Only shown when the
+  // SDK is actually reachable (`YandexGamesService.isAvailable()`) — a
+  // guest outside Yandex Games would otherwise see a sign-in button that
+  // can never do anything.
+  yandexIdGuest: { ru: 'Yandex ID: гость', en: 'Yandex ID: guest' },
+  yandexIdSignedIn: { ru: 'Yandex ID: вошли', en: 'Yandex ID: signed in' },
+
   // The keys themselves are drawn as keycaps (`ui/KeyCap.ts`), so these are
   // captions only — never a binding list that could go stale.
   hintMove: { ru: 'Движение', en: 'Move' },
