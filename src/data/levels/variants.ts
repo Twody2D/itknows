@@ -231,216 +231,109 @@ export const LEVEL_VARIANTS: Record<string, { gentle?: LevelDef; bold?: LevelDef
   // §14's original 12 (`TrapDef.ts` — recorded as a deliberate scope-lock
   // revision in TODO.md, not silently folded into the old count).
   //
-  // `spike-bank`/`spike-wall` are phase-gated exactly like every other timed
-  // hazard, so they go straight onto the mandatory path with the same
-  // generous clear-ground margin every ambush spike/sudden pit in this
-  // campaign already uses. `orbit-spike`/`swinging-spike`/`loop-spike` have
-  // no phase cycle — their honesty is the same "slow, continuous, visible
-  // motion" basis `moving-spike` relies on — and this project's own history
-  // (see sector01-level-01's file doc comment) deliberately kept that class
-  // of hazard on optional bonus routes only, until a specific one went
-  // through the extra verification a mandatory placement needs. These three
-  // follow that same precedent: a small bonus platform, always skippable by
-  // the level's already-`LevelValidator`-proven ground route.
+  // Each of the five now lives directly on these levels' BASE definition
+  // (`sector01.ts`/`sector02.ts`) — present in every variant, `standard`
+  // included, not just `bold`. Owner feedback after a live playtest: gating
+  // brand-new content behind `DifficultyDirector`'s `thriving` streak (3
+  // clean clears in a row) meant a normal playthrough could go the whole
+  // campaign without ever seeing it, which read as "the traps don't
+  // actually work" rather than "you haven't earned bold yet." `gentle`/
+  // `bold` below only *retune* the one hazard each level already has —
+  // safer/slower vs. harsher/faster — the same way every other adaptive
+  // level in the campaign retunes an always-present hazard, never add or
+  // remove it.
   [MOVING_BRIDGE.id]: {
     // Not trigger-gated (unlike the ambush spikes above) — `spike-bank`
     // loops on its own clock regardless of where the player is, so gentle/
     // bold only ever tune `timing`, never a trigger distance.
     gentle: {
       ...MOVING_BRIDGE,
-      traps: [
-        ...MOVING_BRIDGE.traps!,
-        {
-          type: 'spike-bank',
-          id: 'sbank-01',
-          col: 34,
-          width: 3,
-          hiddenRow: 23,
-          lethalRow: 21,
-          timing: { idleMs: 1100, warningMs: 650, activeMs: 500, cooldownMs: 350 },
-        },
-      ],
+      traps: MOVING_BRIDGE.traps!.map((trap) =>
+        trap.type === 'spike-bank' && trap.id === 'sbank-01'
+          ? { ...trap, timing: { idleMs: 1100, warningMs: 650, activeMs: 500, cooldownMs: 350 } }
+          : trap,
+      ),
     },
     bold: {
       ...MOVING_BRIDGE,
-      traps: [
-        ...MOVING_BRIDGE.traps!,
-        // Clear ground between `bridge-01`'s landing (30) and `laser-02`
-        // (40) — the level's own quietest stretch. Hidden below the floor
-        // (row 23) rising to one tile above it (row 21), the same
-        // hidden/lethal row pair the campaign's ambush spikes already use.
-        {
-          type: 'spike-bank',
-          id: 'sbank-01',
-          col: 34,
-          width: 3,
-          hiddenRow: 23,
-          lethalRow: 21,
-          // warningMs at the honest floor, longer activeMs and shorter
-          // idleMs than gentle — less safe time overall, same telegraph.
-          timing: { idleMs: 600, warningMs: 300, activeMs: 900, cooldownMs: 250 },
-        },
-      ],
+      traps: MOVING_BRIDGE.traps!.map((trap) =>
+        // warningMs at the honest floor, longer activeMs and shorter idleMs
+        // than gentle — less safe time overall, same telegraph.
+        trap.type === 'spike-bank' && trap.id === 'sbank-01'
+          ? { ...trap, timing: { idleMs: 600, warningMs: 300, activeMs: 900, cooldownMs: 250 } }
+          : trap,
+      ),
     },
   },
   [FALSE_FLOOR.id]: {
     gentle: {
       ...FALSE_FLOOR,
-      traps: [
-        ...FALSE_FLOOR.traps!,
-        {
-          type: 'spike-wall',
-          id: 'swall-01',
-          col: 68,
-          topRow: 19,
-          bottomRow: 21,
-          extendTiles: 4,
-          timing: { idleMs: 1100, warningMs: 650, activeMs: 500, cooldownMs: 350 },
-        },
-      ],
+      traps: FALSE_FLOOR.traps!.map((trap) =>
+        trap.type === 'spike-wall' && trap.id === 'swall-01'
+          ? { ...trap, timing: { idleMs: 1100, warningMs: 650, activeMs: 500, cooldownMs: 350 } }
+          : trap,
+      ),
     },
     bold: {
       ...FALSE_FLOOR,
-      traps: [
-        ...FALSE_FLOOR.traps!,
-        // Solid ground throughout (no gap here) — spans rows 19-21, tall
-        // enough that jumping over it is not an option, only waiting for it
-        // to retract. Sits in the clear run between `dp-02`'s crumble (64)
-        // and `dp-03` (96), well clear of both.
-        {
-          type: 'spike-wall',
-          id: 'swall-01',
-          col: 68,
-          topRow: 19,
-          bottomRow: 21,
-          extendTiles: 4,
-          timing: { idleMs: 600, warningMs: 300, activeMs: 900, cooldownMs: 250 },
-        },
-      ],
+      traps: FALSE_FLOOR.traps!.map((trap) =>
+        trap.type === 'spike-wall' && trap.id === 'swall-01'
+          ? { ...trap, timing: { idleMs: 600, warningMs: 300, activeMs: 900, cooldownMs: 250 } }
+          : trap,
+      ),
     },
   },
   [RISE.id]: {
     // Slower, smaller sweep — comfortably timed around even on a first look.
     gentle: {
       ...RISE,
-      platforms: [...RISE.platforms, { col: 152, row: 20, width: 2 }],
-      traps: [
-        ...RISE.traps!,
-        {
-          type: 'orbit-spike',
-          id: 'orbit-01',
-          pivotCol: 153,
-          pivotRow: 17,
-          radiusTiles: 1.5,
-          periodMs: 2600,
-        },
-      ],
+      traps: RISE.traps!.map((trap) =>
+        trap.type === 'orbit-spike' && trap.id === 'orbit-01'
+          ? { ...trap, radiusTiles: 1.5, periodMs: 2600 }
+          : trap,
+      ),
     },
     bold: {
       ...RISE,
-      // A single 2-tile bonus platform in the level's plainest stretch
-      // (152-154, between the gap at 150-151 and the static spikes at
-      // 166-167) — stepping onto it is never required, the ground path
-      // below (already `LevelValidator`-proven) is untouched.
-      platforms: [...RISE.platforms, { col: 152, row: 20, width: 2 }],
-      traps: [
-        ...RISE.traps!,
-        {
-          type: 'orbit-spike',
-          id: 'orbit-01',
-          pivotCol: 153,
-          pivotRow: 17,
-          radiusTiles: 2,
-          periodMs: 1800,
-        },
-      ],
+      traps: RISE.traps!.map((trap) =>
+        trap.type === 'orbit-spike' && trap.id === 'orbit-01'
+          ? { ...trap, radiusTiles: 2, periodMs: 1800 }
+          : trap,
+      ),
     },
   },
   [PRESSURE.id]: {
     // Narrower swing, slower period — easier to read and time around.
     gentle: {
       ...PRESSURE,
-      platforms: [...PRESSURE.platforms, { col: 106, row: 20, width: 2 }],
-      traps: [
-        ...PRESSURE.traps!,
-        {
-          type: 'swinging-spike',
-          id: 'swing-01',
-          pivotCol: 107,
-          pivotRow: 15,
-          lengthTiles: 3,
-          maxAngleDeg: 35,
-          periodMs: 2200,
-        },
-      ],
+      traps: PRESSURE.traps!.map((trap) =>
+        trap.type === 'swinging-spike' && trap.id === 'swing-01'
+          ? { ...trap, maxAngleDeg: 35, periodMs: 2200 }
+          : trap,
+      ),
     },
     bold: {
       ...PRESSURE,
-      // Bonus platform between `laser-01` (100) and `laser-02` (148) — the
-      // level's longest clear stretch, ground path unaffected.
-      platforms: [...PRESSURE.platforms, { col: 106, row: 20, width: 2 }],
-      traps: [
-        ...PRESSURE.traps!,
-        {
-          type: 'swinging-spike',
-          id: 'swing-01',
-          pivotCol: 107,
-          pivotRow: 15,
-          lengthTiles: 3,
-          maxAngleDeg: 50,
-          periodMs: 1600,
-        },
-      ],
+      traps: PRESSURE.traps!.map((trap) =>
+        trap.type === 'swinging-spike' && trap.id === 'swing-01'
+          ? { ...trap, maxAngleDeg: 50, periodMs: 1600 }
+          : trap,
+      ),
     },
   },
   [SHORT_CIRCUIT.id]: {
     // Same circuit, slower per-leg travel — more time to read where it's headed.
     gentle: {
       ...SHORT_CIRCUIT,
-      platforms: [
-        ...SHORT_CIRCUIT.platforms,
-        { col: 57, row: 19, width: 2 },
-        { col: 62, row: 19, width: 2 },
-      ],
-      traps: [
-        ...SHORT_CIRCUIT.traps!,
-        {
-          type: 'loop-spike',
-          id: 'loop-01',
-          waypoints: [
-            { col: 57, row: 16 },
-            { col: 64, row: 16 },
-            { col: 64, row: 19 },
-            { col: 57, row: 19 },
-          ],
-          travelMs: 1400,
-        },
-      ],
+      traps: SHORT_CIRCUIT.traps!.map((trap) =>
+        trap.type === 'loop-spike' && trap.id === 'loop-01' ? { ...trap, travelMs: 1400 } : trap,
+      ),
     },
     bold: {
       ...SHORT_CIRCUIT,
-      // A small triangular bonus loop above the gap-run stretch (50-69,
-      // clear of `ef-01`/`ef-02` and every static spike) — the plain gap at
-      // 54-55 below remains the always-available honest route.
-      platforms: [
-        ...SHORT_CIRCUIT.platforms,
-        { col: 57, row: 19, width: 2 },
-        { col: 62, row: 19, width: 2 },
-      ],
-      traps: [
-        ...SHORT_CIRCUIT.traps!,
-        {
-          type: 'loop-spike',
-          id: 'loop-01',
-          waypoints: [
-            { col: 57, row: 16 },
-            { col: 64, row: 16 },
-            { col: 64, row: 19 },
-            { col: 57, row: 19 },
-          ],
-          travelMs: 900,
-        },
-      ],
+      traps: SHORT_CIRCUIT.traps!.map((trap) =>
+        trap.type === 'loop-spike' && trap.id === 'loop-01' ? { ...trap, travelMs: 900 } : trap,
+      ),
     },
   },
 };

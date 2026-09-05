@@ -526,6 +526,11 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       { col: 120, row: 20, width: 3 },
       { col: 126, row: 18, width: 3 },
       { col: 132, row: 20, width: 3 },
+      // A single 2-tile bonus platform in the level's plainest stretch
+      // (152-154, between the gap at 150-151 and the static spikes at
+      // 166-167) — stepping onto it is never required, the ground path
+      // below (already `LevelValidator`-proven) is untouched.
+      { col: 152, row: 20, width: 2 },
     ],
     playerStartCol: 2,
     exitCol: 184,
@@ -603,6 +608,16 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         targetId: 'mspike-03',
         visible: false,
       },
+      // Guards the bonus platform above — continuous, always visible,
+      // never required. Standard sweep; `gentle`/`bold` only retune it.
+      {
+        type: 'orbit-spike',
+        id: 'orbit-01',
+        pivotCol: 153,
+        pivotRow: 17,
+        radiusTiles: 1.75,
+        periodMs: 2200,
+      },
     ],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 17, requiredMechanics: ['move'] },
@@ -658,6 +673,9 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       { col: 23, row: 20, width: 5 },
       { col: 117, row: 20, width: 5 },
       { col: 165, row: 20, width: 5 },
+      // Bonus platform between `laser-01` (100) and `laser-02` (148) — the
+      // level's longest clear stretch, ground path unaffected.
+      { col: 106, row: 20, width: 2 },
     ],
     playerStartCol: 2,
     exitCol: 209,
@@ -741,6 +759,17 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         height: 3,
         targetId: 'mspike-03',
         visible: false,
+      },
+      // Guards the bonus platform above — continuous, always visible,
+      // never required. Standard swing; `gentle`/`bold` only retune it.
+      {
+        type: 'swinging-spike',
+        id: 'swing-01',
+        pivotCol: 107,
+        pivotRow: 15,
+        lengthTiles: 3,
+        maxAngleDeg: 42,
+        periodMs: 1900,
       },
     ],
     sections: [

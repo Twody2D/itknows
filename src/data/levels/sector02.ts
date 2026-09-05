@@ -150,6 +150,23 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
         width: 2,
         travelMs: 2600,
       },
+      // Clear ground between `bridge-01`'s landing (30) and `laser-02` (40)
+      // — the level's own quietest stretch. Hidden below the floor (row 23)
+      // rising to one tile above it (row 21), the same hidden/lethal row
+      // pair the campaign's ambush spikes already use. Standard timing —
+      // same idle/warning/active/cooldown convention as every other timed
+      // ambush hazard in the base campaign (`gentle`/`bold` in
+      // `variants.ts` only ever retune this, never add it — every variant
+      // of this level always has it).
+      {
+        type: 'spike-bank',
+        id: 'sbank-01',
+        col: 34,
+        width: 3,
+        hiddenRow: 23,
+        lethalRow: 21,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+      },
       // Dormant until triggered; harmless if never triggered or if the
       // player arrives after its one-shot cycle already finished — it
       // returns to idle for good afterward (loop: false), so it can never
@@ -308,6 +325,21 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
       // punished).
       { type: 'fake-platform', id: 'fp-01', col: 38, row: 20, width: 3 },
       { type: 'fake-platform', id: 'fp-02', col: 120, row: 20, width: 3 },
+      // Solid ground throughout (no gap here) — spans rows 19-21, tall
+      // enough that jumping over it is not an option, only waiting for it
+      // to retract. Sits in the clear run between `dp-02`'s crumble (64)
+      // and `dp-03` (96), well clear of both. Standard timing, same
+      // convention as every other timed ambush hazard in the base
+      // campaign — always present, `gentle`/`bold` only retune it.
+      {
+        type: 'spike-wall',
+        id: 'swall-01',
+        col: 68,
+        topRow: 19,
+        bottomRow: 21,
+        extendTiles: 4,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+      },
     ],
     sections: [
       { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
@@ -360,11 +392,31 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
       [160, 162],
     ],
     spikeColumns: [20, 21, 42, 43, 44, 70, 71, 104, 105, 106, 140, 141, 176, 177, 178],
-    platforms: [],
+    // Small triangular bonus loop above the gap-run stretch (50-69, clear of
+    // `ef-01`/`ef-02` and every static spike) — the plain gap at 54-55 below
+    // remains the always-available honest route.
+    platforms: [
+      { col: 57, row: 19, width: 2 },
+      { col: 62, row: 19, width: 2 },
+    ],
     playerStartCol: 2,
     exitCol: 198,
     checkpoints: [116],
     traps: [
+      // Patrols the bonus loop above in one direction, always visible —
+      // same continuous-motion honesty basis as `moving-spike`. Standard
+      // travel speed; `gentle`/`bold` only retune it, never add it.
+      {
+        type: 'loop-spike',
+        id: 'loop-01',
+        waypoints: [
+          { col: 57, row: 16 },
+          { col: 64, row: 16 },
+          { col: 64, row: 19 },
+          { col: 57, row: 19 },
+        ],
+        travelMs: 1150,
+      },
       // Sits directly on the main ground run (no gap underneath — the level's
       // own ground tiles are still there; this only adds a periodically-lethal
       // overlap zone on top). Same "wait for the safe window, then cross"
