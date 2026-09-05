@@ -16,6 +16,12 @@ const GRID_ENTRY = findBase('sector-02-level-01');
 const PURSUIT = findBase('sector-02-level-03');
 const GAP_AND_SPIKE = findIn(SECTOR_01_LEVELS, 'sector-01-level-03');
 
+const MOVING_BRIDGE = findBase('sector-02-level-02');
+const FALSE_FLOOR = findBase('sector-02-level-04');
+const SHORT_CIRCUIT = findBase('sector-02-level-05');
+const RISE = findIn(SECTOR_01_LEVELS, 'sector-01-level-04');
+const PRESSURE = findIn(SECTOR_01_LEVELS, 'sector-01-level-05');
+
 /**
  * `DifficultyDirector` demo content (Phase 3): two levels with real
  * gentle/bold variants, proving variant selection end to end rather than
@@ -94,6 +100,130 @@ export const LEVEL_VARIANTS: Record<string, { gentle?: LevelDef; bold?: LevelDef
     troll: {
       ...GAP_AND_SPIKE,
       gaps: [[16, 16], ...GAP_AND_SPIKE.gaps.slice(1)],
+    },
+  },
+
+  // First real content for the five trap types added beyond master-prompt
+  // §14's original 12 (`TrapDef.ts` — recorded as a deliberate scope-lock
+  // revision in TODO.md, not silently folded into the old count).
+  //
+  // `spike-bank`/`spike-wall` are phase-gated exactly like every other timed
+  // hazard, so they go straight onto the mandatory path with the same
+  // generous clear-ground margin every ambush spike/sudden pit in this
+  // campaign already uses. `orbit-spike`/`swinging-spike`/`loop-spike` have
+  // no phase cycle — their honesty is the same "slow, continuous, visible
+  // motion" basis `moving-spike` relies on — and this project's own history
+  // (see sector01-level-01's file doc comment) deliberately kept that class
+  // of hazard on optional bonus routes only, until a specific one went
+  // through the extra verification a mandatory placement needs. These three
+  // follow that same precedent: a small bonus platform, always skippable by
+  // the level's already-`LevelValidator`-proven ground route.
+  [MOVING_BRIDGE.id]: {
+    bold: {
+      ...MOVING_BRIDGE,
+      traps: [
+        ...MOVING_BRIDGE.traps!,
+        // Clear ground between `bridge-01`'s landing (30) and `laser-02`
+        // (40) — the level's own quietest stretch. Hidden below the floor
+        // (row 23) rising to one tile above it (row 21), the same
+        // hidden/lethal row pair the campaign's ambush spikes already use.
+        {
+          type: 'spike-bank',
+          id: 'sbank-01',
+          col: 34,
+          width: 3,
+          hiddenRow: 23,
+          lethalRow: 21,
+        },
+      ],
+    },
+  },
+  [FALSE_FLOOR.id]: {
+    bold: {
+      ...FALSE_FLOOR,
+      traps: [
+        ...FALSE_FLOOR.traps!,
+        // Solid ground throughout (no gap here) — spans rows 19-21, tall
+        // enough that jumping over it is not an option, only waiting for it
+        // to retract. Sits in the clear run between `dp-02`'s crumble (64)
+        // and `dp-03` (96), well clear of both.
+        {
+          type: 'spike-wall',
+          id: 'swall-01',
+          col: 68,
+          topRow: 19,
+          bottomRow: 21,
+          extendTiles: 4,
+        },
+      ],
+    },
+  },
+  [RISE.id]: {
+    bold: {
+      ...RISE,
+      // A single 2-tile bonus platform in the level's plainest stretch
+      // (152-154, between the gap at 150-151 and the static spikes at
+      // 166-167) — stepping onto it is never required, the ground path
+      // below (already `LevelValidator`-proven) is untouched.
+      platforms: [...RISE.platforms, { col: 152, row: 20, width: 2 }],
+      traps: [
+        ...RISE.traps!,
+        {
+          type: 'orbit-spike',
+          id: 'orbit-01',
+          pivotCol: 153,
+          pivotRow: 17,
+          radiusTiles: 2,
+          periodMs: 1800,
+        },
+      ],
+    },
+  },
+  [PRESSURE.id]: {
+    bold: {
+      ...PRESSURE,
+      // Bonus platform between `laser-01` (100) and `laser-02` (148) — the
+      // level's longest clear stretch, ground path unaffected.
+      platforms: [...PRESSURE.platforms, { col: 106, row: 20, width: 2 }],
+      traps: [
+        ...PRESSURE.traps!,
+        {
+          type: 'swinging-spike',
+          id: 'swing-01',
+          pivotCol: 107,
+          pivotRow: 15,
+          lengthTiles: 3,
+          maxAngleDeg: 50,
+          periodMs: 1600,
+        },
+      ],
+    },
+  },
+  [SHORT_CIRCUIT.id]: {
+    bold: {
+      ...SHORT_CIRCUIT,
+      // A small triangular bonus loop above the gap-run stretch (50-69,
+      // clear of `ef-01`/`ef-02` and every static spike) — the plain gap at
+      // 54-55 below remains the always-available honest route.
+      platforms: [
+        ...SHORT_CIRCUIT.platforms,
+        { col: 57, row: 19, width: 2 },
+        { col: 62, row: 19, width: 2 },
+      ],
+      traps: [
+        ...SHORT_CIRCUIT.traps!,
+        {
+          type: 'loop-spike',
+          id: 'loop-01',
+          waypoints: [
+            { col: 57, row: 16 },
+            { col: 64, row: 16 },
+            { col: 64, row: 19 },
+            { col: 57, row: 19 },
+          ],
+          travelMs: 900,
+        },
+      ],
     },
   },
 };
