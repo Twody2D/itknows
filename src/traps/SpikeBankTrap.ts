@@ -1,0 +1,106 @@
+import Phaser from 'phaser';
+import { Trap } from './Trap';
+import type { TrapPhase } from './Trap';
+import type { TrapTiming } from './TrapTiming';
+
+export interface SpikeBankConfig {
+  id: string;
+  x: number;
+  /** World Y of the retracted/idle position — either side of `yLethal`. */
+  yHidden: number;
+  /** World Y it reaches at `active` — where it's actually lethal. */
+  yLethal: number;
+  timing?: TrapTiming | undefined;
+  initialIdleMs?: number | undefined;
+  loop?: boolean | undefined;
+}
+
+/**
+ * One column of `spike-bank` (see `TrapDef.ts` for the full reasoning) — a
+ * single tile-wide instance; `width > 1` in the level data spawns several of
+ * these side by side, each independently timed but sharing the same config,
+ * so they stay in lockstep the same way `disappearing-platform`/
+ * `falling-platform` already do for their own `width`.
+ *
+ * Deliberately NOT a copy of `AmbushSpikeTrap`'s true invisibility: this is
+ * ordinary, reusable content the player is meant to learn to recognize, so
+ * `idle` stays dimly visible (a real tell) rather than hidden, and it loops
+ * on its own timer by default instead of waiting for a trigger.
+ */
+export class SpikeBankTrap extends Trap {
+  readonly gameObject: Phaser.Physics.Arcade.Sprite;
+
+  private readonly scene: Phaser.Scene;
+  private readonly x: number;
+  private readonly yHidden: number;
+  private readonly yLethal: number;
+  private idleElapsedOverride = 0;
+  private moveTween: Phaser.Tweens.Tween | null = null;
+
+  constructor(scene: Phaser.Scene, config: SpikeBankConfig) {
+    super('spike-bank', config.id, { timing: config.timing, loop: config.loop });
+    this.scene = scene;
+    this.x = config.x;
+    this.yHidden = config.yHidden;
+    this.yLethal = config.yLethal;
+    this.idleElapsedOverride = config.initialIdleMs ?? 0;
+
+    this.gameObject = scene.physics.add.sprite(config.x, config.yHidden, 'tile-spike');
+    const body = this.gameObject.body as Phaser.Physics.Arcade.Body;
+    body.setAllowGravity(false);
+    body.setImmovable(true);
+    body.setSize(6, 4);
+    body.setOffset(2, 6);
+
+    this.onEnterPhase('idle');
+  }
+
+  protected onEnterPhase(phase: TrapPhase): void {
+    if (!this.gameObject) return; // guard: base constructor calls this before field assignment
+    this.moveTween?.stop();
+    this.moveTween = null;
+    switch (phase) {
+      case 'idle':
+        this.gameObject.setPosition(this.x, this.yHidden);
+        this.gameObject.setAlpha(0.35);
+        break;
+      case 'warning':
+        this.moveTween = this.scene.tweens.add({
+          targets: this.gameObject,
+          y: this.yLethal,
+          alpha: 1,
+          duration: this.timing.warningMs,
+          ease: 'Sine.easeIn',
+        });
+        break;
+      case 'active':
+        // The tween above should already have arrived — snapping removes
+        // any float drift between the phase clock and the tween's own.
+        this.gameObject.setPosition(this.x, this.yLethal);
+        this.gameObject.setAlpha(1);
+        break;
+      case 'cooldown':
+        this.moveTween = this.scene.tweens.add({
+          targets: this.gameObject,
+          y: this.yHidden,
+          alpha: 0.35,
+          duration: this.timing.cooldownMs,
+          ease: 'Sine.easeOut',
+        });
+        break;
+    }
+  }
+
+  override update(time: number, delta: number): void {
+    if (this.idleElapsedOverride > 0) {
+      this.idleElapsedOverride -= delta;
+      if (this.idleElapsedOverride > 0) return;
+    }
+    super.update(time, delta);
+  }
+
+  destroy(): void {
+    this.moveTween?.stop();
+    this.gameObject.destroy();
+  }
+}

@@ -22,6 +22,11 @@ import type { Triggerable } from '@/traps/TriggerTrap';
 import { Pursuer } from '@/traps/Pursuer';
 import { TimingGate } from '@/traps/TimingGate';
 import { FakeExit } from '@/traps/FakeExit';
+import { SpikeBankTrap } from '@/traps/SpikeBankTrap';
+import { SpikeWallTrap } from '@/traps/SpikeWallTrap';
+import { OrbitSpikeTrap } from '@/traps/OrbitSpikeTrap';
+import { SwingingSpikeTrap } from '@/traps/SwingingSpikeTrap';
+import { LoopSpikeTrap } from '@/traps/LoopSpikeTrap';
 import { hash01, stringHash } from '@/art/hash';
 import { PALETTE } from '@/config/palette';
 import { EXIT_VISUAL_HEIGHT_TILES } from '@/art/drawTiles';
@@ -291,6 +296,92 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[]): BuiltTraps {
         const y = def.row * TILE_SIZE - (3 * TILE_SIZE) / 2;
         const trap = new FakeExit(scene, { id: def.id, x, y });
         result.fakeExits.push(trap);
+        result.all.push(trap);
+        break;
+      }
+
+      case 'spike-bank': {
+        for (let i = 0; i < def.width; i++) {
+          const { x } = tileCenter(def.col + i, def.lethalRow);
+          const trap = new SpikeBankTrap(scene, {
+            id: `${def.id}-${i}`,
+            x,
+            yHidden: tileCenter(def.col + i, def.hiddenRow).y,
+            yLethal: tileCenter(def.col + i, def.lethalRow).y,
+            timing: def.timing,
+            initialIdleMs: def.initialIdleMs,
+            loop: def.loop,
+          });
+          result.updatable.push(trap);
+          result.lethalHazards.push(trap);
+          result.all.push(trap);
+        }
+        break;
+      }
+
+      case 'spike-wall': {
+        const { x } = tileCenter(def.col, def.topRow);
+        // `tileCenter` centers on the column; the retracted edge sits at
+        // that tile's near side, so the wall never reaches back past its
+        // own starting tile.
+        const edgeX = def.fromRight ? x + TILE_SIZE / 2 : x - TILE_SIZE / 2;
+        const yTop = def.topRow * TILE_SIZE;
+        const yBottom = (def.bottomRow + 1) * TILE_SIZE;
+        const trap = new SpikeWallTrap(scene, {
+          id: def.id,
+          edgeX,
+          y: yTop + (yBottom - yTop) / 2,
+          height: yBottom - yTop,
+          extendedWidth: def.extendTiles * TILE_SIZE,
+          fromRight: def.fromRight,
+          timing: def.timing,
+          initialIdleMs: def.initialIdleMs,
+          loop: def.loop,
+        });
+        result.updatable.push(trap);
+        result.lethalHazards.push(trap);
+        result.all.push(trap);
+        triggerable.set(def.id, trap);
+        break;
+      }
+
+      case 'orbit-spike': {
+        const { x, y } = tileCenter(def.pivotCol, def.pivotRow);
+        const trap = new OrbitSpikeTrap(scene, {
+          id: def.id,
+          pivotX: x,
+          pivotY: y,
+          radius: def.radiusTiles * TILE_SIZE,
+          periodMs: def.periodMs,
+          clockwise: def.clockwise,
+        });
+        result.lethalHazards.push(trap);
+        result.all.push(trap);
+        break;
+      }
+
+      case 'swinging-spike': {
+        const { x, y } = tileCenter(def.pivotCol, def.pivotRow);
+        const trap = new SwingingSpikeTrap(scene, {
+          id: def.id,
+          pivotX: x,
+          pivotY: y,
+          length: def.lengthTiles * TILE_SIZE,
+          maxAngleDeg: def.maxAngleDeg,
+          periodMs: def.periodMs,
+        });
+        result.lethalHazards.push(trap);
+        result.all.push(trap);
+        break;
+      }
+
+      case 'loop-spike': {
+        const trap = new LoopSpikeTrap(scene, {
+          id: def.id,
+          waypoints: def.waypoints.map((wp) => tileCenter(wp.col, wp.row)),
+          travelMs: def.travelMs,
+        });
+        result.lethalHazards.push(trap);
         result.all.push(trap);
         break;
       }
