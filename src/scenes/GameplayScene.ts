@@ -325,9 +325,16 @@ export class GameplayScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ESC', () => this.pauseGame());
   }
 
-  /** Menu/pause and settings are never on the retry-loop's hot path — freely pausable, no honesty-invariant concerns (CLAUDE.md #4 is about level geometry/timing during an attempt, not the player choosing to step away). */
+  /**
+   * Menu/pause and settings are never on the retry-loop's hot path — freely
+   * pausable, no honesty-invariant concerns (CLAUDE.md #4 is about level
+   * geometry/timing during an attempt, not the player choosing to step
+   * away). Also pausable mid-death-animation/mid-victory: `scene.pause()`
+   * freezes this scene's own timers too, so the pending `delayedCall` for
+   * the death restart or the victory scene transition simply resumes
+   * exactly where it left off once the player unpauses — never fires twice.
+   */
   private pauseGame(): void {
-    if (this.resolving) return;
     YandexGamesService.notifyGameplayStop();
     this.scene.pause();
     this.scene.launch('PauseScene', { gameplaySceneKey: this.scene.key, levelId: this.levelDef.id });
