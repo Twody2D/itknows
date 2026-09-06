@@ -4,7 +4,7 @@ import { YandexGamesService } from './YandexGamesService';
 
 const STORAGE_KEY = 'itknows.save.v1';
 const CLOUD_KEY = 'save';
-const SAVE_VERSION = 4;
+const SAVE_VERSION = 5;
 
 /** Everything the shop grants/tracks — `default`/`static`/`standard` are owned+equipped from a fresh save (CurrencyService/InventoryService read this, never a second save file). */
 export interface InventoryData {
@@ -33,8 +33,8 @@ export interface GhostRecord {
   samples: number[];
 }
 
-interface SaveDataV4 {
-  version: 4;
+interface SaveDataV5 {
+  version: 5;
   completedLevels: string[];
   lastLevelId: string | null;
   credits: number;
@@ -43,6 +43,8 @@ interface SaveDataV4 {
   processedPurchaseTokens: string[];
   /** Keyed by `${levelId}::${variantId}` (GhostService owns that scheme) — one best-run trace per level+variant, since different variants have different geometry (CLAUDE.md #4.3). */
   ghosts: Record<string, GhostRecord>;
+  /** Keyed by `sector-01`-style id (`sectors.ts`'s `sectorIdOf`) — best `GameState.sectorElapsedMs()` ever posted for that sector, shown as BEST on `SectorCompleteScene`. No per-variant split like ghosts: a sector's time already blends whatever variant each of its levels happened to serve, so there's no single "canonical" sector run to isolate. */
+  sectorBests: Record<string, number>;
 }
 
 function defaultInventory(): InventoryData {
@@ -59,7 +61,7 @@ function defaultInventory(): InventoryData {
   };
 }
 
-function emptySave(): SaveDataV4 {
+function emptySave(): SaveDataV5 {
   return {
     version: SAVE_VERSION,
     completedLevels: [],
@@ -68,6 +70,7 @@ function emptySave(): SaveDataV4 {
     inventory: defaultInventory(),
     processedPurchaseTokens: [],
     ghosts: {},
+    sectorBests: {},
   };
 }
 
@@ -97,8 +100,8 @@ function sanitizeInventory(raw: unknown): InventoryData {
   };
 }
 
-/** Loose shape covering a v1/v2/v3/v4 payload — `version` is the only field whose type actually conflicts between them, so it's widened here rather than intersected. */
-type AnySaveShape = Partial<Omit<SaveDataV4, 'version'>> & { version?: unknown };
+/** Loose shape covering a v1/v2/v3/v4/v5 payload — `version` is the only field whose type actually conflicts between them, so it's widened here rather than intersected. */
+type AnySaveShape = Partial<Omit<SaveDataV5, 'version'>> & { version?: unknown };
 
 /** Drops anything that isn't a plausible `[t,x,y,facing]×N` trace — a corrupt/truncated entry is dropped whole rather than replayed as a broken ghost. */
 function sanitizeGhostRecord(raw: unknown): GhostRecord | null {
@@ -120,8 +123,17 @@ function sanitizeGhosts(raw: unknown): Record<string, GhostRecord> {
   return result;
 }
 
+function sanitizeSectorBests(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== 'object') return {};
+  const result: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) result[key] = value;
+  }
+  return result;
+}
+
 /** A v1/v2 save (or anything unrecognized) migrates forward with sane shop defaults and no ghost data yet — never a hard failure, same "fall back to a clean save" posture v1 already had for a fully malformed payload. */
-function parseSave(raw: unknown): SaveDataV4 {
+function parseSave(raw: unknown): SaveDataV5 {
   const parsed = raw as AnySaveShape | null;
   if (!parsed || !Array.isArray(parsed.completedLevels)) return emptySave();
 
@@ -140,6 +152,7 @@ function parseSave(raw: unknown): SaveDataV4 {
     inventory: sanitizeInventory(parsed.inventory),
     processedPurchaseTokens: sanitizeStringArray(parsed.processedPurchaseTokens),
     ghosts: sanitizeGhosts(parsed.ghosts),
+    sectorBests: sanitizeSectorBests(parsed.sectorBests),
   };
 }
 
@@ -185,7 +198,17 @@ function mergeGhosts(local: Record<string, GhostRecord>, cloud: Record<string, G
   return result;
 }
 
-function mergeSaves(local: SaveDataV4, cloud: SaveDataV4): SaveDataV4 {
+/** Per key, keep whichever side actually ran faster — same "faster wins" rule as `mergeGhosts`, just without a samples payload to carry along. */
+function mergeSectorBests(local: Record<string, number>, cloud: Record<string, number>): Record<string, number> {
+  const result: Record<string, number> = { ...local };
+  for (const [key, cloudTimeMs] of Object.entries(cloud)) {
+    const localTimeMs = result[key];
+    if (localTimeMs === undefined || cloudTimeMs < localTimeMs) result[key] = cloudTimeMs;
+  }
+  return result;
+}
+
+function mergeSaves(local: SaveDataV5, cloud: SaveDataV5): SaveDataV5 {
   return {
     version: SAVE_VERSION,
     completedLevels: unionArrays(local.completedLevels, cloud.completedLevels),
@@ -194,6 +217,7 @@ function mergeSaves(local: SaveDataV4, cloud: SaveDataV4): SaveDataV4 {
     inventory: mergeInventory(local.inventory, cloud.inventory),
     processedPurchaseTokens: unionArrays(local.processedPurchaseTokens, cloud.processedPurchaseTokens),
     ghosts: mergeGhosts(local.ghosts, cloud.ghosts),
+    sectorBests: mergeSectorBests(local.sectorBests, cloud.sectorBests),
   };
 }
 
@@ -209,7 +233,7 @@ function mergeSaves(local: SaveDataV4, cloud: SaveDataV4): SaveDataV4 {
  * to sane defaults, field by field" is still an open `TODO.md` item.
  */
 class SaveServiceController {
-  private data: SaveDataV4 = parseSave(readJson(STORAGE_KEY));
+  private data: SaveDataV5 = parseSave(readJson(STORAGE_KEY));
   private cloudSyncStarted = false;
 
   private persist(): void {
@@ -320,6 +344,20 @@ class SaveServiceController {
     const existing = this.data.ghosts[key];
     if (existing && existing.timeMs <= timeMs) return;
     this.data.ghosts[key] = { timeMs, samples: [...samples] };
+    this.persist();
+  }
+
+  // --- Sector best time (SectorCompleteScene's BEST — see `sectorBests`'s own doc comment) ---
+
+  getSectorBestMs(sectorId: string): number | null {
+    return this.data.sectorBests[sectorId] ?? null;
+  }
+
+  /** No-ops unless this beats the stored best (or there is none yet) — same enforcement posture as `saveGhostIfBest`. */
+  saveSectorBestIfFaster(sectorId: string, timeMs: number): void {
+    const existing = this.data.sectorBests[sectorId];
+    if (existing !== undefined && existing <= timeMs) return;
+    this.data.sectorBests[sectorId] = timeMs;
     this.persist();
   }
 

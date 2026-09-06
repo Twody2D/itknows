@@ -43,4 +43,16 @@ describe('LeaderboardService', () => {
     await LeaderboardService.getPlayerLevelEntry('sector-02-level-03');
     expect(YandexGamesService.getPlayerLeaderboardEntry).toHaveBeenCalledWith('level-sector-02-level-03');
   });
+
+  it('submits a sector time unconditionally, not gated on a canonical variant', async () => {
+    await LeaderboardService.submitSectorScore('sector-01', 60000.4);
+    expect(YandexGamesService.submitScore).toHaveBeenCalledWith('sector-sector-01', 60000);
+  });
+
+  it('reads a sector\'s entries and the player\'s own by its own leaderboard name', async () => {
+    await LeaderboardService.getSectorEntries('sector-01', 5);
+    expect(YandexGamesService.getLeaderboardEntries).toHaveBeenCalledWith('sector-sector-01', 5);
+    await LeaderboardService.getPlayerSectorEntry('sector-01');
+    expect(YandexGamesService.getPlayerLeaderboardEntry).toHaveBeenCalledWith('sector-sector-01');
+  });
 });

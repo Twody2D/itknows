@@ -38,3 +38,8 @@ export function levelIdFor(sectorNumber: number, levelNumber: number): string {
   const level = String(levelNumber).padStart(2, '0');
   return `sector-${sector}-level-${level}`;
 }
+
+/** `sector-01`-style id for a level — the key `SaveService`'s sector-best-time store and `LeaderboardService`'s sector tables use, so both stay consistent with `GameState.currentSectorId`'s own format. */
+export function sectorIdOf(levelId: string): string {
+  return `sector-${String(sectorNumberOf(levelId)).padStart(2, '0')}`;
+}

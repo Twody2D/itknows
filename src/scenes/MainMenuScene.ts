@@ -13,6 +13,7 @@ import { PixelLabel } from '@/ui/PixelLabel';
 import { MenuTile, type MenuTileLabelState } from '@/ui/MenuTile';
 import { DomTextOverlay, type DomTextHandle } from '@/ui/DomTextOverlay';
 import { fadeIn } from '@/ui/SceneFade';
+import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
 import { t } from '@/i18n/ui';
 
 /**
@@ -107,35 +108,7 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   private buildBackground(width: number, height: number): void {
-    // Procedural canvas texture, not an image file — a radial fill is the one
-    // thing `Graphics` can't express, and CLAUDE.md #3 ships zero binaries.
-    const key = 'menu-backdrop';
-    if (this.textures.exists(key)) this.textures.remove(key);
-
-    const tex = this.textures.createCanvas(key, width, height);
-    if (tex) {
-      const ctx = tex.getContext();
-      const cx = width * 0.78;
-      const cy = height * 0.4;
-      const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(width, height) * 1.1);
-      gradient.addColorStop(0, hexToCss(PALETTE.bgIndigo));
-      gradient.addColorStop(0.45, hexToCss(PALETTE.bgGraphite));
-      gradient.addColorStop(1, hexToCss(PALETTE.bgVoid));
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, width, height);
-      tex.refresh();
-      this.add.image(0, 0, key).setOrigin(0, 0).setDepth(-10);
-    }
-
-    const grid = this.add.graphics().setDepth(-9);
-    for (let x = 0; x < width; x += 20) {
-      grid.fillStyle(PALETTE.cyan, 0.05);
-      grid.fillRect(x, 0, 1, height);
-    }
-    for (let y = 0; y < height; y += 20) {
-      grid.fillStyle(PALETTE.cyan, 0.04);
-      grid.fillRect(0, y, width, 1);
-    }
+    buildRadialGridBackdrop(this, width, height, 'menu-backdrop', 0.78, 0.4);
 
     // Starts past the showcase panel so it reads as sweeping the open space,
     // not passing over the character.

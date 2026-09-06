@@ -78,7 +78,7 @@ describe('SaveService', () => {
       SaveService.markCompleted('sector-01-level-01');
       expect(YandexGamesService.setPlayerData).toHaveBeenCalledWith({
         save: JSON.stringify({
-          version: 4,
+          version: 5,
           completedLevels: ['sector-01-level-01'],
           lastLevelId: null,
           credits: 0,
@@ -95,6 +95,7 @@ describe('SaveService', () => {
           },
           processedPurchaseTokens: [],
           ghosts: {},
+          sectorBests: {},
         }),
       });
     });
@@ -128,7 +129,7 @@ describe('SaveService', () => {
       SaveService.setInventory({ ...SaveService.getInventory(), ownedSkins: ['default', 'void'] });
       vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
         save: JSON.stringify({
-          version: 4,
+          version: 5,
           completedLevels: [],
           lastLevelId: null,
           credits: 20,
@@ -145,6 +146,7 @@ describe('SaveService', () => {
           },
           processedPurchaseTokens: ['tok-1'],
           ghosts: {},
+          sectorBests: {},
         }),
       });
       await SaveService.syncWithCloud();
@@ -226,7 +228,7 @@ describe('SaveService', () => {
       it('adopts a cloud-only ghost this device has never recorded', async () => {
         vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
           save: JSON.stringify({
-            version: 4,
+            version: 5,
             completedLevels: [],
             lastLevelId: null,
             credits: 0,
@@ -243,7 +245,7 @@ describe('SaveService', () => {
         SaveService.saveGhostIfBest('sector-01-level-01::standard', 3000, [0, 1, 1, 0]);
         vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
           save: JSON.stringify({
-            version: 4,
+            version: 5,
             completedLevels: [],
             lastLevelId: null,
             credits: 0,
@@ -260,7 +262,7 @@ describe('SaveService', () => {
         SaveService.saveGhostIfBest('sector-01-level-01::standard', 9000, [0, 1, 1, 0]);
         vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
           save: JSON.stringify({
-            version: 4,
+            version: 5,
             completedLevels: [],
             lastLevelId: null,
             credits: 0,
@@ -276,7 +278,7 @@ describe('SaveService', () => {
       it('drops a corrupt ghost entry instead of ever returning it', async () => {
         vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
           save: JSON.stringify({
-            version: 4,
+            version: 5,
             completedLevels: [],
             lastLevelId: null,
             credits: 0,
@@ -288,6 +290,57 @@ describe('SaveService', () => {
         await SaveService.syncWithCloud();
         expect(SaveService.getGhost('sector-01-level-01::standard')).toBeNull();
       });
+    });
+  });
+
+  describe('sector bests', () => {
+    it('has no best for a sector that has never been cleared', () => {
+      expect(SaveService.getSectorBestMs('sector-01')).toBeNull();
+    });
+
+    it('stores the first cleared time as the best', () => {
+      SaveService.saveSectorBestIfFaster('sector-01', 60000);
+      expect(SaveService.getSectorBestMs('sector-01')).toBe(60000);
+    });
+
+    it('replaces the stored best with a strictly faster clear', () => {
+      SaveService.saveSectorBestIfFaster('sector-01', 60000);
+      SaveService.saveSectorBestIfFaster('sector-01', 45000);
+      expect(SaveService.getSectorBestMs('sector-01')).toBe(45000);
+    });
+
+    it('keeps the existing best when a new clear is not faster', () => {
+      SaveService.saveSectorBestIfFaster('sector-01', 45000);
+      SaveService.saveSectorBestIfFaster('sector-01', 45000);
+      SaveService.saveSectorBestIfFaster('sector-01', 70000);
+      expect(SaveService.getSectorBestMs('sector-01')).toBe(45000);
+    });
+
+    it('keeps different sectors independent', () => {
+      SaveService.saveSectorBestIfFaster('sector-01', 45000);
+      SaveService.saveSectorBestIfFaster('sector-02', 90000);
+      expect(SaveService.getSectorBestMs('sector-01')).toBe(45000);
+      expect(SaveService.getSectorBestMs('sector-02')).toBe(90000);
+    });
+
+    it('cloud merge keeps whichever side cleared faster', async () => {
+      vi.mocked(YandexGamesService.isAvailable).mockReturnValue(true);
+      SaveService.saveSectorBestIfFaster('sector-01', 40000);
+      vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
+        save: JSON.stringify({
+          version: 5,
+          completedLevels: [],
+          lastLevelId: null,
+          credits: 0,
+          inventory: null,
+          processedPurchaseTokens: [],
+          ghosts: {},
+          sectorBests: { 'sector-01': 30000, 'sector-02': 90000 },
+        }),
+      });
+      await SaveService.syncWithCloud();
+      expect(SaveService.getSectorBestMs('sector-01')).toBe(30000);
+      expect(SaveService.getSectorBestMs('sector-02')).toBe(90000);
     });
   });
 });

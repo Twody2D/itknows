@@ -56,6 +56,9 @@ export const PALETTE = {
   echoBody: 0xb8c4e0,
   echoVisor: 0xff7de0,
 
+  /** Muted blue-gray for small secondary labels (TIME/BEST/leaderboard captions) — distinct from `textMuted` (much lighter) and `systemMuted` (purple-shifted). `SectorCompleteScene`, design round 2. */
+  labelMuted: 0x8a93b0,
+
   outline: 0x000000,
 } as const;
 

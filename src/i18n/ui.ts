@@ -69,6 +69,16 @@ const UI_STRINGS = {
   resultCleanerRun: { ru: 'Чище, чем в прошлый раз', en: 'Cleaner run than last time' },
   resultSystemUpdate: { ru: 'Обновление SYSTEM', en: 'SYSTEM update' },
   resultCampaignDone: { ru: 'SYSTEM изучил тебя полностью', en: 'SYSTEM has fully profiled you' },
+  resultNoDeaths: { ru: 'Без смертей', en: 'No deaths' },
+  resultLeaderboardTitle: { ru: 'Лидерборд', en: 'Leaderboard' },
+  resultYou: { ru: 'ТЫ', en: 'YOU' },
+  resultLeaderboardOffline: { ru: 'Лидерборд недоступен', en: 'Leaderboard unavailable' },
+  resultSignIn: { ru: 'Войти', en: 'Sign in' },
+  resultMenu: { ru: 'Меню', en: 'Menu' },
+  resultSectorLabel: { ru: 'Сектор', en: 'Sector' },
+  resultToMenu: { ru: 'В меню', en: 'To menu' },
+  resultAllDoneShort: { ru: 'Всё пройдено', en: 'All complete' },
+  resultProgress: { ru: 'Прогресс', en: 'Progress' },
   next: { ru: 'Дальше', en: 'Next' },
 
   // SYSTEM ARCHIVE (shop) — master-prompt §18. Product/category names stay
