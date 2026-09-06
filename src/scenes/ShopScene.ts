@@ -534,9 +534,10 @@ export class ShopScene extends Phaser.Scene {
     } else if (item.productId) {
       statusText = this.catalogPricesById.get(item.productId) ?? (this.catalogLoaded ? t('shopCatalogUnavailable') : '…');
     }
+    const statusY = y + desc.height + 6;
     const status = this.domText.add(
       textX,
-      y + desc.height + 6,
+      statusY,
       statusText,
       { color: hexToCss(statusColor), strokeColor: hexToCss(PALETTE.outline), scale: 1 },
       0,
@@ -544,7 +545,15 @@ export class ShopScene extends Phaser.Scene {
     );
     this.content.push(status);
 
-    const buttonY = this.panelY + this.panelH - 58;
+    // A long flavor text (e.g. a multi-line character description) can push
+    // the status line past where the buy/equip button normally sits — grow
+    // the gap downward instead of letting the button print over the text,
+    // but never past the safe margin the bottom nav row already claims
+    // (same -34 offset `systemLineLabel` uses against this panel's bottom).
+    const buttonY = Math.min(
+      this.panelY + this.panelH - 34,
+      Math.max(this.panelY + this.panelH - 58, statusY + status.height + 10),
+    );
     const buttonW = this.panelW - 24;
 
     if (owned && equipSlot && !isEquipped) {
