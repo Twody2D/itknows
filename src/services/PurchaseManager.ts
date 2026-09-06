@@ -9,6 +9,8 @@ import { SYSTEM_ACCESS_BUNDLE } from '@/data/shop/items';
 
 const CREDIT_PACK_BY_ID = new Map(CREDIT_PACKS.map((pack) => [pack.productId, pack]));
 const ENTITLEMENT_PRODUCT_IDS = new Set(['remove_ads', 'system_access']);
+/** One-time credits gift the shop's "БЕЗ РЕКЛАМЫ" offer advertises — granted once, alongside the entitlement itself. */
+const REMOVE_ADS_BONUS_CREDITS = 500;
 
 export type PurchaseResult = 'success' | 'failed';
 
@@ -96,6 +98,10 @@ class PurchaseManagerController {
 
     if (purchase.productID === 'remove_ads') {
       InventoryService.grantPremium('remove_ads');
+      // The shop showroom's "БЕЗ РЕКЛАМЫ" offer advertises this bonus — real,
+      // one-time, gated by the same purchase-token guard as the entitlement
+      // itself (`hasProcessedPurchase` above), never re-granted on restore.
+      CurrencyService.earnCredits(REMOVE_ADS_BONUS_CREDITS, 'purchase');
     } else if (purchase.productID === 'system_access') {
       InventoryService.grantPremium(SYSTEM_ACCESS_BUNDLE.premiumProductId);
       InventoryService.grantPremium('system_access');

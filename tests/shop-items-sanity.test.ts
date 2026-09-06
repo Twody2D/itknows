@@ -43,6 +43,14 @@ describe('SHOP_ITEMS sanity', () => {
     }
   });
 
+  it('the campaign-complete-locked core skin has no price/productId — not for sale', () => {
+    const core = SHOP_ITEMS.find((i) => i.id === 'core');
+    expect(core).toBeDefined();
+    expect(core!.unlockCondition).toEqual({ kind: 'campaign_complete' });
+    expect(core!.priceCredits).toBeUndefined();
+    expect(core!.productId).toBeUndefined();
+  });
+
   it('the SYSTEM ACCESS bundle exclusives exist as items but are not independently purchasable', () => {
     const skin = SHOP_ITEMS.find((i) => i.id === SYSTEM_ACCESS_BUNDLE.skin);
     const deathFx = SHOP_ITEMS.find((i) => i.id === SYSTEM_ACCESS_BUNDLE.deathFx);

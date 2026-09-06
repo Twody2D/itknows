@@ -50,11 +50,12 @@ export const PALETTE = {
   textMuted: 0xc9cee4,
   textDisabled: 0x4a5068,
 
-  /** Skin tones for `patrol`/`echo` (`data/shop/skinVisuals.ts`) — chosen to stay ≥24° apart in hue from every other visor and from the reserved danger red (design round 2, 2026-09-06). */
+  /** Skin tones for `patrol`/`echo`/`core` (`data/shop/skinVisuals.ts`) — chosen to stay ≥24° apart in hue from every other visor and from the reserved danger red (design round 2, 2026-09-06; `core` added for the shop showroom redesign, 2026-09-06). */
   patrolBody: 0x3e5a7a,
   patrolVisor: 0x5cff8a,
   echoBody: 0xb8c4e0,
   echoVisor: 0xff7de0,
+  coreVisor: 0x4d6fff,
 
   /** Muted blue-gray for small secondary labels (TIME/BEST/leaderboard captions) — distinct from `textMuted` (much lighter) and `systemMuted` (purple-shifted). `SectorCompleteScene`, design round 2. */
   labelMuted: 0x8a93b0,

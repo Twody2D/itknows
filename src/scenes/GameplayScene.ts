@@ -682,7 +682,7 @@ export class GameplayScene extends Phaser.Scene {
     this.resolving = true;
     GameState.registerDeath();
     this.hudAttemptsText.setPixelText(String(GameState.run.deaths));
-    this.fx.deathBurst(payload.x, payload.y, InventoryService.getEquipped('death_fx') as 'static' | 'glitch');
+    this.fx.deathBurst(payload.x, payload.y, InventoryService.getEquipped('death_fx') as 'static' | 'glitch' | 'data_wipe');
     this.trailFx?.onPlayerDeath(this);
     playSfx('death');
 

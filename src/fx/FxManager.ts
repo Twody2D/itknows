@@ -91,18 +91,28 @@ export class FxManager {
    * settles within the death-restart budget (CLAUDE.md #5, < 700ms total).
    * `variant` is a purely cosmetic shop unlock (`InventoryService`'s
    * `death_fx` slot) — `static` is this exact effect, unchanged; `glitch`
-   * layers on two extra, wider glitch-slice passes. Neither variant touches
-   * timing or the death itself, only what it looks like.
+   * layers on two extra, wider glitch-slice passes; `data_wipe` (SYSTEM
+   * ACCESS bundle exclusive) goes further still — a bigger burst and a held
+   * white flash, matching its "full wipe" billing instead of quietly
+   * behaving like `static` (shop showroom redesign, 2026-09-06 — the bundle
+   * previously granted this variant with no distinct effect of its own).
+   * Neither variant touches timing or the death itself, only what it looks
+   * like.
    */
-  deathBurst(x: number, y: number, variant: 'static' | 'glitch' = 'static'): void {
-    if (FxSettings.particlesEnabled) this.deathEmitter.explode(14, x, y);
-    this.flash(x, y, PALETTE.danger, 0.22);
+  deathBurst(x: number, y: number, variant: 'static' | 'glitch' | 'data_wipe' = 'static'): void {
+    if (FxSettings.particlesEnabled) this.deathEmitter.explode(variant === 'data_wipe' ? 22 : 14, x, y);
+    this.flash(x, y, variant === 'data_wipe' ? PALETTE.white : PALETTE.danger, variant === 'data_wipe' ? 0.34 : 0.22);
     this.glitchSlice(x, y);
     if (variant === 'glitch') {
       this.glitchSlice(x, y - 4, 6);
       this.glitchSlice(x, y + 4, 9);
     }
-    this.shake(140, 0.006);
+    if (variant === 'data_wipe') {
+      this.glitchSlice(x, y - 5, 11);
+      this.glitchSlice(x, y + 5, 14);
+      this.glitchSlice(x, y, 18);
+    }
+    this.shake(140, variant === 'data_wipe' ? 0.01 : 0.006);
   }
 
   victoryBurst(x: number, y: number): void {

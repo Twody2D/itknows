@@ -11,6 +11,8 @@ export interface DomTextOptions {
   bold?: boolean;
   /** Uppercases visually only — so the i18n dictionary keeps ordinary sentence case ("Играть") and stays reusable by screens that don't shout. */
   uppercase?: boolean;
+  /** Hard-clips to this many lines (CSS line-clamp) instead of letting a long description grow the box — for a fixed-height legend slot (shop showroom card/detail panel) where overflow must never push a sibling element down. */
+  clampLines?: number;
 }
 
 export interface DomTextHandle {
@@ -176,6 +178,17 @@ export class DomTextOverlay {
     el.style.whiteSpace = opts.wordWrapWidth ? 'normal' : 'pre';
     el.style.wordBreak = 'break-word';
     el.style.maxWidth = opts.wordWrapWidth !== undefined ? `${opts.wordWrapWidth * scaleY}px` : '';
+
+    if (opts.clampLines !== undefined) {
+      el.style.display = '-webkit-box';
+      el.style.setProperty('-webkit-line-clamp', String(opts.clampLines));
+      el.style.setProperty('-webkit-box-orient', 'vertical');
+      el.style.overflow = 'hidden';
+    } else {
+      el.style.overflow = '';
+      el.style.removeProperty('-webkit-line-clamp');
+      el.style.removeProperty('-webkit-box-orient');
+    }
 
     if (opts.strokeColor) {
       // A thin hairline relative to the *rendered* font size, not the small

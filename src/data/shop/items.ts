@@ -7,11 +7,12 @@ export type ShopRarity = 'common' | 'rare' | 'premium';
 
 /**
  * `unlockCondition` is typed now for future secret/achievement-gated items
- * (master-prompt §28) but nothing in this vertical slice sets it — no
- * achievement/Daily-Challenge infra exists yet to back a real condition, and
- * a fake one would violate §28's own "never use fake purchases" honesty
- * rule. Every item below is either free-by-default, credits-purchasable, or
- * a real Yandex product.
+ * (master-prompt §28) — `achievement`/`daily_challenge` still have no
+ * achievement/Daily-Challenge infra to back a real condition, so nothing
+ * sets those (a fake one would violate §28's own "never use fake purchases"
+ * honesty rule). `campaign_complete` is real: the shop showroom redesign
+ * (2026-09-06) gates the `core` skin on `SaveService.getCompletedLevels()`
+ * already covering every level (`ShopScene`'s own check), no new save field.
  */
 export interface ShopItem {
   id: string;
@@ -23,7 +24,7 @@ export interface ShopItem {
   /** Yandex product id — omitted for a credits-only cosmetic. */
   productId?: string;
   rarity?: ShopRarity;
-  unlockCondition?: { kind: 'achievement' | 'daily_challenge'; id: string };
+  unlockCondition?: { kind: 'achievement' | 'daily_challenge'; id: string } | { kind: 'campaign_complete' };
 }
 
 /**
@@ -69,6 +70,17 @@ export const SHOP_ITEMS: ShopItem[] = [
     descriptionKey: 'shopSkinEchoDesc',
     priceCredits: 220,
     rarity: 'premium',
+  },
+  // Locked until every level in the campaign is completed — a real,
+  // already-tracked stat (`SaveService.getCompletedLevels()`), never a fake
+  // purchase (CLAUDE.md #12). No price/productId: not for sale.
+  {
+    id: 'core',
+    category: 'character',
+    nameKey: 'shopSkinCore',
+    descriptionKey: 'shopSkinCoreDesc',
+    rarity: 'premium',
+    unlockCondition: { kind: 'campaign_complete' },
   },
 
   // DEATH FX
