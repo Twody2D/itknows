@@ -35,11 +35,13 @@ import { selectVariant } from '@/ai/DifficultyDirector';
 import { Commentator } from '@/ai/Commentator';
 import { SystemVoice } from '@/ai/SystemVoice';
 import { personalityTag } from '@/ai/SystemPersonality';
-import { isSectorFinale } from '@/gameplay/sectors';
+import { isSectorFinale, sectorNumberOf } from '@/gameplay/sectors';
 import type { SectorCompleteData } from '@/scenes/SectorCompleteScene';
 import { TutorialHints } from '@/ui/TutorialHints';
 import { fadeIn } from '@/ui/SceneFade';
 import { MIN_VIRTUAL_WIDTH, TILE_SIZE } from '@/config/display';
+import { formatMmSs } from '@/utils/formatTime';
+import { t } from '@/i18n/ui';
 
 const SYSTEM_COMMENT_DISPLAY_MS = 3800;
 /**
@@ -109,8 +111,16 @@ export class GameplayScene extends Phaser.Scene {
   private ghostSprite: GhostSprite | null = null;
   private trailFx: TrailFx | null = null;
 
-  private hudDeathsText!: PixelLabel;
+  private hudTimeText!: PixelLabel;
+  private hudAttemptsText!: PixelLabel;
   private hudSystemText!: PixelLabel;
+  private hudSystemPill!: Phaser.GameObjects.Graphics;
+  /** Last whole second shown on the HUD clock — `PixelLabel.setPixelText` rebuilds a canvas texture per call, so the live timer is throttled to once a second (CLAUDE.md #9) instead of following `attemptElapsedMs`'s tenths every frame. */
+  private hudLastShownSeconds = -1;
+  private hudProgressTrackX = 0;
+  private hudProgressTrackW = 0;
+  private hudProgressFill!: Phaser.GameObjects.Rectangle;
+  private hudProgressMarker!: Phaser.GameObjects.Rectangle;
   /** Best-effort "which trap probably did this" — `Player.kill()` only carries a cause, not a trap id (see BehaviorTracker's doc comment for the same limitation). */
   private lastTriggeredTrapId: string | null = null;
 
@@ -424,7 +434,17 @@ export class GameplayScene extends Phaser.Scene {
 
     const voiceText = SystemVoice.current();
     const rendered = voiceText ? `${this.systemLabel()}: ${voiceText}` : '';
-    if (this.hudSystemText.pixelText !== rendered) this.hudSystemText.setPixelText(rendered);
+    if (this.hudSystemText.pixelText !== rendered) {
+      this.hudSystemText.setPixelText(rendered);
+      this.refreshSystemPill();
+    }
+
+    const shownSeconds = Math.floor(attemptElapsedMs / 1000);
+    if (shownSeconds !== this.hudLastShownSeconds) {
+      this.hudLastShownSeconds = shownSeconds;
+      this.hudTimeText.setPixelText(formatMmSs(attemptElapsedMs));
+    }
+    if (this.player.isAlive()) this.updateProgressBar();
   }
 
   /** Nudges the player by a moving platform's per-frame delta while standing on it. */
@@ -450,30 +470,69 @@ export class GameplayScene extends Phaser.Scene {
     this.withUiCamera(() => this.buildHudObjects());
   }
 
+  /**
+   * Design round 4h: one compact strip (time + attempt count) instead of the
+   * old 168×56 panel with a red "DEATHS N" — a dying counter in the game's
+   * one danger color read as "you already lost" rather than "the process is
+   * working" (master-prompt's own framing of death, CLAUDE.md #4/§this
+   * scene's own class doc). The level/sector name drops to a small caption
+   * under the strip instead of leading it — it's orientation, not the thing
+   * a player needs to read every second.
+   *
+   * The in-level "chips" counter from the same design pass is deliberately
+   * not built: it assumes a collectible-pickup mechanic that doesn't exist
+   * anywhere in this game yet (CLAUDE.md #12 — no placeholder content).
+   */
   private buildHudObjects(): void {
-    // VISUAL RESET v1 #11/#12: HUD text at 2x the old scale — "LEVEL 01" and
-    // the deaths counter have to read instantly, not just be technically
-    // present. Panel grows to fit the bigger glyphs without crowding them.
-    const panelW = 168;
-    const panelH = 56;
-    const panel = this.add.graphics().setScrollFactor(0).setDepth(899);
-    panel.fillStyle(PALETTE.bgVoid, 0.6);
-    panel.fillRect(0, 0, panelW, panelH);
-    panel.fillStyle(PALETTE.cyanDim, 0.7);
-    panel.fillRect(0, 0, panelW, 2);
+    const stripX = 8;
+    const stripY = 8;
+    const stripH = 22;
+    const stripW = 104;
 
-    new PixelLabel(this, 8, 6, this.levelDef.name, {
-      color: hexToCss(PALETTE.white),
+    const strip = this.add.graphics().setScrollFactor(0).setDepth(899);
+    strip.fillStyle(PALETTE.bgVoid, 0.75);
+    strip.fillRect(stripX, stripY, stripW, stripH);
+    strip.lineStyle(1, PALETTE.cyanDim, 1);
+    strip.strokeRect(stripX + 0.5, stripY + 0.5, stripW - 1, stripH - 1);
+
+    this.hudTimeText = new PixelLabel(this, stripX + 8, stripY + stripH / 2, formatMmSs(0), {
+      color: hexToCss(PALETTE.cyan),
       strokeColor: hexToCss(PALETTE.outline),
-      scale: 2,
+      scale: 1,
+    })
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0)
+      .setDepth(900);
+
+    strip.lineStyle(1, PALETTE.cyanDim, 1);
+    strip.lineBetween(stripX + 52, stripY + 4, stripX + 52, stripY + stripH - 4);
+
+    const attemptIcon = this.add.graphics().setScrollFactor(0).setDepth(900);
+    attemptIcon.lineStyle(1.5, PALETTE.dangerAlt, 1);
+    attemptIcon.strokeRect(stripX + 60, stripY + stripH / 2 - 4, 8, 8);
+
+    this.hudAttemptsText = new PixelLabel(this, stripX + 74, stripY + stripH / 2, String(GameState.run.deaths), {
+      color: hexToCss(PALETTE.dangerAlt),
+      strokeColor: hexToCss(PALETTE.outline),
+      scale: 1,
+    })
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0)
+      .setDepth(900);
+
+    const sectorLabel = `${t('resultSectorLabel').toUpperCase()} ${String(sectorNumberOf(this.levelDef.id)).padStart(2, '0')} · ${this.levelDef.name.toUpperCase()}`;
+    new PixelLabel(this, stripX, stripY + stripH + 4, sectorLabel, {
+      color: hexToCss(PALETTE.labelMuted),
+      strokeColor: hexToCss(PALETTE.outline),
+      scale: 1,
     })
       .setScrollFactor(0)
       .setDepth(900);
 
-    // SYSTEM presence — a small always-on pulsing dot next to the level name,
-    // distinct from the transient commentary line below (§13: SYSTEM should
-    // feel like a character that's always watching, not just a text log).
-    const systemDot = this.add.circle(panelW - 14, 15, 4, PALETTE.system, 1).setScrollFactor(0).setDepth(900);
+    // SYSTEM presence — a small always-on pulsing dot, distinct from the
+    // transient commentary pill below (§13: SYSTEM should feel like a
+    // character that's always watching, not just a text log).
+    const systemDot = this.add.circle(stripX + stripW + 14, stripY + stripH / 2, 4, PALETTE.system, 1).setScrollFactor(0).setDepth(900);
     this.tweens.add({
       targets: systemDot,
       alpha: { from: 0.5, to: 1 },
@@ -483,29 +542,53 @@ export class GameplayScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
 
-    this.hudDeathsText = new PixelLabel(this, 8, 30, `DEATHS ${GameState.run.deaths}`, {
-      color: hexToCss(PALETTE.danger),
-      strokeColor: hexToCss(PALETTE.outline),
-      scale: 2,
-    })
+    // Level-progress bar (real data: player x / this.level.worldWidth,
+    // same fraction `Commentator.commentOnDeath` already uses) — centered so
+    // it stays clear of both the strip and the pause button across the
+    // 480-620 floating-width range (master-prompt §2).
+    this.hudProgressTrackW = Math.min(240, this.scale.width - 160);
+    this.hudProgressTrackX = this.scale.width / 2 - this.hudProgressTrackW / 2;
+    const trackY = 15;
+
+    this.add
+      .rectangle(this.hudProgressTrackX, trackY, this.hudProgressTrackW, 6, PALETTE.metalEdge, 0.7)
+      .setOrigin(0, 0.5)
+      .setScrollFactor(0)
+      .setDepth(899);
+    this.hudProgressFill = this.add
+      .rectangle(this.hudProgressTrackX, trackY, 0, 6, PALETTE.cyan, 1)
+      .setOrigin(0, 0.5)
       .setScrollFactor(0)
       .setDepth(900);
+    this.hudProgressMarker = this.add
+      .rectangle(this.hudProgressTrackX, trackY, 3, 12, PALETTE.white, 1)
+      .setOrigin(0.5, 0.5)
+      .setScrollFactor(0)
+      .setDepth(901);
+    this.add
+      .rectangle(this.hudProgressTrackX + this.hudProgressTrackW, trackY, 6, 10, PALETTE.reward, 1)
+      .setOrigin(0.5, 0.5)
+      .setScrollFactor(0)
+      .setDepth(900);
+    this.updateProgressBar();
+
+    this.hudSystemPill = this.add.graphics().setScrollFactor(0).setDepth(899).setVisible(false);
 
     const initialVoiceText = SystemVoice.current();
     this.hudSystemText = new PixelLabel(
       this,
-      8,
-      this.scale.height - 8,
+      16,
+      this.scale.height - 12,
       initialVoiceText ? `${this.systemLabel()}: ${initialVoiceText}` : '',
       {
-        color: hexToCss(PALETTE.system),
+        color: hexToCss(PALETTE.systemLight),
         strokeColor: hexToCss(PALETTE.outline),
-        // Deliberately smaller than the title/deaths counter above — a full
-        // SYSTEM sentence at scale 2 could wrap to 2-3 lines and dominate the
-        // whole bottom of the screen right after a death. Scale 1 plus the
-        // longer display window above reads as a caption, not a billboard.
+        // Deliberately smaller than the strip above — a full SYSTEM sentence
+        // at a bigger scale could wrap to 2-3 lines and dominate the whole
+        // bottom of the screen right after a death. Scale 1 plus the longer
+        // display window above reads as a caption, not a billboard.
         scale: 1,
-        wordWrapWidth: this.scale.width - 16,
+        wordWrapWidth: this.scale.width - 32,
       },
     )
       // Bottom-anchored (not top-left) so a 2-line SYSTEM line grows upward
@@ -514,6 +597,7 @@ export class GameplayScene extends Phaser.Scene {
       .setOrigin(0, 1)
       .setScrollFactor(0)
       .setDepth(900);
+    this.refreshSystemPill();
 
     new PixelButton(this, this.scale.width - 24, 24, 'II', {
       width: 36,
@@ -526,6 +610,36 @@ export class GameplayScene extends Phaser.Scene {
 
     this.touchControls = new TouchControls(this, this.inputState);
     this.touchControls.setVisible(isTouchDevice());
+  }
+
+  /** Redraws the SYSTEM-line pill to fit whatever `hudSystemText` currently renders — called only when the text itself changes, never per-frame (same rebuild-cost reasoning as `hudLastShownSeconds`). */
+  private refreshSystemPill(): void {
+    this.hudSystemPill.clear();
+    if (this.hudSystemText.pixelText === '') {
+      this.hudSystemPill.setVisible(false);
+      return;
+    }
+
+    const padX = 8;
+    const padY = 5;
+    const w = this.hudSystemText.width + padX * 2;
+    const h = this.hudSystemText.height + padY * 2;
+    const x = this.hudSystemText.x - padX;
+    const y = this.hudSystemText.y - h + padY;
+
+    this.hudSystemPill.fillStyle(PALETTE.systemDim, 0.55);
+    this.hudSystemPill.fillRect(x, y, w, h);
+    this.hudSystemPill.fillStyle(PALETTE.system, 1);
+    this.hudSystemPill.fillRect(x, y, 2, h);
+    this.hudSystemPill.setVisible(true);
+  }
+
+  /** Fill width + "you are here" marker from real player position — `Graphics`/`Rectangle` resizing is a property mutation, not a texture rebuild, so (unlike `PixelLabel`) this is cheap enough to run every frame. */
+  private updateProgressBar(): void {
+    const fraction = Phaser.Math.Clamp(this.player.x / this.level.worldWidth, 0, 1);
+    const fillW = this.hudProgressTrackW * fraction;
+    this.hudProgressFill.width = fillW;
+    this.hudProgressMarker.x = this.hudProgressTrackX + fillW;
   }
 
   /**
@@ -567,7 +681,7 @@ export class GameplayScene extends Phaser.Scene {
     if (this.resolving) return;
     this.resolving = true;
     GameState.registerDeath();
-    this.hudDeathsText.setPixelText(`DEATHS ${GameState.run.deaths}`);
+    this.hudAttemptsText.setPixelText(String(GameState.run.deaths));
     this.fx.deathBurst(payload.x, payload.y, InventoryService.getEquipped('death_fx') as 'static' | 'glitch');
     this.trailFx?.onPlayerDeath(this);
     playSfx('death');
