@@ -73,6 +73,54 @@ const SHOP_LINES: Record<ShopCommentKind, DialogueLine[]> = {
   ],
 };
 
+/**
+ * SYSTEM's opinion on one specific item, keyed by `SHOP_ITEMS` id. The mockup
+ * shows the panel reacting to whatever is selected, not to the category — one
+ * shared line per category made the column look broken while the player
+ * clicked through six skins. One line each, so the reaction is stable rather
+ * than a slot machine: the player is comparing items, and a text that keeps
+ * changing under a fixed selection reads as noise.
+ */
+const SHOP_ITEM_LINES: Record<string, DialogueLine> = {
+  default: { id: 'shop-item-default', ru: 'Заводской корпус. С него все начинают.', en: 'Factory chassis. Everyone starts here.' },
+  void: { id: 'shop-item-void', ru: 'Тёмный. Тебя всё равно видно по следу.', en: 'Dark. Your trail still gives you away.' },
+  signal: { id: 'shop-item-signal', ru: 'Яркий визор. Шипы это не впечатляет.', en: 'A bright visor. Spikes are unimpressed.' },
+  patrol: { id: 'shop-item-patrol', ru: 'Зелёный. Неожиданно разумный выбор.', en: 'Green. An unexpectedly sensible choice.' },
+  echo: { id: 'shop-item-echo', ru: 'Дорогой корпус. Прыгать он не помогает.', en: 'An expensive shell. It will not jump for you.' },
+  core: { id: 'shop-item-core', ru: 'То, что остаётся после пятого сектора.', en: 'What is left after sector five.' },
+  error404: { id: 'shop-item-error404', ru: 'Этого корпуса в списке нет. И всё же он тут.', en: 'This chassis is not in the list. It is here anyway.' },
+
+  data_trail: { id: 'shop-item-data_trail', ru: 'След из данных. Как будто мне сложно тебя найти.', en: 'A data trail. As if finding you were hard.' },
+  launch: { id: 'shop-item-launch', ru: 'Выхлоп вниз. Физика та же, шума больше.', en: 'Exhaust downward. Same physics, more noise.' },
+  interference: { id: 'shop-item-interference', ru: 'Помехи. Мне они не мешают.', en: 'Interference. It does not bother me.' },
+  beep7: { id: 'shop-item-beep7', ru: 'Дрон. Он летит за тобой, а не наоборот.', en: 'A drone. It follows you, not the reverse.' },
+
+  static: { id: 'shop-item-static', ru: 'Базовый распад. Ты его уже знаешь.', en: 'The default decay. You know it already.' },
+  glitch: { id: 'shop-item-glitch', ru: 'Сбой вместо конца. Красиво врёшь себе.', en: 'A glitch instead of an end. A pretty lie.' },
+  data_wipe: { id: 'shop-item-data_wipe', ru: 'Полная очистка. Драматично для одной попытки.', en: 'A full wipe. Dramatic for one attempt.' },
+
+  standard: { id: 'shop-item-standard', ru: 'Мой обычный тон. Он тебе уже привычен.', en: 'My usual tone. You are used to it.' },
+  cold: { id: 'shop-item-cold', ru: 'Суше. Короче. Тебе может понравиться.', en: 'Drier. Shorter. You might prefer it.' },
+  corrupted: { id: 'shop-item-corrupted', ru: 'Этот голос ещё не настроен.', en: 'This voice is not tuned yet.' },
+
+  remove_ads: { id: 'shop-item-remove_ads', ru: 'Рекламу придумали не мы. Но убрать её можем.', en: 'We did not invent ads. We can remove them.' },
+  system_access: { id: 'shop-item-system_access', ru: 'Доступ к тому, чего в списке быть не должно.', en: 'Access to what should not be on the list.' },
+};
+
+/**
+ * Emits SYSTEM's line for the selected item, falling back to the category
+ * line when an item has none yet — a new cosmetic must never leave the panel
+ * blank.
+ */
+export function commentOnShopItem(itemId: string, fallback: ShopCommentKind): void {
+  const line = SHOP_ITEM_LINES[itemId];
+  if (!line) {
+    commentOnShop(fallback);
+    return;
+  }
+  EventBus.emit('system:comment', { text: line[LocaleState.current], category: 'shop' });
+}
+
 const usedByKind = new Map<ShopCommentKind, Set<string>>();
 
 /** Same shuffle-bag idea as `Commentator` (no repeat until the pool cycles), kept independent since this isn't death commentary. */

@@ -7,6 +7,7 @@ import { DomTextOverlay } from '@/ui/DomTextOverlay';
 import type { DomTextHandle } from '@/ui/DomTextOverlay';
 import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
 import { fadeIn } from '@/ui/SceneFade';
+import { PixelLabel } from '@/ui/PixelLabel';
 import { attachEscape } from '@/ui/ScreenChrome';
 import { playSfx } from '@/audio/SfxManager';
 import { EventBus } from '@/core/EventBus';
@@ -22,7 +23,7 @@ import { SHOP_ITEMS } from '@/data/shop/items';
 import type { ShopCategory, ShopItem, ShopRarity } from '@/data/shop/items';
 import { CREDIT_PACKS } from '@/data/shop/creditPacks';
 import { EARN_AMOUNTS } from '@/data/shop/economy';
-import { commentOnShop } from '@/data/dialogues/shop';
+import { commentOnShop, commentOnShopItem } from '@/data/dialogues/shop';
 import type { ShopCommentKind } from '@/data/dialogues/shop';
 import { playerTexturePrefix, skinColorsFor } from '@/data/shop/skinVisuals';
 import { PHYSICS } from '@/config/physics';
@@ -87,8 +88,6 @@ const INVENTORY_CATEGORY: Partial<Record<ShopCategory, InventoryCategory>> = {
 const TOPBAR_H = 28;
 const RAIL_W = 64;
 const GRID_X = 70;
-const DETAIL_X = 330;
-const DETAIL_W = 146;
 const DETAIL_TOP = 32;
 const DETAIL_H = 206;
 const PREVIEW_TOP = 56;
@@ -101,12 +100,20 @@ const NAME_Y = 132;
 const DESC_TOP = 146;
 const STATUS_Y = 180;
 const CHAR_BOX_H = 84;
-const BTN_X = DETAIL_X + 6;
-const BTN_W = DETAIL_W - 12;
 const BTN_TOP = 196;
 const BTN_H = 36;
-const RIGHT_COL_X = 492;
-const RIGHT_COL_MIN_W = 80;
+/**
+ * The mockup's own geometry at its full 620px canvas: fitting panel at 330
+ * (146 wide) and SYSTEM's column at 492. Below that width the three blocks
+ * are squeezed rather than dropped — the owner's call after SYSTEM's line
+ * disappeared entirely on a 480px canvas, which is the one element the game
+ * is named after.
+ */
+const WIDE_DETAIL_X = 330;
+const WIDE_DETAIL_W = 146;
+const WIDE_SYS_X = 492;
+const MIN_SYS_W = 86;
+const MIN_DETAIL_W = 126;
 const DEATH_PREVIEW_INTERVAL_MS = 1600;
 /**
  * The test run hops often and lands hard on purpose: LAUNCH only emits on a
@@ -118,7 +125,14 @@ const DEATH_PREVIEW_INTERVAL_MS = 1600;
 const TRAIL_JUMP_INTERVAL_MS = 800;
 const TRAIL_JUMP_SPEED = 300;
 const TRAIL_GRAVITY = 2000;
-const TRAIL_RUN_SPEED = PHYSICS.moveSpeed;
+/**
+ * Half the real run speed. The stage is 130px wide against a level's several
+ * thousand, so a runner moving at `PHYSICS.moveSpeed` crosses it three times
+ * a second and reads as a twitch rather than a run (owner's call after
+ * watching it). The trail's own spacing is set by this speed, so the preview
+ * shows a slightly denser trail than play — the trade the owner picked.
+ */
+const TRAIL_RUN_SPEED = PHYSICS.moveSpeed * 0.5;
 const TRAIL_SPRITE_SCALE = 0.7;
 /**
  * The floor sits inside the stage rather than on its bottom edge, and the
@@ -184,10 +198,17 @@ export class ShopScene extends Phaser.Scene {
   private content: Disposable[] = [];
   private railHandles: RailHandle[] = [];
   private domText!: DomTextOverlay;
-  private walletLabel!: DomTextHandle;
-  private titleLabel!: DomTextHandle;
-  private subtitleLabel: DomTextHandle | null = null;
-  private systemLineLabel: DomTextHandle | null = null;
+  private walletLabel!: PixelLabel;
+  /** Width-dependent columns — see `WIDE_DETAIL_X` and `layout()`. */
+  private detailX = WIDE_DETAIL_X;
+  private detailW = WIDE_DETAIL_W;
+  private sysX = WIDE_SYS_X;
+  private sysW = 120;
+  private btnX = WIDE_DETAIL_X + 6;
+  private btnW = WIDE_DETAIL_W - 12;
+  private titleLabel!: PixelLabel;
+  private subtitleLabel: PixelLabel | null = null;
+  private systemLineLabel: PixelLabel | null = null;
   private systemLineText = '';
 
   private trailPreview: TrailPreview | null = null;
@@ -199,7 +220,7 @@ export class ShopScene extends Phaser.Scene {
     super('ShopScene');
   }
 
-  create(): void {
+  create(data?: { category?: ShopCategory }): void {
     const { width, height } = this.scale;
 
     // The scene instance is reused every time the player reopens the shop
@@ -210,6 +231,14 @@ export class ShopScene extends Phaser.Scene {
     this.content = [];
     this.previewFx = null;
     this.view = 'main';
+    // Launched from the menu's "change skin" tile, the shop has to open on
+    // skins — not on whatever tab the last visit happened to end on.
+    if (data?.category) {
+      const index = CATEGORIES.indexOf(data.category);
+      if (index >= 0) this.categoryIndex = index;
+    }
+
+    this.layout(width);
 
     buildRadialGridBackdrop(this, width, height, 'shop-backdrop', 0.55, 0.3);
     fadeIn(this);
@@ -237,6 +266,27 @@ export class ShopScene extends Phaser.Scene {
     void this.loadCatalog();
     this.renderCategory();
     commentOnShop('open');
+  }
+
+  /**
+   * The mockup's columns at 620px, squeezed proportionally below it. SYSTEM's
+   * column keeps a floor of `MIN_SYS_W` and the fitting panel gives up 20px
+   * before the card grid pays for the rest, so the commentary is always on
+   * screen at any width the game supports.
+   */
+  private layout(width: number): void {
+    if (width >= WIDE_SYS_X + 8 + MIN_SYS_W + 24) {
+      this.detailX = WIDE_DETAIL_X;
+      this.detailW = WIDE_DETAIL_W;
+      this.sysX = WIDE_SYS_X;
+    } else {
+      this.detailW = MIN_DETAIL_W;
+      this.sysX = width - 8 - MIN_SYS_W;
+      this.detailX = this.sysX - 8 - this.detailW;
+    }
+    this.sysW = width - 8 - this.sysX;
+    this.btnX = this.detailX + 6;
+    this.btnW = this.detailW - 12;
   }
 
   override update(_time: number, delta: number): void {
@@ -270,26 +320,12 @@ export class ShopScene extends Phaser.Scene {
       else this.backToMain();
     });
 
-    this.titleLabel = this.domText.add(
-      36,
-      14,
-      t('shop'),
-      { color: hexToCss(PALETTE.white), strokeColor: hexToCss(PALETTE.outline), sizePx: 17, bold: true, uppercase: true },
-      0,
-      0.5,
-    );
+    this.titleLabel = this.pixel(36, 14, t('shop'), PALETTE.white, 2);
 
     const walletW = 116;
     const walletX = width - 8 - walletW;
     if (walletX >= 150) {
-      this.subtitleLabel = this.domText.add(
-        142,
-        15,
-        t('shopTitle'),
-        { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9 },
-        0,
-        0.5,
-      );
+      this.subtitleLabel = this.pixel(142, 15, t('shopTitle'), PALETTE.labelMuted, 1);
     }
 
     const wallet = this.add.graphics();
@@ -304,14 +340,7 @@ export class ShopScene extends Phaser.Scene {
     wallet.fillRect(walletX + walletW - 15, 11, 3, 7);
     wallet.fillRect(walletX + walletW - 17, 13, 7, 3);
 
-    this.walletLabel = this.domText.add(
-      walletX + 24,
-      14,
-      this.balanceText(),
-      { color: hexToCss(PALETTE.reward), strokeColor: hexToCss(PALETTE.outline), sizePx: 14, bold: true },
-      0,
-      0.5,
-    );
+    this.walletLabel = this.pixel(walletX + 24, 14, this.balanceText(), PALETTE.reward, 2);
 
     const walletZone = this.add.zone(walletX + walletW / 2, 14, walletW, 20).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
     walletZone.on('pointerup', () => {
@@ -320,12 +349,39 @@ export class ShopScene extends Phaser.Scene {
     });
   }
 
+  /**
+   * The mockup sets every technical label — titles, counters, prices, SYSTEM's
+   * own voice — in a pixel typeface and only the prose in a proportional one.
+   * This is that first half: the project's own bitmap font (`art/font`), whose
+   * glyphs are hard pixels and therefore stay crisp through the canvas's
+   * nearest-neighbour upscale. Sizes map to the only scales a bitmap font has:
+   * 9-12px -> 1, 15-19px -> 2, 22-26px -> 3.
+   */
+  private pixel(
+    x: number,
+    y: number,
+    text: string,
+    color: number,
+    scale: number,
+    originX = 0,
+    originY = 0.5,
+    track = false,
+  ): PixelLabel {
+    const label = new PixelLabel(this, Math.round(x), Math.round(y), text, {
+      color: hexToCss(color),
+      scale,
+    });
+    label.setOrigin(originX, originY);
+    if (track) this.content.push(label);
+    return label;
+  }
+
   private balanceText(): string {
     return String(CurrencyService.getBalance());
   }
 
   private refreshBalance(): void {
-    this.walletLabel.setText(this.balanceText());
+    this.walletLabel.setPixelText(this.balanceText());
   }
 
   private async loadCatalog(): Promise<void> {
@@ -350,22 +406,29 @@ export class ShopScene extends Phaser.Scene {
   }
 
   /**
-   * The mockup's tick: not a drawn stroke but an "L" of two 2px bars rotated
-   * -45deg (`border-left`/`border-bottom` + `transform:rotate(-45deg)`). A
-   * stroked polyline gave the corner a mitre and antialiased both ends, which
-   * on a pixel-art surface read as a smudge rather than a mark.
+   * The mockup's tick is a CSS border pair rotated -45deg, which the browser
+   * renders at device resolution. Reproducing that literally — a rotated
+   * `fillRect` — puts antialiased grey along both edges of a shape that is
+   * then blown up by the canvas's nearest-neighbour upscale, and it read as a
+   * smudge. Drawn instead as pixel art: a 7x6 staircase on whole pixels, the
+   * same way the bitmap font's own glyphs are built.
    */
   private drawCheck(g: Phaser.GameObjects.Graphics, cx: number, cy: number, size: number, color: number): void {
-    const long = size * 1.8;
-    const short = size * 1.1;
-    const th = Math.max(2, Math.round(size * 0.5));
+    const u = Math.max(1, Math.round(size / 3));
+    const left = Math.round(cx - u * 3.5);
+    const top = Math.round(cy - u * 3);
     g.fillStyle(color, 1);
-    g.save();
-    g.translateCanvas(cx, cy);
-    g.rotateCanvas(-Math.PI / 4);
-    g.fillRect(-long / 2, short / 2 - th, long, th);
-    g.fillRect(-long / 2, -short / 2, th, short);
-    g.restore();
+    // column x-offset -> (y-offset, height), in units of `u`
+    const steps: [number, number, number][] = [
+      [0, 3, 2],
+      [1, 4, 2],
+      [2, 5, 1],
+      [3, 4, 1],
+      [4, 2, 2],
+      [5, 1, 2],
+      [6, 0, 2],
+    ];
+    for (const [dx, dy, h] of steps) g.fillRect(left + dx * u, top + dy * u, u, h * u);
   }
 
   private drawLockGlyph(g: Phaser.GameObjects.Graphics, cx: number, cy: number): void {
@@ -502,7 +565,8 @@ export class ShopScene extends Phaser.Scene {
     if (this.categoryIndex === index) return;
     this.categoryIndex = index;
     this.renderCategory();
-    commentOnShop(CATEGORY_COMMENT[this.currentCategory()]);
+    const category = this.currentCategory();
+    commentOnShopItem(this.selectedItem(category).id, CATEGORY_COMMENT[category]);
   }
 
   private currentCategory(): ShopCategory {
@@ -598,29 +662,33 @@ export class ShopScene extends Phaser.Scene {
     const selected = this.selectedItem(category);
 
     const owned = items.filter((item) => this.isOwned(item)).length;
-    const header = this.domText.add(
+    this.pixel(
       GRID_X,
-      31,
+      36,
       `${t(CATEGORY_LABEL[category])} · ${owned} ${t('shopOf')} ${items.length} ${t('shopUnlockedSuffix')}`,
-      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9 },
+      PALETTE.labelMuted,
+      1,
       0,
-      0,
+      0.5,
+      true,
     );
-    this.content.push(header);
 
-    const cols = items.length > 4 ? 3 : 2;
-    const cardW = cols === 3 ? 78 : 120;
-    const gapX = cols === 3 ? 9 : 10;
+    // The grid takes whatever the rail, the fitting panel and SYSTEM's column
+    // leave. At the mockup's 620px that works out to its own 78px cards in
+    // three columns; on a narrower canvas it drops to two rather than
+    // shrinking every card into illegibility.
+    const gridW = this.detailX - 8 - GRID_X;
+    const gapX = 9;
     const gapY = 8;
+    const wide = Math.floor((gridW - gapX * 2) / 3);
+    const cols = items.length > 4 && wide >= 70 ? 3 : 2;
+    const cardW = Math.floor((gridW - gapX * (cols - 1)) / cols);
     const gridTop = 46;
     const rows = Math.ceil(items.length / cols);
     // `character` can grow past 6 items (ERROR 404 from the SYSTEM ACCESS
     // bundle plus the campaign-locked CORE) — shrink the row instead of
     // letting a third row run off the fixed 270px canvas.
-    // Reserve the bottom strip whenever SYSTEM has to live there instead of
-    // in the right-hand column.
-    const bottom = this.scale.height - (this.hasRightColumn() ? 6 : 40);
-    const cardH = Math.min(92, Math.floor((bottom - gridTop - (rows - 1) * gapY) / rows));
+    const cardH = Math.min(92, Math.floor((this.scale.height - gridTop - 6 - (rows - 1) * gapY) / rows));
 
     items.forEach((item, i) => {
       const x = GRID_X + (i % cols) * (cardW + gapX);
@@ -691,17 +759,9 @@ export class ShopScene extends Phaser.Scene {
     if (unlocked && item.rarity === 'premium') {
       const flag = this.add.graphics();
       flag.fillStyle(PALETTE.echoVisor, 1);
-      flag.fillRect(x + 1, y + 1, 24, 10);
+      flag.fillRect(x + 1, y + 1, 26, 11);
       this.content.push(flag);
-      const flagLabel = this.domText.add(
-        x + 13,
-        y + 6,
-        t('shopRarityPremium'),
-        { color: hexToCss(PALETTE.bgVoid), strokeColor: hexToCss(PALETTE.outline), sizePx: 8, bold: true },
-        0.5,
-        0.5,
-      );
-      this.content.push(flagLabel);
+      this.pixel(x + 14, y + 7, t('shopRarityPremium'), PALETTE.bgVoid, 1, 0.5, 0.5, true);
     }
 
     const labelX = centered ? x + w / 2 : x + 8;
@@ -724,30 +784,18 @@ export class ShopScene extends Phaser.Scene {
 
     const stateY = plateMid + 6;
     if (!unlocked) {
-      const cond = this.domText.add(
-        labelX,
-        stateY,
-        t('shopLockedCondition'),
-        { color: hexToCss(PALETTE.system), strokeColor: hexToCss(PALETTE.outline), sizePx: 9 },
-        labelOrigin,
-        0.5,
-      );
-      this.content.push(cond);
+      this.pixel(labelX, stateY, t('shopLockedCondition'), PALETTE.system, 1, labelOrigin, 0.5, true);
     } else if (equipped || owned) {
-      const state = this.domText.add(
+      this.pixel(
         labelX,
         stateY,
         equipped ? t('shopEquipped') : t('shopOwned'),
-        {
-          color: hexToCss(equipped ? accent : PALETTE.labelMuted),
-          strokeColor: hexToCss(PALETTE.outline),
-          sizePx: 9,
-          uppercase: true,
-        },
+        equipped ? accent : PALETTE.labelMuted,
+        1,
         labelOrigin,
         0.5,
+        true,
       );
-      this.content.push(state);
     } else if (item.priceCredits !== undefined) {
       // Coin + number, the same money shape the wallet uses — never a bare
       // "150 CR" string (mockup: price always reads as currency).
@@ -755,20 +803,16 @@ export class ShopScene extends Phaser.Scene {
       const coinX = centered ? x + w / 2 - 14 : x + 12;
       this.drawCoin(coin, coinX, stateY, 4, !affordable);
       this.content.push(coin);
-      const price = this.domText.add(
+      this.pixel(
         coinX + 8,
         stateY,
         String(item.priceCredits),
-        {
-          color: hexToCss(affordable ? PALETTE.reward : PALETTE.goldSole),
-          strokeColor: hexToCss(PALETTE.outline),
-          sizePx: 12,
-          bold: true,
-        },
+        affordable ? PALETTE.reward : PALETTE.goldSole,
+        1,
         0,
         0.5,
+        true,
       );
-      this.content.push(price);
     }
 
     if (equipped) {
@@ -785,6 +829,7 @@ export class ShopScene extends Phaser.Scene {
         playSfx('uiClick');
         this.selectedByCategory.set(category, item.id);
         this.renderCategory();
+        commentOnShopItem(item.id, CATEGORY_COMMENT[category]);
       });
       this.content.push(zone);
     }
@@ -806,7 +851,11 @@ export class ShopScene extends Phaser.Scene {
     const groundY = y + h - 4;
 
     if (category === 'character') {
-      this.addSprite(item.id, cx, y + h - 2, 1.45, litColors ? undefined : PALETTE.textDisabled);
+      // A narrow canvas gives the grid shorter cards; the mockup's 1.45 has to
+      // give way rather than let the android grow out of its own well and over
+      // the card above it.
+      const sprite = this.addSprite(item.id, cx, y + h - 2, 1.45, litColors ? undefined : PALETTE.textDisabled);
+      if (sprite && sprite.displayHeight > h - 4) sprite.setScale((h - 4) / sprite.height);
       return;
     }
 
@@ -823,7 +872,8 @@ export class ShopScene extends Phaser.Scene {
 
     if (category === 'trail') {
       this.drawTrailCardArt(g, item.id as TrailKind, x, y, h, spriteX, groundY);
-      this.addSprite(equippedSkin, spriteX, groundY, 0.9, litColors ? undefined : PALETTE.textDisabled);
+      const runner = this.addSprite(equippedSkin, spriteX, groundY, 0.9, litColors ? undefined : PALETTE.textDisabled);
+      if (runner && runner.displayHeight > h - 6) runner.setScale((h - 6) / runner.height);
       return;
     }
 
@@ -1020,24 +1070,16 @@ export class ShopScene extends Phaser.Scene {
   private detailFrame(border: number, headerText: string, headerColor: number): void {
     const g = this.add.graphics();
     g.fillStyle(PALETTE.bgGraphite, 1);
-    g.fillRect(DETAIL_X, DETAIL_TOP, DETAIL_W, DETAIL_H);
+    g.fillRect(this.detailX, DETAIL_TOP, this.detailW, DETAIL_H);
     g.fillStyle(PALETTE.bgIndigo, 1);
-    g.fillRect(DETAIL_X, DETAIL_TOP, DETAIL_W, 18);
+    g.fillRect(this.detailX, DETAIL_TOP, this.detailW, 18);
     g.fillStyle(PALETTE.metalMid, 1);
-    g.fillRect(DETAIL_X, DETAIL_TOP + 18, DETAIL_W, 1);
+    g.fillRect(this.detailX, DETAIL_TOP + 18, this.detailW, 1);
     g.lineStyle(1, border, 1);
-    g.strokeRect(DETAIL_X + 0.5, DETAIL_TOP + 0.5, DETAIL_W - 1, DETAIL_H - 1);
+    g.strokeRect(this.detailX + 0.5, DETAIL_TOP + 0.5, this.detailW - 1, DETAIL_H - 1);
     this.content.push(g);
 
-    const header = this.domText.add(
-      DETAIL_X + DETAIL_W / 2,
-      DETAIL_TOP + 9,
-      headerText,
-      { color: hexToCss(headerColor), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
-      0.5,
-      0.5,
-    );
-    this.content.push(header);
+    this.pixel(this.detailX + this.detailW / 2, DETAIL_TOP + 10, headerText, headerColor, 1, 0.5, 0.5, true);
   }
 
   private buildDetailPanel(category: ShopCategory, item: ShopItem): void {
@@ -1071,53 +1113,55 @@ export class ShopScene extends Phaser.Scene {
 
   /** Name + rarity badge on one line — the layout every non-character panel uses (the character panel puts them in its own right-hand column instead). */
   private buildNameRow(item: ShopItem, y: number): void {
+    // The badge is measured first so the name can be told how much room is
+    // actually left — on a narrow panel the two used to print over each other.
+    const badgeW = t(RARITY_LABEL[item.rarity ?? 'common']).length * 6 + 8;
     const name = this.domText.add(
-      DETAIL_X + 8,
+      this.detailX + 8,
       y,
       t(item.nameKey),
-      { color: hexToCss(PALETTE.white), strokeColor: hexToCss(PALETTE.outline), sizePx: 12, bold: true },
+      {
+        color: hexToCss(PALETTE.white),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: this.detailW >= WIDE_DETAIL_W ? 12 : 10,
+        bold: true,
+        wordWrapWidth: this.detailW - 22 - badgeW,
+        clampLines: 1,
+      },
       0,
       0.5,
     );
     this.content.push(name);
-    this.buildRarityBadge(item, DETAIL_X + DETAIL_W - 8, y, 1);
+    this.buildRarityBadge(item, this.detailX + this.detailW - 8, y, 1);
   }
 
   private buildRarityBadge(item: ShopItem, x: number, y: number, originX: number): void {
     const rarity = item.rarity ?? 'common';
     const color = RARITY_COLOR[rarity];
     const label = t(RARITY_LABEL[rarity]);
-    const w = label.length * 5 + 8;
+    const w = label.length * 6 + 8;
     const boxX = originX === 1 ? x - w : x;
 
     const g = this.add.graphics();
     g.fillStyle(color, 0.16);
-    g.fillRect(boxX, y - 6, w, 12);
+    g.fillRect(boxX, y - 7, w, 14);
     g.lineStyle(1, color, 1);
-    g.strokeRect(boxX + 0.5, y - 5.5, w - 1, 11);
+    g.strokeRect(boxX + 0.5, y - 6.5, w - 1, 13);
     this.content.push(g);
 
-    const text = this.domText.add(
-      boxX + w / 2,
-      y,
-      label,
-      { color: hexToCss(color), strokeColor: hexToCss(PALETTE.outline), sizePx: 8, bold: true },
-      0.5,
-      0.5,
-    );
-    this.content.push(text);
+    this.pixel(boxX + w / 2, y, label, color, 1, 0.5, 0.5, true);
   }
 
   private buildLegend(item: ShopItem, y: number): void {
     const legend = this.domText.add(
-      DETAIL_X + 8,
+      this.detailX + 8,
       y,
       t(item.descriptionKey),
       {
         color: hexToCss(PALETTE.textMuted),
         strokeColor: hexToCss(PALETTE.outline),
         sizePx: 9,
-        wordWrapWidth: DETAIL_W - 16,
+        wordWrapWidth: this.detailW - 16,
         clampLines: 2,
       },
       0,
@@ -1129,49 +1173,25 @@ export class ShopScene extends Phaser.Scene {
   /** The row above the button: what the purchase costs you on the left, the price (or a live action) on the right. */
   private buildStatusRow(category: ShopCategory, item: ShopItem, unlocked: boolean): void {
     const y = STATUS_Y;
-    const leftX = DETAIL_X + 8;
-    const rightX = DETAIL_X + DETAIL_W - 8;
+    const leftX = this.detailX + 8;
+    const rightX = this.detailX + this.detailW - 8;
     const owned = unlocked && this.isOwned(item);
     const equipped = owned && this.isEquipped(item);
     const price = item.priceCredits;
     const balance = CurrencyService.getBalance();
 
     if (!unlocked) {
-      const cond = this.domText.add(
-        leftX,
-        y,
-        t('shopLockedCondition'),
-        { color: hexToCss(PALETTE.system), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
-        0,
-        0.5,
-      );
-      this.content.push(cond);
+      this.pixel(leftX, y, t('shopLockedCondition'), PALETTE.system, 1, 0, 0.5, true);
       return;
     }
 
     if (owned) {
-      const left = this.domText.add(
-        leftX,
-        y,
-        equipped ? t('shopWorn') : t('shopOwned'),
-        { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, uppercase: true },
-        0,
-        0.5,
-      );
-      this.content.push(left);
+      this.pixel(leftX, y, equipped ? t('shopWorn') : t('shopOwned'), PALETTE.labelMuted, 1, 0, 0.5, true);
 
       // "ЕЩЁ РАЗ" replays the death effect on demand — the one secondary
       // action in this row that maps onto something the preview really does.
       if (category === 'death_fx' && this.replayDeathPreview) {
-        const replay = this.domText.add(
-          rightX,
-          y,
-          t('shopReplay'),
-          { color: hexToCss(PALETTE.dangerAlt), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
-          1,
-          0.5,
-        );
-        this.content.push(replay);
+        this.pixel(rightX, y, t('shopReplay'), PALETTE.dangerAlt, 1, 1, 0.5, true);
         const zone = this.add.zone(rightX - 24, y, 56, 14).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
         zone.on('pointerup', () => {
           playSfx('uiClick');
@@ -1185,36 +1205,29 @@ export class ShopScene extends Phaser.Scene {
     if (price === undefined) return;
 
     const affordable = balance >= price;
-    const left = this.domText.add(
+    this.pixel(
       leftX,
       y,
       affordable ? `${t('shopWillRemain')} ${balance - price}` : `${t('shopNotEnough')} ${price - balance}`,
-      {
-        color: hexToCss(affordable ? PALETTE.labelMuted : PALETTE.dangerAlt),
-        strokeColor: hexToCss(PALETTE.outline),
-        sizePx: 9,
-      },
+      affordable ? PALETTE.labelMuted : PALETTE.dangerAlt,
+      1,
       0,
       0.5,
+      true,
     );
-    this.content.push(left);
 
-    const priceText = this.domText.add(
+    const priceText = this.pixel(
       rightX,
       y,
       String(price),
-      {
-        color: hexToCss(affordable ? PALETTE.reward : PALETTE.goldSole),
-        strokeColor: hexToCss(PALETTE.outline),
-        sizePx: 14,
-        bold: true,
-      },
+      affordable ? PALETTE.reward : PALETTE.goldSole,
+      2,
       1,
       0.5,
+      true,
     );
-    this.content.push(priceText);
     const coin = this.add.graphics();
-    this.drawCoin(coin, rightX - priceText.width - 8, y, 5, !affordable);
+    this.drawCoin(coin, rightX - priceText.displayWidth - 9, y, 5, !affordable);
     this.content.push(coin);
   }
 
@@ -1325,9 +1338,9 @@ export class ShopScene extends Phaser.Scene {
     w?: number;
     h?: number;
   }): void {
-    const x = opts.x ?? BTN_X;
+    const x = opts.x ?? this.btnX;
     const y = opts.y ?? BTN_TOP;
-    const w = opts.w ?? BTN_W;
+    const w = opts.w ?? this.btnW;
     const h = opts.h ?? BTN_H;
     const textColor = opts.style === 'muted' ? PALETTE.labelMuted : PALETTE.white;
 
@@ -1336,13 +1349,11 @@ export class ShopScene extends Phaser.Scene {
       x + w / 2 + (opts.icon === 'none' ? 0 : 9),
       y + h / 2,
       opts.label,
-      {
-        color: hexToCss(textColor),
-        strokeColor: hexToCss(PALETTE.outline),
-        sizePx: 17,
-        bold: true,
-        uppercase: true,
-      },
+      // No outline: the mockup's button label is plain heavy type on a solid
+      // face, and a hairline around every glyph at this size read as dirt.
+      // The size follows the button, which shrinks with the panel on a narrow
+      // canvas — at a fixed 19px the word ran off both ends of its own face.
+      { color: hexToCss(textColor), sizePx: w >= 120 ? 19 : w >= 100 ? 16 : 13, bold: true, uppercase: true },
       0.5,
       0.5,
     );
@@ -1407,9 +1418,11 @@ export class ShopScene extends Phaser.Scene {
   // ---- character scene ---------------------------------------------------
 
   private buildCharacterScene(item: ShopItem, unlocked: boolean): void {
-    const boxX = DETAIL_X + 14;
-    const boxW = 56;
+    const boxX = this.detailX + 10;
+    const boxW = this.detailW >= WIDE_DETAIL_W ? 56 : 40;
     const boxH = CHAR_BOX_H;
+    const colX = boxX + boxW + 8;
+    const colW = this.detailX + this.detailW - 8 - colX;
     const g = this.add.graphics();
     g.fillStyle(PALETTE.bgVoid, 1);
     g.fillRect(boxX, PREVIEW_TOP, boxW, boxH);
@@ -1454,7 +1467,6 @@ export class ShopScene extends Phaser.Scene {
     this.content.push(pedestal);
 
     // Right column: name, rarity, and the three colors the skin is made of.
-    const colX = DETAIL_X + 78;
     const name = this.domText.add(
       colX,
       PREVIEW_TOP + 6,
@@ -1464,7 +1476,7 @@ export class ShopScene extends Phaser.Scene {
         strokeColor: hexToCss(PALETTE.outline),
         sizePx: 12,
         bold: true,
-        wordWrapWidth: DETAIL_W - 86,
+        wordWrapWidth: colW,
         clampLines: 2,
       },
       0,
@@ -1496,8 +1508,8 @@ export class ShopScene extends Phaser.Scene {
   // ---- trail scene (live test run) ---------------------------------------
 
   private buildTrailScene(item: ShopItem): void {
-    const boxX = DETAIL_X + 8;
-    const boxW = DETAIL_W - 16;
+    const boxX = this.detailX + 8;
+    const boxW = this.detailW - 16;
     const boxH = 64;
     const groundY = PREVIEW_TOP + TRAIL_FLOOR_OFFSET;
 
@@ -1518,11 +1530,11 @@ export class ShopScene extends Phaser.Scene {
     this.content.push(back);
 
     const prefix = playerTexturePrefix(InventoryService.getEquipped('character'));
-    const fx = new TrailFx(this, item.id as TrailKind, DETAIL_X + DETAIL_W / 2, groundY);
+    const fx = new TrailFx(this, item.id as TrailKind, this.detailX + this.detailW / 2, groundY);
     this.content.push({ destroy: () => fx.destroy() });
 
     const sprite = this.textures.exists(`${prefix}-idle-0`)
-      ? this.add.sprite(DETAIL_X + DETAIL_W / 2, groundY, `${prefix}-idle-0`).setOrigin(0.5, 1).setScale(TRAIL_SPRITE_SCALE)
+      ? this.add.sprite(this.detailX + this.detailW / 2, groundY, `${prefix}-idle-0`).setOrigin(0.5, 1).setScale(TRAIL_SPRITE_SCALE)
       : null;
     if (sprite) {
       sprite.play(`${prefix}-run`);
@@ -1534,7 +1546,7 @@ export class ShopScene extends Phaser.Scene {
       sprite,
       prefix,
       anim: 'run',
-      x: DETAIL_X + DETAIL_W / 2,
+      x: this.detailX + this.detailW / 2,
       y: groundY,
       vx: TRAIL_RUN_SPEED,
       vy: 0,
@@ -1605,8 +1617,8 @@ export class ShopScene extends Phaser.Scene {
   private buildDeathScene(item: ShopItem, unlocked: boolean): void {
     const boxW = 62;
     const boxH = 64;
-    const leftX = DETAIL_X + 8;
-    const rightX = DETAIL_X + DETAIL_W - 8 - boxW;
+    const leftX = this.detailX + 8;
+    const rightX = this.detailX + this.detailW - 8 - boxW;
 
     const g = this.add.graphics();
     g.fillStyle(PALETTE.bgVoid, 1);
@@ -1672,10 +1684,10 @@ export class ShopScene extends Phaser.Scene {
     const bandBottom = y + h + 4;
     const cover = this.add.graphics();
     cover.fillStyle(PALETTE.bgGraphite, 1);
-    cover.fillRect(DETAIL_X + 1, DETAIL_TOP + 19, DETAIL_W - 2, y - DETAIL_TOP - 19);
-    cover.fillRect(DETAIL_X + 1, y + h, DETAIL_W - 2, bandBottom - (y + h));
-    cover.fillRect(DETAIL_X + 1, y, x - DETAIL_X - 1, h);
-    cover.fillRect(x + w, y, DETAIL_X + DETAIL_W - (x + w) - 1, h);
+    cover.fillRect(this.detailX + 1, DETAIL_TOP + 19, this.detailW - 2, y - DETAIL_TOP - 19);
+    cover.fillRect(this.detailX + 1, y + h, this.detailW - 2, bandBottom - (y + h));
+    cover.fillRect(this.detailX + 1, y, x - this.detailX - 1, h);
+    cover.fillRect(x + w, y, this.detailX + this.detailW - (x + w) - 1, h);
     cover.lineStyle(1, border, 0.6);
     cover.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     this.content.push(cover);
@@ -1684,8 +1696,8 @@ export class ShopScene extends Phaser.Scene {
   // ---- SYSTEM pack scene (real sampled lines) ----------------------------
 
   private buildSystemScene(item: ShopItem): void {
-    const boxX = DETAIL_X + 8;
-    const boxW = DETAIL_W - 16;
+    const boxX = this.detailX + 8;
+    const boxW = this.detailW - 16;
     const rowH = 20;
     const lines = this.packLines(item.id);
 
@@ -1741,46 +1753,26 @@ export class ShopScene extends Phaser.Scene {
 
   // ---- right column ------------------------------------------------------
 
-  private hasRightColumn(): boolean {
-    return this.scale.width - RIGHT_COL_X - 8 >= RIGHT_COL_MIN_W;
-  }
-
+  /**
+   * SYSTEM's column. `layout()` guarantees it room at every supported width,
+   * so unlike the first pass it is never dropped: the whole point of the
+   * screen is that something is watching you shop.
+   */
   private buildRightColumn(category: ShopCategory, items: ShopItem[]): void {
-    const colW = this.scale.width - RIGHT_COL_X - 8;
-    if (colW < RIGHT_COL_MIN_W) {
-      this.buildSystemStrip();
-      return;
-    }
-
+    const colW = this.sysW;
     const systemH = category === 'character' ? 96 : DETAIL_H;
-    const bg = this.add.rectangle(RIGHT_COL_X, DETAIL_TOP, colW, systemH, PALETTE.system, 0.12).setOrigin(0, 0);
-    const edge = this.add.rectangle(RIGHT_COL_X, DETAIL_TOP, 2, systemH, PALETTE.system, 1).setOrigin(0, 0);
+    const bg = this.add.rectangle(this.sysX, DETAIL_TOP, colW, systemH, PALETTE.system, 0.12).setOrigin(0, 0);
+    const edge = this.add.rectangle(this.sysX, DETAIL_TOP, 2, systemH, PALETTE.system, 1).setOrigin(0, 0);
     this.content.push(bg, edge);
 
-    const heading = this.domText.add(
-      RIGHT_COL_X + 8,
-      DETAIL_TOP + 9,
-      'SYSTEM',
-      { color: hexToCss(PALETTE.system), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
-      0,
-      0.5,
-    );
-    this.content.push(heading);
+    this.pixel(this.sysX + 8, DETAIL_TOP + 10, 'SYSTEM', PALETTE.system, 1, 0, 0.5, true);
 
-    const label = this.domText.add(
-      RIGHT_COL_X + 8,
-      DETAIL_TOP + 22,
-      this.systemLineText,
-      {
-        color: hexToCss(PALETTE.systemLight),
-        strokeColor: hexToCss(PALETTE.outline),
-        sizePx: 10,
-        wordWrapWidth: colW - 16,
-        clampLines: category === 'character' ? 5 : 12,
-      },
-      0,
-      0,
-    );
+    const label = new PixelLabel(this, this.sysX + 8, DETAIL_TOP + 20, this.systemLineText, {
+      color: hexToCss(PALETTE.systemLight),
+      scale: 1,
+      wordWrapWidth: colW - 14,
+    });
+    label.setOrigin(0, 0);
     this.content.push(label);
     this.systemLineLabel = label;
 
@@ -1788,17 +1780,15 @@ export class ShopScene extends Phaser.Scene {
 
     const collY = DETAIL_TOP + systemH + 10;
     const collH = DETAIL_H - systemH - 10;
-    const collBg = this.add.rectangle(RIGHT_COL_X, collY, colW, collH, PALETTE.metalDark, 1).setOrigin(0, 0);
+    const collBg = this.add.rectangle(this.sysX, collY, colW, collH, PALETTE.metalDark, 1).setOrigin(0, 0);
     this.content.push(collBg);
 
-    const collHeading = this.domText.add(
-      RIGHT_COL_X + 8,
-      collY + 10,
-      t('shopCollection'),
-      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9 },
-      0,
-      0.5,
-    );
+    const collHeading = new PixelLabel(this, this.sysX + 8, collY + 4, t('shopCollection'), {
+      color: hexToCss(PALETTE.labelMuted),
+      scale: 1,
+      wordWrapWidth: colW - 14,
+    });
+    collHeading.setOrigin(0, 0);
     this.content.push(collHeading);
 
     const chip = 9;
@@ -1809,8 +1799,8 @@ export class ShopScene extends Phaser.Scene {
       const owned = this.isUnlocked(item) && this.isOwned(item);
       chips.fillStyle(owned ? skinColorsFor(item.id)?.visor ?? PALETTE.cyan : PALETTE.metalEdge, 1);
       chips.fillRect(
-        RIGHT_COL_X + 8 + (i % perRow) * (chip + chipGap),
-        collY + 22 + Math.floor(i / perRow) * (chip + chipGap),
+        this.sysX + 8 + (i % perRow) * (chip + chipGap),
+        collY + 26 + Math.floor(i / perRow) * (chip + chipGap),
         chip,
         chip,
       );
@@ -1818,58 +1808,7 @@ export class ShopScene extends Phaser.Scene {
     this.content.push(chips);
 
     const ownedCount = items.filter((item) => this.isUnlocked(item) && this.isOwned(item)).length;
-    const count = this.domText.add(
-      RIGHT_COL_X + 8,
-      collY + collH - 14,
-      `${ownedCount} / ${items.length}`,
-      { color: hexToCss(PALETTE.textMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 12, bold: true },
-      0,
-      0.5,
-    );
-    this.content.push(count);
-  }
-
-  /**
-   * SYSTEM's line when the canvas is too narrow for the right-hand column
-   * (the mockup only draws that column past its own 480px safe zone, and at
-   * 480 the commentary simply vanished — the one element of the screen the
-   * game is actually named after). It moves into the strip under the grid,
-   * which the mockup fills with page dots this shop has no use for.
-   */
-  private buildSystemStrip(): void {
-    const y = this.scale.height - 34;
-    const w = DETAIL_X - 8 - GRID_X;
-
-    const bg = this.add.rectangle(GRID_X, y, w, 32, PALETTE.system, 0.12).setOrigin(0, 0);
-    const edge = this.add.rectangle(GRID_X, y, 2, 32, PALETTE.system, 1).setOrigin(0, 0);
-    this.content.push(bg, edge);
-
-    const heading = this.domText.add(
-      GRID_X + 8,
-      y + 16,
-      'SYSTEM',
-      { color: hexToCss(PALETTE.system), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
-      0,
-      0.5,
-    );
-    this.content.push(heading);
-
-    const label = this.domText.add(
-      GRID_X + 52,
-      y + 5,
-      this.systemLineText,
-      {
-        color: hexToCss(PALETTE.systemLight),
-        strokeColor: hexToCss(PALETTE.outline),
-        sizePx: 9,
-        wordWrapWidth: w - 60,
-        clampLines: 2,
-      },
-      0,
-      0,
-    );
-    this.content.push(label);
-    this.systemLineLabel = label;
+    this.pixel(this.sysX + 8, collY + collH - 12, `${ownedCount} / ${items.length}`, PALETTE.textMuted, 1, 0, 0.5, true);
   }
 
   private handleSystemComment(payload: { text: string; category: string }): void {
@@ -1877,7 +1816,7 @@ export class ShopScene extends Phaser.Scene {
     // Kept on screen until the next line replaces it — the SYSTEM panel is a
     // fixture of the showroom, not a toast that blinks out and leaves a hole.
     this.systemLineText = payload.text;
-    this.systemLineLabel?.setText(payload.text);
+    this.systemLineLabel?.setPixelText(payload.text);
   }
 
   // ---- premium ("БЕЗ РЕК.") ----------------------------------------------
@@ -1890,7 +1829,7 @@ export class ShopScene extends Phaser.Scene {
 
     const offerX = GRID_X;
     const offerY = 40;
-    const offerW = 252;
+    const offerW = this.detailX - 8 - GRID_X;
     const offerH = 198;
     const headerH = 26;
 
@@ -1903,7 +1842,7 @@ export class ShopScene extends Phaser.Scene {
 
     // Two real products share this tab, so the gold bar doubles as the
     // selector between them — short labels, because the offer's own headline
-    // moves inside the card where it has the full 252px to breathe.
+    // moves inside the card where it has the full width to breathe.
     const segW = offerW / items.length;
     items.forEach((it, i) => {
       const active = it.id === selected.id;
@@ -1913,33 +1852,32 @@ export class ShopScene extends Phaser.Scene {
       g.fillRect(segX, offerY, segW, headerH);
       this.content.push(g);
 
-      const label = this.domText.add(
+      this.pixel(
         segX + segW / 2,
         offerY + headerH / 2,
         it.id === 'remove_ads' ? t('shopCategoryPremium') : t(it.nameKey),
-        {
-          color: hexToCss(active ? PALETTE.bgVoid : PALETTE.labelMuted),
-          strokeColor: hexToCss(PALETTE.outline),
-          sizePx: 11,
-          bold: true,
-          uppercase: true,
-        },
+        active ? PALETTE.bgVoid : PALETTE.labelMuted,
+        1,
         0.5,
         0.5,
+        true,
       );
-      this.content.push(label);
 
-      const zone = this.add.zone(segX + segW / 2, offerY + headerH / 2, segW, headerH).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+      const zone = this.add
+        .zone(segX + segW / 2, offerY + headerH / 2, segW, headerH)
+        .setOrigin(0.5, 0.5)
+        .setInteractive({ useHandCursor: true });
       zone.on('pointerup', () => {
         playSfx('uiClick');
         this.selectedByCategory.set('premium', it.id);
         this.renderCategory();
+        commentOnShopItem(it.id, 'browse_premium');
       });
       this.content.push(zone);
     });
 
     // Headline row — the gold diamond plus the promise, at full card width.
-    const bannerY = offerY + headerH + 18;
+    const bannerY = offerY + headerH + 14;
     const diamond = this.add.graphics();
     diamond.fillStyle(PALETTE.reward, 1);
     diamond.save();
@@ -1949,31 +1887,38 @@ export class ShopScene extends Phaser.Scene {
     diamond.restore();
     this.content.push(diamond);
 
-    const banner = this.domText.add(
-      offerX + 34,
-      bannerY,
-      selected.id === 'remove_ads' ? t('shopNoAdsForever') : t('shopSystemAccess'),
-      { color: hexToCss(PALETTE.reward), strokeColor: hexToCss(PALETTE.outline), sizePx: 14, bold: true, uppercase: true },
-      0,
-      0.5,
-    );
-    this.content.push(banner);
+    // The bitmap font only scales in whole steps, so the headline takes the
+    // bigger one only when it actually fits the card — rebuilt at the smaller
+    // scale rather than squashed, which would land its pixels off the grid.
+    const headline = selected.id === 'remove_ads' ? t('shopNoAdsForever') : t('shopSystemAccess');
+    const big = this.pixel(offerX + 34, bannerY, headline, PALETTE.reward, 2, 0, 0.5, true);
+    if (big.displayWidth > offerW - 46) {
+      this.content.pop();
+      big.destroy();
+      this.pixel(offerX + 34, bannerY, headline, PALETTE.reward, 1, 0, 0.5, true);
+    }
 
     const features =
       selected.id === 'remove_ads'
         ? [t('shopNoAdsFeature1'), t('shopNoAdsFeature2'), t('shopNoAdsFeature3')]
         : [t('shopBundleFeature'), t('shopSkinError404'), t('shopFxDataWipe'), t('shopPackCorrupted')];
 
+    // The row pitch is divided out of the space that is actually left, so the
+    // four-item SYSTEM ACCESS list fits whole instead of clipping to "…".
+    const listTop = bannerY + 16;
+    const noteY = offerY + offerH - 20;
+    const rowH = Math.floor((noteY - 12 - listTop) / features.length);
+
     features.forEach((line, i) => {
-      const y = bannerY + 24 + i * 22;
+      const y = listTop + rowH * i + rowH / 2;
       const check = this.add.graphics();
       check.fillStyle(PALETTE.patrolVisor, 1);
-      check.fillRect(offerX + 14, y - 6, 12, 12);
-      this.drawCheck(check, offerX + 20, y, 3.5, PALETTE.bgVoid);
+      check.fillRect(offerX + 12, y - 6, 12, 12);
+      this.drawCheck(check, offerX + 18, y, 3.5, PALETTE.bgVoid);
       this.content.push(check);
 
       const text = this.domText.add(
-        offerX + 32,
+        offerX + 30,
         y,
         line,
         {
@@ -1981,8 +1926,8 @@ export class ShopScene extends Phaser.Scene {
           strokeColor: hexToCss(PALETTE.outline),
           sizePx: 11,
           bold: true,
-          wordWrapWidth: offerW - 46,
-          clampLines: 1,
+          wordWrapWidth: offerW - 42,
+          clampLines: 2,
         },
         0,
         0.5,
@@ -1991,21 +1936,20 @@ export class ShopScene extends Phaser.Scene {
     });
 
     // The quiet honesty line, in the mockup's own "empty checkbox" style.
-    const noteY = offerY + offerH - 22;
     const noteBox = this.add.graphics();
     noteBox.lineStyle(2, PALETTE.labelMuted, 1);
-    noteBox.strokeRect(offerX + 14, noteY - 6, 12, 12);
+    noteBox.strokeRect(offerX + 13, noteY - 5, 10, 10);
     this.content.push(noteBox);
     const note = this.domText.add(
-      offerX + 32,
+      offerX + 30,
       noteY,
       selected.id === 'remove_ads' ? t('shopNoAdsNote') : t(selected.descriptionKey),
       {
         color: hexToCss(PALETTE.labelMuted),
         strokeColor: hexToCss(PALETTE.outline),
         sizePx: 10,
-        wordWrapWidth: offerW - 46,
-        clampLines: 1,
+        wordWrapWidth: offerW - 42,
+        clampLines: 2,
       },
       0,
       0.5,
@@ -2018,8 +1962,8 @@ export class ShopScene extends Phaser.Scene {
 
   /** Owner's amendments over the mockup: no "ask an adult" line, no manual restore button (`PurchaseManager.restorePurchases()` already runs at every boot) — the buy button centers in the space they freed. */
   private buildPremiumPurchasePanel(item: ShopItem, owned: boolean, top: number, h: number): void {
-    const x = DETAIL_X;
-    const w = DETAIL_W;
+    const x = this.detailX;
+    const w = this.detailW;
 
     const g = this.add.graphics();
     g.fillStyle(PALETTE.bgGraphite, 1);
@@ -2028,22 +1972,16 @@ export class ShopScene extends Phaser.Scene {
     g.strokeRect(x + 0.5, top + 0.5, w - 1, h - 1);
     this.content.push(g);
 
-    const title = this.domText.add(
+    this.pixel(
       x + w / 2,
       top + 16,
       owned ? t('shopNoAdsOwned') : t('shopOneTimePurchase'),
-      {
-        // No `clampLines` on a centered label — a centered -webkit-box sizes
-        // to its first break opportunity, which cuts short strings mid-word.
-        color: hexToCss(owned ? PALETTE.patrolVisor : PALETTE.labelMuted),
-        strokeColor: hexToCss(PALETTE.outline),
-        sizePx: 9,
-        bold: true,
-      },
+      owned ? PALETTE.patrolVisor : PALETTE.labelMuted,
+      1,
       0.5,
       0.5,
+      true,
     );
-    this.content.push(title);
 
     const realPrice = item.productId ? this.catalogPricesById.get(item.productId) : undefined;
     const priceText = realPrice ?? (this.catalogLoaded ? t('shopCatalogUnavailable') : '…');
@@ -2092,39 +2030,19 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private buildPremiumSystemColumn(top: number, h: number): void {
-    const colW = this.scale.width - RIGHT_COL_X - 8;
-    if (colW < RIGHT_COL_MIN_W) {
-      this.buildSystemStrip();
-      return;
-    }
-    const bg = this.add.rectangle(RIGHT_COL_X, top, colW, h, PALETTE.system, 0.12).setOrigin(0, 0);
-    const edge = this.add.rectangle(RIGHT_COL_X, top, 2, h, PALETTE.system, 1).setOrigin(0, 0);
+    const colW = this.sysW;
+    const bg = this.add.rectangle(this.sysX, top, colW, h, PALETTE.system, 0.12).setOrigin(0, 0);
+    const edge = this.add.rectangle(this.sysX, top, 2, h, PALETTE.system, 1).setOrigin(0, 0);
     this.content.push(bg, edge);
 
-    const heading = this.domText.add(
-      RIGHT_COL_X + 8,
-      top + 12,
-      'SYSTEM',
-      { color: hexToCss(PALETTE.system), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
-      0,
-      0.5,
-    );
-    this.content.push(heading);
+    this.pixel(this.sysX + 8, top + 10, 'SYSTEM', PALETTE.system, 1, 0, 0.5, true);
 
-    const label = this.domText.add(
-      RIGHT_COL_X + 8,
-      top + 26,
-      this.systemLineText,
-      {
-        color: hexToCss(PALETTE.systemLight),
-        strokeColor: hexToCss(PALETTE.outline),
-        sizePx: 10,
-        wordWrapWidth: colW - 16,
-        clampLines: 12,
-      },
-      0,
-      0,
-    );
+    const label = new PixelLabel(this, this.sysX + 8, top + 20, this.systemLineText, {
+      color: hexToCss(PALETTE.systemLight),
+      scale: 1,
+      wordWrapWidth: colW - 14,
+    });
+    label.setOrigin(0, 0);
     this.content.push(label);
     this.systemLineLabel = label;
   }
@@ -2200,12 +2118,13 @@ export class ShopScene extends Phaser.Scene {
     this.teardownLivePreview();
     this.clearContent();
     this.systemLineLabel = null;
-    this.titleLabel.setText(t('creditsTitle'));
-    this.subtitleLabel?.setText(t('creditsSubtitle'));
+    this.titleLabel.setPixelText(t('creditsTitle'));
+    this.subtitleLabel?.setPixelText(t('creditsSubtitle'));
 
-    const { width } = this.scale;
     const x = 12;
-    const w = Math.min(width - 24, 456);
+    // Stops short of SYSTEM's column instead of running under it — the same
+    // three-block split the showroom uses.
+    const w = Math.min(456, this.sysX - 8 - x);
 
     this.buildBand(x, 38, w, t('creditsFreeBand'), PALETTE.cyan, PALETTE.cyanDim);
 
@@ -2224,8 +2143,7 @@ export class ShopScene extends Phaser.Scene {
       this.buildPackTile(x + i * (tileW + packGap), 174, tileW, pack, pack.productId === best);
     });
 
-    if (this.hasRightColumn()) this.buildPremiumSystemColumn(38, 218);
-    else this.systemLineLabel = null;
+    this.buildPremiumSystemColumn(38, 218);
   }
 
   /** Mockup 4d/4f/4g's section header: a 20px band with a 3px bar in the section's own color. */
@@ -2237,26 +2155,9 @@ export class ShopScene extends Phaser.Scene {
     g.fillRect(x, y, 3, 20);
     this.content.push(g);
 
-    const text = this.domText.add(
-      x + 11,
-      y + 10,
-      label,
-      { color: hexToCss(accent), strokeColor: hexToCss(PALETTE.outline), sizePx: 11, bold: true },
-      0,
-      0.5,
-    );
-    this.content.push(text);
-
+    this.pixel(x + 11, y + 10, label, accent, 1, 0, 0.5, true);
     if (rightLabel === undefined) return;
-    const right = this.domText.add(
-      x + w - 8,
-      y + 10,
-      rightLabel,
-      { color: hexToCss(PALETTE.goldEdge), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
-      1,
-      0.5,
-    );
-    this.content.push(right);
+    this.pixel(x + w - 8, y + 10, rightLabel, PALETTE.goldEdge, 1, 1, 0.5, true);
   }
 
   /** Shared body of an "earn" card: frame, glyph, title, one line of copy. */
@@ -2287,7 +2188,7 @@ export class ShopScene extends Phaser.Scene {
         strokeColor: hexToCss(PALETTE.outline),
         sizePx: 9,
         wordWrapWidth: w - 16,
-        clampLines: 2,
+        clampLines: 1,
       },
       0,
       0,
@@ -2300,15 +2201,7 @@ export class ShopScene extends Phaser.Scene {
     const coin = this.add.graphics();
     this.drawCoin(coin, x + 6, y, 5, false);
     this.content.push(coin);
-    const label = this.domText.add(
-      x + 15,
-      y,
-      `+${amount}`,
-      { color: hexToCss(PALETTE.reward), strokeColor: hexToCss(PALETTE.outline), sizePx: 14, bold: true },
-      0,
-      0.5,
-    );
-    this.content.push(label);
+    this.pixel(x + 15, y, `+${amount}`, PALETTE.reward, 2, 0, 0.5, true);
   }
 
   private buildAdCard(x: number, y: number, w: number): void {
@@ -2322,22 +2215,18 @@ export class ShopScene extends Phaser.Scene {
     glyph.fillTriangle(x + 14, y + 11, x + 14, y + 17, x + 19, y + 14);
     this.content.push(glyph);
 
-    this.buildEarnAmount(x + 8, y + 58, EARN_AMOUNTS.rewardedAd);
+    this.buildEarnAmount(x + 8, y + 60, EARN_AMOUNTS.rewardedAd);
 
-    const state = this.domText.add(
+    this.pixel(
       x + w - 8,
-      y + 58,
+      y + 44,
       disabled ? t('shopNoAdsOwned') : t('creditsAdReady'),
-      {
-        color: hexToCss(disabled ? PALETTE.textDisabled : PALETTE.patrolVisor),
-        strokeColor: hexToCss(PALETTE.outline),
-        sizePx: 9,
-        bold: true,
-      },
+      disabled ? PALETTE.textDisabled : PALETTE.patrolVisor,
+      1,
       1,
       0.5,
+      true,
     );
-    this.content.push(state);
 
     if (disabled) return;
     const zone = this.add.zone(x + w / 2, y + 37, w, 74).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
@@ -2362,17 +2251,18 @@ export class ShopScene extends Phaser.Scene {
     this.drawCheck(glyph, x + 16, y + 14, 3.5, PALETTE.patrolVisor);
     this.content.push(glyph);
 
-    this.buildEarnAmount(x + 8, y + 58, EARN_AMOUNTS.levelComplete);
+    this.buildEarnAmount(x + 8, y + 60, EARN_AMOUNTS.levelComplete);
 
-    const bonus = this.domText.add(
+    this.pixel(
       x + w - 8,
-      y + 58,
+      y + 44,
       `${t('creditsNoDeaths')} +${EARN_AMOUNTS.zeroDeaths}`,
-      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
+      PALETTE.labelMuted,
+      1,
       1,
       0.5,
+      true,
     );
-    this.content.push(bonus);
   }
 
   private buildSectorCard(x: number, y: number, w: number): void {
@@ -2390,22 +2280,14 @@ export class ShopScene extends Phaser.Scene {
     const done = SaveService.getCompletedLevels().length % LEVELS_PER_SECTOR;
     const bar = this.add.graphics();
     bar.fillStyle(PALETTE.metalMid, 1);
-    bar.fillRect(x + 8, y + 44, w - 16, 6);
+    bar.fillRect(x + 8, y + 41, w - 16, 6);
     bar.fillStyle(PALETTE.system, 1);
-    bar.fillRect(x + 8, y + 44, Math.round(((w - 16) * done) / LEVELS_PER_SECTOR), 6);
+    bar.fillRect(x + 8, y + 41, Math.round(((w - 16) * done) / LEVELS_PER_SECTOR), 6);
     this.content.push(bar);
 
     this.buildEarnAmount(x + 8, y + 60, EARN_AMOUNTS.sectorComplete);
 
-    const count = this.domText.add(
-      x + w - 8,
-      y + 60,
-      `${done} / ${LEVELS_PER_SECTOR}`,
-      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
-      1,
-      0.5,
-    );
-    this.content.push(count);
+    this.pixel(x + w - 8, y + 60, `${done} / ${LEVELS_PER_SECTOR}`, PALETTE.labelMuted, 1, 1, 0.5, true);
   }
 
   /**
@@ -2444,52 +2326,37 @@ export class ShopScene extends Phaser.Scene {
     // single number is parsed.
     const coins = Math.min(3, 1 + Math.floor(CREDIT_PACKS.indexOf(pack) / 2));
     const stack = this.add.graphics();
-    for (let i = 0; i < coins; i++) this.drawCoin(stack, x + w / 2 - (coins - 1) * 7 + i * 14, y + 20, 5, false);
+    for (let i = 0; i < coins; i++) this.drawCoin(stack, x + w / 2 - (coins - 1) * 7 + i * 14, y + 18, 5, false);
     this.content.push(stack);
 
-    const amount = this.domText.add(
-      x + w / 2,
-      y + 38,
-      String(pack.credits),
-      { color: hexToCss(PALETTE.reward), strokeColor: hexToCss(PALETTE.outline), sizePx: 17, bold: true },
-      0.5,
-      0.5,
-    );
-    this.content.push(amount);
-
-    const units = this.domText.add(
-      x + w / 2,
-      y + 51,
-      t('creditsUnits'),
-      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 8, bold: true },
-      0.5,
-      0.5,
-    );
-    this.content.push(units);
+    this.pixel(x + w / 2, y + 34, String(pack.credits), PALETTE.reward, 2, 0.5, 0.5, true);
+    this.pixel(x + w / 2, y + 48, t('creditsUnits'), PALETTE.labelMuted, 1, 0.5, 0.5, true);
 
     const btnW = w - 16;
     const btnX = x + 8;
-    const btnY = y + h - 28;
+    const btnY = y + h - 22;
     const btn = this.add.graphics();
     const paint = (hover: boolean): void => {
       btn.clear();
       if (best && buyable) btn.fillStyle(hover ? PALETTE.goldLight : PALETTE.reward, 1);
       else btn.fillStyle(hover && buyable ? PALETTE.metalEdge : PALETTE.metalMid, 1);
-      btn.fillRect(btnX, btnY, btnW, 20);
+      btn.fillRect(btnX, btnY, btnW, 18);
       btn.lineStyle(1, buyable ? PALETTE.goldDim : PALETTE.metalEdge, 1);
-      btn.strokeRect(btnX + 0.5, btnY + 0.5, btnW - 1, 19);
+      btn.strokeRect(btnX + 0.5, btnY + 0.5, btnW - 1, 17);
     };
     paint(false);
     this.content.push(btn);
 
     const priceLabel = this.domText.add(
       btnX + btnW / 2,
-      btnY + 10,
+      btnY + 9,
       price ?? (this.catalogLoaded ? t('creditsNoPrice') : '…'),
       {
         color: hexToCss(best && buyable ? PALETTE.bgVoid : buyable ? PALETTE.reward : PALETTE.textDisabled),
         strokeColor: hexToCss(best && buyable ? PALETTE.reward : PALETTE.outline),
-        sizePx: 12,
+        // A narrow canvas splits the same row into five tiles; the price is
+        // the one label that must never spill out of its own button.
+        sizePx: btnW >= 76 ? 12 : 10,
         bold: true,
       },
       0.5,
@@ -2503,15 +2370,7 @@ export class ShopScene extends Phaser.Scene {
       flag.fillStyle(PALETTE.reward, 1);
       flag.fillRect(x + 1, y + 1, flagW, 11);
       this.content.push(flag);
-      const flagLabel = this.domText.add(
-        x + 1 + flagW / 2,
-        y + 7,
-        t('creditsBestValue'),
-        { color: hexToCss(PALETTE.bgVoid), strokeColor: hexToCss(PALETTE.reward), sizePx: 8, bold: true },
-        0.5,
-        0.5,
-      );
-      this.content.push(flagLabel);
+      this.pixel(x + 1 + flagW / 2, y + 7, t('creditsBestValue'), PALETTE.bgVoid, 1, 0.5, 0.5, true);
     }
 
     if (!buyable) return;
@@ -2527,8 +2386,8 @@ export class ShopScene extends Phaser.Scene {
 
   private backToMain(): void {
     this.view = 'main';
-    this.titleLabel.setText(t('shop'));
-    this.subtitleLabel?.setText(t('shopTitle'));
+    this.titleLabel.setPixelText(t('shop'));
+    this.subtitleLabel?.setPixelText(t('shopTitle'));
     this.setRailVisible(true);
     this.renderCategory();
   }

@@ -21,6 +21,18 @@ const UI_STRINGS = {
   menuItWatches: { ru: 'Оно смотрит', en: 'It watches' },
 
   levelSelectSector: { ru: 'СЕКТОР', en: 'SECTOR' },
+  // Карта уровней (мокап 4e). Чипов в игре нет, поэтому вместо счётчика
+  // чипов карточка показывает то, что действительно сохраняется: отметку
+  // прохождения и личное лучшее время.
+  levelsNext: { ru: 'ДАЛЬШЕ', en: 'NEXT' },
+  levelsPlay: { ru: 'ИГРАТЬ', en: 'PLAY' },
+  levelsAgain: { ru: 'ЗАНОВО', en: 'AGAIN' },
+  levelsNew: { ru: 'НОВЫЙ', en: 'NEW' },
+  levelsDone: { ru: 'ПРОЙДЕН', en: 'CLEARED' },
+  levelsSectorBest: { ru: 'ЛУЧШЕЕ ПО СЕКТОРУ', en: 'SECTOR BEST' },
+  levelsNoBest: { ru: 'ЕЩЁ НЕ ПРОЙДЕН ЦЕЛИКОМ', en: 'NOT CLEARED YET' },
+  levelsChallengeReset: { ru: 'ДО СБРОСА', en: 'RESETS IN' },
+  levelsUnit: { ru: 'ЮНИТ', en: 'UNIT' },
   levelSelectLevel: { ru: 'Уровень', en: 'Level' },
   dailyChallenge: { ru: 'Испытание дня', en: 'Daily challenge' },
 
@@ -187,10 +199,10 @@ const UI_STRINGS = {
   creditsPaidBand: { ru: 'ЗА РЕАЛЬНЫЕ ДЕНЬГИ', en: 'FOR REAL MONEY' },
   creditsCosmeticOnly: { ru: 'ТОЛЬКО ВНЕШНИЙ ВИД', en: 'COSMETICS ONLY' },
   creditsAdCard: { ru: 'РОЛИК', en: 'AD' },
-  creditsAdDesc: { ru: 'Полминуты рекламы — и кредиты твои.', en: 'Half a minute of ads and the credits are yours.' },
+  creditsAdDesc: { ru: 'Полминуты рекламы.', en: 'Half a minute of ads.' },
   creditsAdReady: { ru: 'МОЖНО СЕЙЧАС', en: 'READY NOW' },
   creditsLevelCard: { ru: 'УРОВЕНЬ', en: 'LEVEL' },
-  creditsLevelDesc: { ru: 'За каждый пройденный уровень.', en: 'For every level you finish.' },
+  creditsLevelDesc: { ru: 'За каждый уровень.', en: 'Per level.' },
   creditsNoDeaths: { ru: 'БЕЗ СМЕРТЕЙ', en: 'NO DEATHS' },
   creditsSectorCard: { ru: 'СЕКТОР', en: 'SECTOR' },
   creditsSectorDesc: { ru: 'Сектор целиком.', en: 'A whole sector.' },

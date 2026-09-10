@@ -97,10 +97,10 @@ export class MainMenuScene extends Phaser.Scene {
    * hitting them. Both are hidden/disabled for the duration and restored
    * when the overlay shuts itself down.
    */
-  private openOverlay(key: string): void {
+  private openOverlay(key: string, data?: object): void {
     this.domText.setLayerVisible(false);
     this.input.enabled = false;
-    this.scene.launch(key);
+    this.scene.launch(key, data);
     this.scene.get(key).events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.domText.setLayerVisible(true);
       this.input.enabled = true;
@@ -256,7 +256,7 @@ export class MainMenuScene extends Phaser.Scene {
       accent: PALETTE.metalEdge,
       hoverAccent: PALETTE.system,
       iconAccent: PALETTE.system,
-      onClick: () => this.openOverlay('ShopScene'),
+      onClick: () => this.openOverlay('ShopScene', { category: 'character' }),
       onLabelState: (state) => this.syncLabel(label, tile, state, 'skin'),
       contentWidth,
     });
