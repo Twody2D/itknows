@@ -7,6 +7,7 @@ import { DomTextOverlay } from '@/ui/DomTextOverlay';
 import type { DomTextHandle } from '@/ui/DomTextOverlay';
 import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
 import { fadeIn } from '@/ui/SceneFade';
+import { attachEscape } from '@/ui/ScreenChrome';
 import { playSfx } from '@/audio/SfxManager';
 import { EventBus } from '@/core/EventBus';
 import { CurrencyService } from '@/services/CurrencyService';
@@ -16,6 +17,7 @@ import { PurchaseManager } from '@/services/PurchaseManager';
 import { AdsService } from '@/services/AdsService';
 import { SaveService } from '@/services/SaveService';
 import { getAllLevels } from '@/gameplay/LevelFactory';
+import { LEVELS_PER_SECTOR } from '@/gameplay/sectors';
 import { SHOP_ITEMS } from '@/data/shop/items';
 import type { ShopCategory, ShopItem, ShopRarity } from '@/data/shop/items';
 import { CREDIT_PACKS } from '@/data/shop/creditPacks';
@@ -90,6 +92,15 @@ const DETAIL_W = 146;
 const DETAIL_TOP = 32;
 const DETAIL_H = 206;
 const PREVIEW_TOP = 56;
+/** Fitting-room vertical rhythm, measured off the mockup and then given the
+ * slack the real DOM text needs: a 9px label renders 11.7px tall (line-height
+ * 1.3), so a two-line description occupies 23.4px, not the mockup's flat 22 —
+ * the earlier layout took the mockup's numbers literally and the second line
+ * printed straight through the status row underneath it. */
+const NAME_Y = 132;
+const DESC_TOP = 146;
+const STATUS_Y = 180;
+const CHAR_BOX_H = 84;
 const BTN_X = DETAIL_X + 6;
 const BTN_W = DETAIL_W - 12;
 const BTN_TOP = 196;
@@ -165,6 +176,8 @@ export class ShopScene extends Phaser.Scene {
   private selectedByCategory = new Map<ShopCategory, string>();
   private purchaseInProgress = false;
   private catalogPricesById = new Map<string, string>();
+  /** The catalog's own numeric `priceValue`, kept so "best value" can be computed from real prices instead of guessed from the pack order. */
+  private catalogValueById = new Map<string, number>();
   private catalogLoaded = false;
   private view: 'main' | 'credits' = 'main';
 
@@ -172,6 +185,8 @@ export class ShopScene extends Phaser.Scene {
   private railHandles: RailHandle[] = [];
   private domText!: DomTextOverlay;
   private walletLabel!: DomTextHandle;
+  private titleLabel!: DomTextHandle;
+  private subtitleLabel: DomTextHandle | null = null;
   private systemLineLabel: DomTextHandle | null = null;
   private systemLineText = '';
 
@@ -214,6 +229,11 @@ export class ShopScene extends Phaser.Scene {
       EventBus.off('system:comment', this.handleSystemComment, this);
     });
 
+    attachEscape(this, () => {
+      if (this.view === 'main') this.scene.stop();
+      else this.backToMain();
+    });
+
     void this.loadCatalog();
     this.renderCategory();
     commentOnShop('open');
@@ -250,7 +270,7 @@ export class ShopScene extends Phaser.Scene {
       else this.backToMain();
     });
 
-    this.domText.add(
+    this.titleLabel = this.domText.add(
       36,
       14,
       t('shop'),
@@ -262,7 +282,7 @@ export class ShopScene extends Phaser.Scene {
     const walletW = 116;
     const walletX = width - 8 - walletW;
     if (walletX >= 150) {
-      this.domText.add(
+      this.subtitleLabel = this.domText.add(
         142,
         15,
         t('shopTitle'),
@@ -310,9 +330,14 @@ export class ShopScene extends Phaser.Scene {
 
   private async loadCatalog(): Promise<void> {
     const catalog = await PurchaseManager.getCatalog();
-    for (const [id, product] of catalog) this.catalogPricesById.set(id, product.price);
+    for (const [id, product] of catalog) {
+      this.catalogPricesById.set(id, product.price);
+      const value = Number.parseFloat(product.priceValue);
+      if (Number.isFinite(value) && value > 0) this.catalogValueById.set(id, value);
+    }
     this.catalogLoaded = true;
     if (this.view === 'main') this.renderCategory();
+    else this.openGetCredits();
   }
 
   // ---- small shared painters ------------------------------------------
@@ -324,13 +349,23 @@ export class ShopScene extends Phaser.Scene {
     g.strokeCircle(cx, cy, r);
   }
 
+  /**
+   * The mockup's tick: not a drawn stroke but an "L" of two 2px bars rotated
+   * -45deg (`border-left`/`border-bottom` + `transform:rotate(-45deg)`). A
+   * stroked polyline gave the corner a mitre and antialiased both ends, which
+   * on a pixel-art surface read as a smudge rather than a mark.
+   */
   private drawCheck(g: Phaser.GameObjects.Graphics, cx: number, cy: number, size: number, color: number): void {
-    g.lineStyle(1.8, color, 1);
-    g.beginPath();
-    g.moveTo(cx - size, cy);
-    g.lineTo(cx - size * 0.25, cy + size * 0.75);
-    g.lineTo(cx + size, cy - size * 0.8);
-    g.strokePath();
+    const long = size * 1.8;
+    const short = size * 1.1;
+    const th = Math.max(2, Math.round(size * 0.5));
+    g.fillStyle(color, 1);
+    g.save();
+    g.translateCanvas(cx, cy);
+    g.rotateCanvas(-Math.PI / 4);
+    g.fillRect(-long / 2, short / 2 - th, long, th);
+    g.fillRect(-long / 2, -short / 2, th, short);
+    g.restore();
   }
 
   private drawLockGlyph(g: Phaser.GameObjects.Graphics, cx: number, cy: number): void {
@@ -582,7 +617,10 @@ export class ShopScene extends Phaser.Scene {
     // `character` can grow past 6 items (ERROR 404 from the SYSTEM ACCESS
     // bundle plus the campaign-locked CORE) — shrink the row instead of
     // letting a third row run off the fixed 270px canvas.
-    const cardH = Math.min(92, Math.floor((this.scale.height - gridTop - 6 - (rows - 1) * gapY) / rows));
+    // Reserve the bottom strip whenever SYSTEM has to live there instead of
+    // in the right-hand column.
+    const bottom = this.scale.height - (this.hasRightColumn() ? 6 : 40);
+    const cardH = Math.min(92, Math.floor((bottom - gridTop - (rows - 1) * gapY) / rows));
 
     items.forEach((item, i) => {
       const x = GRID_X + (i % cols) * (cardW + gapX);
@@ -610,8 +648,11 @@ export class ShopScene extends Phaser.Scene {
     const equipped = owned && this.isEquipped(item);
     const affordable = item.priceCredits === undefined || CurrencyService.canAfford(item.priceCredits);
     const accent = CATEGORY_ACCENT[category];
-    const plateH = 28;
-    const previewH = h - plateH;
+    // The mockup's card is 60px of art over a 28px name plate inside a 92px
+    // box; taking `h - 28` instead pushed the art down and the name/price
+    // with it. The art keeps its 60px and the plate absorbs whatever is left.
+    const previewH = Math.min(60, h - 28);
+    const plateH = h - previewH;
     const centered = category === 'character';
 
     const g = this.add.graphics();
@@ -665,9 +706,10 @@ export class ShopScene extends Phaser.Scene {
 
     const labelX = centered ? x + w / 2 : x + 8;
     const labelOrigin = centered ? 0.5 : 0;
+    const plateMid = y + previewH + plateH / 2;
     const name = this.domText.add(
       labelX,
-      y + previewH + 9,
+      plateMid - 6,
       unlocked ? t(item.nameKey) : t('shopLockedName'),
       {
         color: hexToCss(unlocked ? (equipped ? PALETTE.white : PALETTE.white) : PALETTE.labelMuted),
@@ -680,7 +722,7 @@ export class ShopScene extends Phaser.Scene {
     );
     this.content.push(name);
 
-    const stateY = y + previewH + 21;
+    const stateY = plateMid + 6;
     if (!unlocked) {
       const cond = this.domText.add(
         labelX,
@@ -732,8 +774,8 @@ export class ShopScene extends Phaser.Scene {
     if (equipped) {
       const badge = this.add.graphics();
       badge.fillStyle(accent, 1);
-      badge.fillRect(x + w - 12, y - 4, 16, 16);
-      this.drawCheck(badge, x + w - 4, y + 4, 4, PALETTE.bgVoid);
+      badge.fillRect(x + w - 16, y - 4, 16, 16);
+      this.drawCheck(badge, x + w - 8, y + 4, 4, PALETTE.bgVoid);
       this.content.push(badge);
     }
 
@@ -1005,7 +1047,7 @@ export class ShopScene extends Phaser.Scene {
     if (category === 'character') {
       this.detailFrame(PALETTE.cyanDim, t('shopFittingRoom'), PALETTE.cyan);
       this.buildCharacterScene(item, unlocked);
-      this.buildLegend(item, 156);
+      this.buildLegend(item, DESC_TOP);
     } else {
       if (category === 'trail') {
         this.detailFrame(PALETTE.cyanDim, t('shopTrialRun'), PALETTE.cyan);
@@ -1017,11 +1059,10 @@ export class ShopScene extends Phaser.Scene {
         this.detailFrame(PALETTE.systemDim, t('shopSystemSample'), PALETTE.system);
         this.buildSystemScene(item);
       }
-      // One rhythm for all three: the stage ends at 120 (SYSTEM's third quote
-      // row at 124), the name sits clear of it, and the legend's two lines
-      // stop just above the status row at 180.
-      this.buildNameRow(item, 132);
-      this.buildLegend(item, 150);
+      // One rhythm for all three: the stage ends at 120, the name row sits
+      // clear of it, and the legend's two lines stop above the status row.
+      this.buildNameRow(item, NAME_Y);
+      this.buildLegend(item, DESC_TOP);
     }
 
     this.buildStatusRow(category, item, unlocked);
@@ -1087,7 +1128,7 @@ export class ShopScene extends Phaser.Scene {
 
   /** The row above the button: what the purchase costs you on the left, the price (or a live action) on the right. */
   private buildStatusRow(category: ShopCategory, item: ShopItem, unlocked: boolean): void {
-    const y = 180;
+    const y = STATUS_Y;
     const leftX = DETAIL_X + 8;
     const rightX = DETAIL_X + DETAIL_W - 8;
     const owned = unlocked && this.isOwned(item);
@@ -1264,8 +1305,12 @@ export class ShopScene extends Phaser.Scene {
    * The showroom's one button shape: a lit face standing on a 4px sole that
    * disappears when pressed (the face drops onto it), exactly like the
    * mockup's `box-shadow: 0 4px 0`. `gold` is the money button (gradient face,
-   * white rim, dark text); `accent` is the category-colored equip button
-   * (dark face, colored rim and icon, white text).
+   * white rim); `accent` is the category-colored equip button (dark face,
+   * colored rim and icon). Both carry a white label: the mockup specs the
+   * gold one's text as near-black, but at this size dark-on-gold read as a
+   * gap punched in the face rather than as a word — owner's call after
+   * seeing it live, so the label color is one constant across all three
+   * styles (white over a black hairline) and only the face changes.
    */
   private drawShowroomButton(opts: {
     label: string;
@@ -1284,14 +1329,20 @@ export class ShopScene extends Phaser.Scene {
     const y = opts.y ?? BTN_TOP;
     const w = opts.w ?? BTN_W;
     const h = opts.h ?? BTN_H;
-    const textColor = opts.style === 'gold' ? PALETTE.bgVoid : opts.style === 'accent' ? PALETTE.white : PALETTE.labelMuted;
+    const textColor = opts.style === 'muted' ? PALETTE.labelMuted : PALETTE.white;
 
     const g = this.add.graphics();
     const label = this.domText.add(
       x + w / 2 + (opts.icon === 'none' ? 0 : 9),
       y + h / 2,
       opts.label,
-      { color: hexToCss(textColor), strokeColor: hexToCss(PALETTE.outline), sizePx: 17, bold: true, uppercase: true },
+      {
+        color: hexToCss(textColor),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 17,
+        bold: true,
+        uppercase: true,
+      },
       0.5,
       0.5,
     );
@@ -1358,7 +1409,7 @@ export class ShopScene extends Phaser.Scene {
   private buildCharacterScene(item: ShopItem, unlocked: boolean): void {
     const boxX = DETAIL_X + 14;
     const boxW = 56;
-    const boxH = 96;
+    const boxH = CHAR_BOX_H;
     const g = this.add.graphics();
     g.fillStyle(PALETTE.bgVoid, 1);
     g.fillRect(boxX, PREVIEW_TOP, boxW, boxH);
@@ -1450,13 +1501,20 @@ export class ShopScene extends Phaser.Scene {
     const boxH = 64;
     const groundY = PREVIEW_TOP + TRAIL_FLOOR_OFFSET;
 
+    // The floor sits above the box's own bottom edge (LAUNCH's exhaust fires
+    // downward and INTERFERENCE streaks need headroom), so everything under
+    // it is painted as a solid platform rather than a tint — otherwise the
+    // runner reads as hovering over an empty strip instead of standing on
+    // ground, which is exactly how it looked before.
     const back = this.add.graphics();
     back.fillStyle(PALETTE.bgVoid, 1);
     back.fillRect(boxX, PREVIEW_TOP, boxW, boxH);
-    back.fillStyle(PALETTE.cyanDim, 0.6);
+    back.fillStyle(PALETTE.metalMid, 1);
+    back.fillRect(boxX, groundY, boxW, boxH - TRAIL_FLOOR_OFFSET);
+    back.fillStyle(PALETTE.cyanDim, 1);
     back.fillRect(boxX, groundY, boxW, 2);
-    back.fillStyle(PALETTE.cyanDim, 0.12);
-    back.fillRect(boxX, groundY + 2, boxW, boxH - TRAIL_FLOOR_OFFSET - 2);
+    back.lineStyle(1, PALETTE.metalMid, 1);
+    back.strokeRect(boxX + 0.5, PREVIEW_TOP + 0.5, boxW - 1, boxH - 1);
     this.content.push(back);
 
     const prefix = playerTexturePrefix(InventoryService.getEquipped('character'));
@@ -1683,10 +1741,14 @@ export class ShopScene extends Phaser.Scene {
 
   // ---- right column ------------------------------------------------------
 
+  private hasRightColumn(): boolean {
+    return this.scale.width - RIGHT_COL_X - 8 >= RIGHT_COL_MIN_W;
+  }
+
   private buildRightColumn(category: ShopCategory, items: ShopItem[]): void {
     const colW = this.scale.width - RIGHT_COL_X - 8;
     if (colW < RIGHT_COL_MIN_W) {
-      this.systemLineLabel = null;
+      this.buildSystemStrip();
       return;
     }
 
@@ -1765,6 +1827,49 @@ export class ShopScene extends Phaser.Scene {
       0.5,
     );
     this.content.push(count);
+  }
+
+  /**
+   * SYSTEM's line when the canvas is too narrow for the right-hand column
+   * (the mockup only draws that column past its own 480px safe zone, and at
+   * 480 the commentary simply vanished — the one element of the screen the
+   * game is actually named after). It moves into the strip under the grid,
+   * which the mockup fills with page dots this shop has no use for.
+   */
+  private buildSystemStrip(): void {
+    const y = this.scale.height - 34;
+    const w = DETAIL_X - 8 - GRID_X;
+
+    const bg = this.add.rectangle(GRID_X, y, w, 32, PALETTE.system, 0.12).setOrigin(0, 0);
+    const edge = this.add.rectangle(GRID_X, y, 2, 32, PALETTE.system, 1).setOrigin(0, 0);
+    this.content.push(bg, edge);
+
+    const heading = this.domText.add(
+      GRID_X + 8,
+      y + 16,
+      'SYSTEM',
+      { color: hexToCss(PALETTE.system), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
+      0,
+      0.5,
+    );
+    this.content.push(heading);
+
+    const label = this.domText.add(
+      GRID_X + 52,
+      y + 5,
+      this.systemLineText,
+      {
+        color: hexToCss(PALETTE.systemLight),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 9,
+        wordWrapWidth: w - 60,
+        clampLines: 2,
+      },
+      0,
+      0,
+    );
+    this.content.push(label);
+    this.systemLineLabel = label;
   }
 
   private handleSystemComment(payload: { text: string; category: string }): void {
@@ -1989,7 +2094,7 @@ export class ShopScene extends Phaser.Scene {
   private buildPremiumSystemColumn(top: number, h: number): void {
     const colW = this.scale.width - RIGHT_COL_X - 8;
     if (colW < RIGHT_COL_MIN_W) {
-      this.systemLineLabel = null;
+      this.buildSystemStrip();
       return;
     }
     const bg = this.add.rectangle(RIGHT_COL_X, top, colW, h, PALETTE.system, 0.12).setOrigin(0, 0);
@@ -2080,79 +2185,350 @@ export class ShopScene extends Phaser.Scene {
 
   // ---- GET CREDITS sub-view ---------------------------------------------
 
+  /**
+   * The «получить кредиты» window, rebuilt against mockup 4d: free sources on
+   * top, paid packs underneath. The free half lists only what this build
+   * really pays out (`EARN_AMOUNTS`) — the mockup's daily-login streak and
+   * daily-quest cards have no system behind them yet, so instead of three
+   * cards two of which would be decoration, the row shows the rewarded ad,
+   * per-level pay, and sector pay, the last with a real progress bar over the
+   * player's own completed levels.
+   */
   private openGetCredits(): void {
     this.view = 'credits';
     this.setRailVisible(false);
     this.teardownLivePreview();
     this.clearContent();
     this.systemLineLabel = null;
+    this.titleLabel.setText(t('creditsTitle'));
+    this.subtitleLabel?.setText(t('creditsSubtitle'));
+
     const { width } = this.scale;
+    const x = 12;
+    const w = Math.min(width - 24, 456);
 
-    const title = this.domText.add(
-      width / 2,
-      44,
-      t('shopGetCredits'),
-      { color: hexToCss(PALETTE.cyan), strokeColor: hexToCss(PALETTE.outline), sizePx: 16, bold: true, uppercase: true },
-      0.5,
-      0.5,
-    );
-    this.content.push(title);
+    this.buildBand(x, 38, w, t('creditsFreeBand'), PALETTE.cyan, PALETTE.cyanDim);
 
-    const rowW = Math.min(320, width - 40);
-    let y = 76;
-    for (const pack of CREDIT_PACKS) {
-      const price = this.catalogPricesById.get(pack.productId) ?? (this.catalogLoaded ? t('shopCatalogUnavailable') : '…');
-      this.drawTextRow(width / 2, y, rowW, `${pack.credits} CREDITS — ${price}`, () => void this.handleBuyCreditPack(pack.productId));
-      y += 26;
-    }
+    const gap = 8;
+    const cardW = Math.floor((w - gap * 2) / 3);
+    this.buildAdCard(x, 64, cardW);
+    this.buildLevelCard(x + cardW + gap, 64, cardW);
+    this.buildSectorCard(x + (cardW + gap) * 2, 64, w - (cardW + gap) * 2);
 
-    if (!AdsService.isAdsDisabled()) {
-      this.drawTextRow(width / 2, y + 6, rowW, `${t('shopWatchAd')} — ${EARN_AMOUNTS.rewardedAd} CREDITS`, () => {
-        AdsService.requestRewarded((granted) => {
-          if (granted) {
-            CurrencyService.earnCredits(EARN_AMOUNTS.rewardedAd, 'rewarded_ad');
-            this.refreshBalance();
-          }
-        });
-      });
-    }
+    this.buildBand(x, 148, w, t('creditsPaidBand'), PALETTE.reward, PALETTE.goldDim, t('creditsCosmeticOnly'));
+
+    const packGap = 4;
+    const tileW = Math.floor((w - packGap * (CREDIT_PACKS.length - 1)) / CREDIT_PACKS.length);
+    const best = this.bestValuePackId();
+    CREDIT_PACKS.forEach((pack, i) => {
+      this.buildPackTile(x + i * (tileW + packGap), 174, tileW, pack, pack.productId === best);
+    });
+
+    if (this.hasRightColumn()) this.buildPremiumSystemColumn(38, 218);
+    else this.systemLineLabel = null;
   }
 
-  private drawTextRow(cx: number, cy: number, w: number, text: string, onClick: () => void): void {
+  /** Mockup 4d/4f/4g's section header: a 20px band with a 3px bar in the section's own color. */
+  private buildBand(x: number, y: number, w: number, label: string, accent: number, fill: number, rightLabel?: string): void {
     const g = this.add.graphics();
-    const domLabel = this.domText.add(
-      cx,
-      cy,
-      text,
-      { color: hexToCss(PALETTE.cyan), strokeColor: hexToCss(PALETTE.outline), sizePx: 10 },
+    g.fillStyle(fill, 0.35);
+    g.fillRect(x, y, w, 20);
+    g.fillStyle(accent, 1);
+    g.fillRect(x, y, 3, 20);
+    this.content.push(g);
+
+    const text = this.domText.add(
+      x + 11,
+      y + 10,
+      label,
+      { color: hexToCss(accent), strokeColor: hexToCss(PALETTE.outline), sizePx: 11, bold: true },
+      0,
+      0.5,
+    );
+    this.content.push(text);
+
+    if (rightLabel === undefined) return;
+    const right = this.domText.add(
+      x + w - 8,
+      y + 10,
+      rightLabel,
+      { color: hexToCss(PALETTE.goldEdge), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
+      1,
+      0.5,
+    );
+    this.content.push(right);
+  }
+
+  /** Shared body of an "earn" card: frame, glyph, title, one line of copy. */
+  private buildEarnCard(x: number, y: number, w: number, border: number, title: string, desc: string): void {
+    const g = this.add.graphics();
+    g.fillStyle(PALETTE.metalDark, 1);
+    g.fillRect(x, y, w, 74);
+    g.lineStyle(1, border, 1);
+    g.strokeRect(x + 0.5, y + 0.5, w - 1, 73);
+    this.content.push(g);
+
+    const name = this.domText.add(
+      x + 30,
+      y + 14,
+      title,
+      { color: hexToCss(PALETTE.white), strokeColor: hexToCss(PALETTE.outline), sizePx: 12, bold: true },
+      0,
+      0.5,
+    );
+    this.content.push(name);
+
+    const line = this.domText.add(
+      x + 8,
+      y + 26,
+      desc,
+      {
+        color: hexToCss(PALETTE.textMuted),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 9,
+        wordWrapWidth: w - 16,
+        clampLines: 2,
+      },
+      0,
+      0,
+    );
+    this.content.push(line);
+  }
+
+  /** Coin + "+N", the shop's one money shape, at a card's bottom-left. */
+  private buildEarnAmount(x: number, y: number, amount: number): void {
+    const coin = this.add.graphics();
+    this.drawCoin(coin, x + 6, y, 5, false);
+    this.content.push(coin);
+    const label = this.domText.add(
+      x + 15,
+      y,
+      `+${amount}`,
+      { color: hexToCss(PALETTE.reward), strokeColor: hexToCss(PALETTE.outline), sizePx: 14, bold: true },
+      0,
+      0.5,
+    );
+    this.content.push(label);
+  }
+
+  private buildAdCard(x: number, y: number, w: number): void {
+    const disabled = AdsService.isAdsDisabled();
+    this.buildEarnCard(x, y, w, disabled ? PALETTE.metalEdge : PALETTE.cyanDim, t('creditsAdCard'), t('creditsAdDesc'));
+
+    const glyph = this.add.graphics();
+    glyph.fillStyle(disabled ? PALETTE.textDisabled : PALETTE.cyan, 1);
+    glyph.fillRect(x + 8, y + 8, 16, 12);
+    glyph.fillStyle(PALETTE.bgVoid, 1);
+    glyph.fillTriangle(x + 14, y + 11, x + 14, y + 17, x + 19, y + 14);
+    this.content.push(glyph);
+
+    this.buildEarnAmount(x + 8, y + 58, EARN_AMOUNTS.rewardedAd);
+
+    const state = this.domText.add(
+      x + w - 8,
+      y + 58,
+      disabled ? t('shopNoAdsOwned') : t('creditsAdReady'),
+      {
+        color: hexToCss(disabled ? PALETTE.textDisabled : PALETTE.patrolVisor),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 9,
+        bold: true,
+      },
+      1,
+      0.5,
+    );
+    this.content.push(state);
+
+    if (disabled) return;
+    const zone = this.add.zone(x + w / 2, y + 37, w, 74).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+    zone.on('pointerup', () => {
+      playSfx('uiClick');
+      AdsService.requestRewarded((granted) => {
+        if (!granted) return;
+        CurrencyService.earnCredits(EARN_AMOUNTS.rewardedAd, 'rewarded_ad');
+        this.refreshBalance();
+        this.openGetCredits();
+      });
+    });
+    this.content.push(zone);
+  }
+
+  private buildLevelCard(x: number, y: number, w: number): void {
+    this.buildEarnCard(x, y, w, PALETTE.metalEdge, t('creditsLevelCard'), t('creditsLevelDesc'));
+
+    const glyph = this.add.graphics();
+    glyph.lineStyle(2, PALETTE.patrolVisor, 1);
+    glyph.strokeRect(x + 9, y + 7, 14, 14);
+    this.drawCheck(glyph, x + 16, y + 14, 3.5, PALETTE.patrolVisor);
+    this.content.push(glyph);
+
+    this.buildEarnAmount(x + 8, y + 58, EARN_AMOUNTS.levelComplete);
+
+    const bonus = this.domText.add(
+      x + w - 8,
+      y + 58,
+      `${t('creditsNoDeaths')} +${EARN_AMOUNTS.zeroDeaths}`,
+      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
+      1,
+      0.5,
+    );
+    this.content.push(bonus);
+  }
+
+  private buildSectorCard(x: number, y: number, w: number): void {
+    this.buildEarnCard(x, y, w, PALETTE.systemDim, t('creditsSectorCard'), t('creditsSectorDesc'));
+
+    const glyph = this.add.graphics();
+    glyph.lineStyle(2, PALETTE.system, 1);
+    glyph.strokeRect(x + 9, y + 7, 14, 14);
+    glyph.fillStyle(PALETTE.system, 1);
+    glyph.fillRect(x + 14, y + 12, 4, 4);
+    this.content.push(glyph);
+
+    // Real progress: how far the player is through the sector they are
+    // currently working on, straight out of the save.
+    const done = SaveService.getCompletedLevels().length % LEVELS_PER_SECTOR;
+    const bar = this.add.graphics();
+    bar.fillStyle(PALETTE.metalMid, 1);
+    bar.fillRect(x + 8, y + 44, w - 16, 6);
+    bar.fillStyle(PALETTE.system, 1);
+    bar.fillRect(x + 8, y + 44, Math.round(((w - 16) * done) / LEVELS_PER_SECTOR), 6);
+    this.content.push(bar);
+
+    this.buildEarnAmount(x + 8, y + 60, EARN_AMOUNTS.sectorComplete);
+
+    const count = this.domText.add(
+      x + w - 8,
+      y + 60,
+      `${done} / ${LEVELS_PER_SECTOR}`,
+      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
+      1,
+      0.5,
+    );
+    this.content.push(count);
+  }
+
+  /**
+   * The pack with the most credits per unit of real currency, or `null` while
+   * the catalog is missing/partial. `priceValue` is the catalog's own numeric
+   * field, so the badge states a fact rather than promoting a chosen tier.
+   */
+  private bestValuePackId(): string | null {
+    let bestId: string | null = null;
+    let bestRate = 0;
+    for (const pack of CREDIT_PACKS) {
+      const value = this.catalogValueById.get(pack.productId);
+      if (value === undefined) return null;
+      const rate = pack.credits / value;
+      if (rate > bestRate) {
+        bestRate = rate;
+        bestId = pack.productId;
+      }
+    }
+    return bestId;
+  }
+
+  private buildPackTile(x: number, y: number, w: number, pack: (typeof CREDIT_PACKS)[number], best: boolean): void {
+    const h = 82;
+    const price = this.catalogPricesById.get(pack.productId);
+    const buyable = price !== undefined;
+
+    const g = this.add.graphics();
+    g.fillStyle(PALETTE.metalDark, 1);
+    g.fillRect(x, y, w, h);
+    g.lineStyle(best ? 2 : 1, best ? PALETTE.reward : PALETTE.goldDim, 1);
+    g.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    this.content.push(g);
+
+    // Coin stack — one coin per tier, so the tiles read as a ladder before a
+    // single number is parsed.
+    const coins = Math.min(3, 1 + Math.floor(CREDIT_PACKS.indexOf(pack) / 2));
+    const stack = this.add.graphics();
+    for (let i = 0; i < coins; i++) this.drawCoin(stack, x + w / 2 - (coins - 1) * 7 + i * 14, y + 20, 5, false);
+    this.content.push(stack);
+
+    const amount = this.domText.add(
+      x + w / 2,
+      y + 38,
+      String(pack.credits),
+      { color: hexToCss(PALETTE.reward), strokeColor: hexToCss(PALETTE.outline), sizePx: 17, bold: true },
       0.5,
       0.5,
     );
-    this.content.push(g, domLabel);
-    const h = 20;
+    this.content.push(amount);
 
-    const redraw = (hover: boolean): void => {
-      g.clear();
-      g.fillStyle(PALETTE.metalMid, hover ? 0.42 : 0.22);
-      g.fillRect(cx - w / 2, cy - h / 2, w, h);
-      g.lineStyle(1, hover ? PALETTE.cyan : PALETTE.cyanDim, 1);
-      g.strokeRect(cx - w / 2, cy - h / 2, w, h);
-      domLabel.setColor(hexToCss(hover ? PALETTE.white : PALETTE.cyan));
+    const units = this.domText.add(
+      x + w / 2,
+      y + 51,
+      t('creditsUnits'),
+      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 8, bold: true },
+      0.5,
+      0.5,
+    );
+    this.content.push(units);
+
+    const btnW = w - 16;
+    const btnX = x + 8;
+    const btnY = y + h - 28;
+    const btn = this.add.graphics();
+    const paint = (hover: boolean): void => {
+      btn.clear();
+      if (best && buyable) btn.fillStyle(hover ? PALETTE.goldLight : PALETTE.reward, 1);
+      else btn.fillStyle(hover && buyable ? PALETTE.metalEdge : PALETTE.metalMid, 1);
+      btn.fillRect(btnX, btnY, btnW, 20);
+      btn.lineStyle(1, buyable ? PALETTE.goldDim : PALETTE.metalEdge, 1);
+      btn.strokeRect(btnX + 0.5, btnY + 0.5, btnW - 1, 19);
     };
-    redraw(false);
+    paint(false);
+    this.content.push(btn);
 
-    const zone = this.add.zone(cx, cy, w, h).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
-    zone.on('pointerover', () => redraw(true));
-    zone.on('pointerout', () => redraw(false));
+    const priceLabel = this.domText.add(
+      btnX + btnW / 2,
+      btnY + 10,
+      price ?? (this.catalogLoaded ? t('creditsNoPrice') : '…'),
+      {
+        color: hexToCss(best && buyable ? PALETTE.bgVoid : buyable ? PALETTE.reward : PALETTE.textDisabled),
+        strokeColor: hexToCss(best && buyable ? PALETTE.reward : PALETTE.outline),
+        sizePx: 12,
+        bold: true,
+      },
+      0.5,
+      0.5,
+    );
+    this.content.push(priceLabel);
+
+    if (best) {
+      const flagW = Math.min(w - 2, 50);
+      const flag = this.add.graphics();
+      flag.fillStyle(PALETTE.reward, 1);
+      flag.fillRect(x + 1, y + 1, flagW, 11);
+      this.content.push(flag);
+      const flagLabel = this.domText.add(
+        x + 1 + flagW / 2,
+        y + 7,
+        t('creditsBestValue'),
+        { color: hexToCss(PALETTE.bgVoid), strokeColor: hexToCss(PALETTE.reward), sizePx: 8, bold: true },
+        0.5,
+        0.5,
+      );
+      this.content.push(flagLabel);
+    }
+
+    if (!buyable) return;
+    const zone = this.add.zone(x + w / 2, y + h / 2, w, h).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+    zone.on('pointerover', () => paint(true));
+    zone.on('pointerout', () => paint(false));
     zone.on('pointerup', () => {
       playSfx('uiClick');
-      onClick();
+      void this.handleBuyCreditPack(pack.productId);
     });
     this.content.push(zone);
   }
 
   private backToMain(): void {
     this.view = 'main';
+    this.titleLabel.setText(t('shop'));
+    this.subtitleLabel?.setText(t('shopTitle'));
     this.setRailVisible(true);
     this.renderCategory();
   }

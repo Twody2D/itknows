@@ -43,6 +43,41 @@ const UI_STRINGS = {
   // SDK is actually reachable (`YandexGamesService.isAvailable()`) — a
   // guest outside Yandex Games would otherwise see a sign-in button that
   // can never do anything.
+  // Настройки (мокап 4g). Разделы называются так же, как в макете, но строки
+  // внутри перечисляют только реально существующие переключатели: раздельных
+  // громкостей музыки и эффектов в проекте нет — звук синтезируется одним
+  // движком и гасится одним флагом, поэтому вместо двух ползунков один
+  // тумблер с честной подписью.
+  settingsSectionSound: { ru: 'ЗВУК', en: 'SOUND' },
+  settingsSectionPicture: { ru: 'КАРТИНКА', en: 'PICTURE' },
+  settingsSectionGame: { ru: 'ИГРА', en: 'GAME' },
+  settingsSectionLanguage: { ru: 'ЯЗЫК', en: 'LANGUAGE' },
+  settingsSectionAccount: { ru: 'АККАУНТ', en: 'ACCOUNT' },
+  settingsSoundDesc: { ru: 'Музыка и эффекты вместе', en: 'Music and effects together' },
+  settingsParticlesDesc: { ru: 'Искры, пыль, следы', en: 'Sparks, dust, trails' },
+  settingsShakeDesc: { ru: 'Экран дрожит от удара', en: 'The screen shakes on impact' },
+  settingsGhostDesc: { ru: 'Показывать твой лучший забег', en: 'Show your best run' },
+  settingsLangRu: { ru: 'РУССКИЙ', en: 'РУССКИЙ' },
+  settingsLangEn: { ru: 'ENGLISH', en: 'ENGLISH' },
+  settingsSignIn: { ru: 'ВОЙТИ', en: 'SIGN IN' },
+
+  // «Как играть» (мокап 4f). Пять карточек-картинок; подписи короткие, потому
+  // что рисунок над ними уже показывает то же самое.
+  htpSubtitle: { ru: '30 СЕКУНД И ТЫ ГОТОВ', en: '30 SECONDS AND YOU ARE READY' },
+  htpStepMove: { ru: 'ИДТИ', en: 'MOVE' },
+  htpStepJump: { ru: 'ПРЫГАТЬ', en: 'JUMP' },
+  htpStepChips: { ru: 'СОБИРАТЬ ЧИПЫ', en: 'COLLECT CHIPS' },
+  htpStepTrap: { ru: 'ЛОВУШКА ПРЕДУПРЕЖДАЕТ', en: 'A TRAP WARNS YOU' },
+  htpStepDeath: { ru: 'СМЕРТЬ — ЭТО НОРМАЛЬНО', en: 'DYING IS FINE' },
+  htpOr: { ru: 'ИЛИ', en: 'OR' },
+  htpTap: { ru: 'ТАП', en: 'TAP' },
+  htpChipsNote: { ru: 'Чипы открывают облик в магазине', en: 'Chips unlock skins in the shop' },
+  htpTrapNote: { ru: 'Оранжевая вспышка = будет опасно', en: 'An orange flash means danger is coming' },
+  htpDeathNote: {
+    ru: 'Рестарт быстрый, кредиты не теряются. SYSTEM просто посчитает попытку.',
+    en: 'Restarts are quick and credits stay. SYSTEM just counts the attempt.',
+  },
+
   yandexIdGuest: { ru: 'Yandex ID: гость', en: 'Yandex ID: guest' },
   yandexIdSignedIn: { ru: 'Yandex ID: вошли', en: 'Yandex ID: signed in' },
 
@@ -142,6 +177,27 @@ const UI_STRINGS = {
   shopRestoring: { ru: 'Восстановление покупок…', en: 'Restoring purchases…' },
   shopAdsDisabled: { ru: 'Реклама отключена', en: 'Ads disabled' },
   shopNoAdsOwned: { ru: 'РЕКЛАМА ОТКЛЮЧЕНА', en: 'ADS DISABLED' },
+
+  // «Получить кредиты» (мокап 4d). Бесплатная половина перечисляет только
+  // те источники, которые реально начисляют кредиты сегодня — ежедневного
+  // входа и заданий в игре нет, поэтому и карточек под них здесь нет.
+  creditsTitle: { ru: 'КРЕДИТЫ', en: 'CREDITS' },
+  creditsSubtitle: { ru: 'ВАЛЮТА ДЛЯ ОБЛИКА И ТРЕЙЛОВ', en: 'CURRENCY FOR SKINS AND TRAILS' },
+  creditsFreeBand: { ru: 'БЕСПЛАТНО — ЗА ИГРУ', en: 'FREE — FOR PLAYING' },
+  creditsPaidBand: { ru: 'ЗА РЕАЛЬНЫЕ ДЕНЬГИ', en: 'FOR REAL MONEY' },
+  creditsCosmeticOnly: { ru: 'ТОЛЬКО ВНЕШНИЙ ВИД', en: 'COSMETICS ONLY' },
+  creditsAdCard: { ru: 'РОЛИК', en: 'AD' },
+  creditsAdDesc: { ru: 'Полминуты рекламы — и кредиты твои.', en: 'Half a minute of ads and the credits are yours.' },
+  creditsAdReady: { ru: 'МОЖНО СЕЙЧАС', en: 'READY NOW' },
+  creditsLevelCard: { ru: 'УРОВЕНЬ', en: 'LEVEL' },
+  creditsLevelDesc: { ru: 'За каждый пройденный уровень.', en: 'For every level you finish.' },
+  creditsNoDeaths: { ru: 'БЕЗ СМЕРТЕЙ', en: 'NO DEATHS' },
+  creditsSectorCard: { ru: 'СЕКТОР', en: 'SECTOR' },
+  creditsSectorDesc: { ru: 'Сектор целиком.', en: 'A whole sector.' },
+  creditsUnits: { ru: 'КРЕДИТОВ', en: 'CREDITS' },
+  creditsBonus: { ru: 'БОНУС', en: 'BONUS' },
+  creditsBestValue: { ru: 'ВЫГОДНО', en: 'BEST VALUE' },
+  creditsNoPrice: { ru: 'НЕТ ЦЕНЫ', en: 'NO PRICE' },
   resultCreditsEarned: { ru: 'Получено', en: 'Earned' },
 
   shopSkinDefault: { ru: 'DEFAULT', en: 'DEFAULT' },

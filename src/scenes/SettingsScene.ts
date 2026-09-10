@@ -6,25 +6,29 @@ import { LocaleState } from '@/i18n/Locale';
 import { FxSettings } from '@/fx/FxSettings';
 import { AudioSettings } from '@/audio/AudioSettings';
 import { GhostSettings } from '@/gameplay/GhostSettings';
-import { PixelLabel } from '@/ui/PixelLabel';
-import { PixelButton } from '@/ui/PixelButton';
-import { drawPanel, buildDimBackdrop } from '@/ui/Panel';
+import { DomTextOverlay } from '@/ui/DomTextOverlay';
+import { buildScreenTopbar, buildSectionBand, attachEscape, SCREEN_TOPBAR_H } from '@/ui/ScreenChrome';
+import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
+import { fadeIn } from '@/ui/SceneFade';
+import { playSfx } from '@/audio/SfxManager';
 import { YandexGamesService } from '@/services/YandexGamesService';
 
 /**
- * Launched as an overlay from the main menu or from `PauseScene` — always
- * ends itself with `scene.stop()` on Back, never touches whatever scene is
- * underneath. Every toggle here writes straight to the live settings module
- * (`FxSettings`, `LocaleState`) so effects already in flight (e.g. a
- * `GameplayScene` paused underneath) pick the new value up immediately,
- * with nothing scene-specific to wire.
+ * Full-screen settings, rebuilt against Claude Design mockup 4g: two columns
+ * of sections, a switch per option instead of a row that reads "ЗВУК: ВКЛ".
+ *
+ * Where the mockup and this build disagree, the build wins and the screen
+ * says so plainly rather than drawing a control with nothing behind it:
+ * there are no separate music/SFX volume sliders (audio is one synthesised
+ * bus with one mute flag — `AudioSettings`), and there is no "SYSTEM voice"
+ * switch (the commentator has no off state; §6 makes it part of the game,
+ * not a decoration). Everything drawn here moves a real setting.
+ *
+ * Launched as an overlay from the main menu or `PauseScene` — always ends
+ * itself with `scene.stop()`, never touches whatever is underneath.
  */
 export class SettingsScene extends Phaser.Scene {
-  private soundButton!: PixelButton;
-  private particlesButton!: PixelButton;
-  private shakeButton!: PixelButton;
-  private ghostButton!: PixelButton;
-  private authButton: PixelButton | null = null;
+  private domText!: DomTextOverlay;
   private authorized = false;
 
   constructor() {
@@ -34,146 +38,283 @@ export class SettingsScene extends Phaser.Scene {
   create(): void {
     const { width, height } = this.scale;
 
-    buildDimBackdrop(this);
+    buildRadialGridBackdrop(this, width, height, 'settings-backdrop', 0.55, 0.3);
+    fadeIn(this);
+
+    this.domText = new DomTextOverlay(this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.domText.destroy());
+
+    buildScreenTopbar(this, this.domText, {
+      title: t('settingsTitle'),
+      accent: PALETTE.cyan,
+      right: `v${__APP_VERSION__}`,
+      onBack: () => this.scene.stop(),
+    });
+    attachEscape(this, () => this.scene.stop());
+
+    // Two columns over the 480px safe zone; a wider canvas only widens them.
+    const gutter = 12;
+    const colGap = 8;
+    const total = Math.min(width - gutter * 2, 596);
+    const leftW = Math.round((total - colGap) * 0.5);
+    const rightW = total - colGap - leftW;
+    const leftX = gutter;
+    const rightX = gutter + leftW + colGap;
+
+    // One rhythm both columns keep: band (20) → 6 → row (40) → 6 → row,
+    // sections 12 apart. It lands the last row near the bottom edge instead
+    // of leaving the lower third of the screen empty.
+    const bandH = 20;
+    const rowH = 40;
+    const afterBand = bandH + 6;
+    const nextRow = rowH + 6;
+    const top = SCREEN_TOPBAR_H + 8;
+
+    // ---- left column ----------------------------------------------------
+    buildSectionBand(this, this.domText, leftX, top, leftW, t('settingsSectionSound'), PALETTE.cyan, PALETTE.cyanDim);
+    this.buildToggleRow(leftX, top + afterBand, leftW, rowH, {
+      title: t('sound'),
+      desc: t('settingsSoundDesc'),
+      accent: PALETTE.cyan,
+      track: PALETTE.cyanDim,
+      value: () => !AudioSettings.muted,
+      toggle: () => AudioSettings.toggle(),
+      glyph: (g, x, cy) => {
+        g.fillRect(x, cy - 3, 5, 6);
+        g.fillRect(x + 5, cy - 7, 5, 14);
+        g.fillRect(x + 12, cy - 4, 2, 8);
+      },
+    });
+
+    const pictureY = top + afterBand + rowH + 12;
+    buildSectionBand(this, this.domText, leftX, pictureY, leftW, t('settingsSectionPicture'), PALETTE.cyan, PALETTE.cyanDim);
+    this.buildToggleRow(leftX, pictureY + afterBand, leftW, rowH, {
+      title: t('particles'),
+      desc: t('settingsParticlesDesc'),
+      accent: PALETTE.cyan,
+      track: PALETTE.cyanDim,
+      value: () => FxSettings.particlesEnabled,
+      toggle: () => {
+        FxSettings.particlesEnabled = !FxSettings.particlesEnabled;
+      },
+      glyph: (g, x, cy) => {
+        g.fillRect(x, cy + 2, 3, 3);
+        g.fillRect(x + 6, cy - 3, 3, 3);
+        g.fillRect(x + 12, cy + 1, 3, 3);
+      },
+    });
+    this.buildToggleRow(leftX, pictureY + afterBand + nextRow, leftW, rowH, {
+      title: t('screenShake'),
+      desc: t('settingsShakeDesc'),
+      accent: PALETTE.cyan,
+      track: PALETTE.cyanDim,
+      value: () => FxSettings.shakeEnabled,
+      toggle: () => {
+        FxSettings.shakeEnabled = !FxSettings.shakeEnabled;
+      },
+      glyph: (g, x, cy) => {
+        g.fillRect(x, cy - 5, 2, 10);
+        g.fillRect(x + 6, cy - 8, 3, 16);
+        g.fillRect(x + 13, cy - 5, 2, 10);
+      },
+    });
+
+    // ---- right column ---------------------------------------------------
+    buildSectionBand(this, this.domText, rightX, top, rightW, t('settingsSectionGame'), PALETTE.system, PALETTE.systemDim);
+    this.buildToggleRow(rightX, top + afterBand, rightW, rowH, {
+      title: t('ghostReplay'),
+      desc: t('settingsGhostDesc'),
+      accent: PALETTE.system,
+      track: PALETTE.systemDim,
+      value: () => GhostSettings.enabled,
+      toggle: () => GhostSettings.toggle(),
+      glyph: (g, x, cy) => {
+        g.fillRect(x + 1, cy - 6, 12, 2);
+        g.fillRect(x + 1, cy + 4, 12, 2);
+        g.fillRect(x + 1, cy - 6, 2, 12);
+        g.fillRect(x + 11, cy - 6, 2, 12);
+      },
+    });
+
+    const langY = pictureY;
+    buildSectionBand(this, this.domText, rightX, langY, rightW, t('settingsSectionLanguage'), PALETTE.cyan, PALETTE.cyanDim);
+    this.buildLanguageRow(rightX, langY + afterBand, rightW, rowH);
 
     // Outside a real Yandex Games hosting `isAvailable()` is always false
-    // (dev, CI, this game opened standalone — see `YandexGamesService`'s own
-    // doc comment on why), so the row simply never renders there rather than
-    // offering a sign-in button that could never do anything.
-    const showAuthRow = YandexGamesService.isAvailable();
+    // (dev, CI, this game opened standalone), so the row simply never renders
+    // there rather than offering a sign-in button that could never do
+    // anything.
+    if (!YandexGamesService.isAvailable()) return;
+    const accountY = langY + afterBand + nextRow;
+    buildSectionBand(this, this.domText, rightX, accountY, rightW, t('settingsSectionAccount'), PALETTE.system, PALETTE.systemDim);
+    this.buildAuthRow(rightX, accountY + afterBand, rightW, rowH);
+  }
 
-    const panelW = 190;
-    const panelH = 204 + (showAuthRow ? 28 : 0);
-    const panelX = width / 2 - panelW / 2;
-    const panelY = height / 2 - panelH / 2;
-    const g = this.add.graphics();
-    drawPanel(g, panelX, panelY, panelW, panelH);
+  /** One 36px option row: glyph, name, one line of explanation, and a switch that reads its own live value. */
+  private buildToggleRow(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    opts: {
+      title: string;
+      desc: string;
+      accent: number;
+      /** The switch's "on" track — the accent's own dark step, so the knob still reads against it. */
+      track: number;
+      value: () => boolean;
+      toggle: () => void;
+      glyph: (g: Phaser.GameObjects.Graphics, x: number, cy: number) => void;
+    },
+  ): void {
+    const frame = this.add.graphics();
+    frame.fillStyle(PALETTE.metalDark, 1);
+    frame.fillRect(x, y, w, h);
+    frame.lineStyle(1, PALETTE.metalMid, 1);
+    frame.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
 
-    new PixelLabel(this, width / 2, panelY + 18, t('settingsTitle'), {
-      color: hexToCss(PALETTE.white),
-      strokeColor: hexToCss(PALETTE.outline),
-      scale: 2,
-    }).setOrigin(0.5, 0.5);
+    const glyph = this.add.graphics();
+    glyph.fillStyle(opts.accent, 1);
+    opts.glyph(glyph, x + 8, y + h / 2);
 
-    const rowW = panelW - 24;
-    const rowH = 20;
-    const gap = 8;
-    let y = panelY + 46;
-
-    this.soundButton = new PixelButton(this, width / 2, y, this.soundLabel(), {
-      width: rowW,
-      height: rowH,
-      textScale: 1,
-      onClick: () => {
-        AudioSettings.toggle();
-        this.soundButton.setLabelText(this.soundLabel());
+    this.domText.add(
+      x + 30,
+      y + h / 2 - 7,
+      opts.title,
+      {
+        color: hexToCss(PALETTE.white),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 12,
+        bold: true,
+        uppercase: true,
       },
-    });
-    y += rowH + gap;
+      0,
+      0.5,
+    );
+    this.domText.add(
+      x + 30,
+      y + h / 2 + 7,
+      opts.desc,
+      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
+      0,
+      0.5,
+    );
 
-    this.particlesButton = new PixelButton(this, width / 2, y, this.particlesLabel(), {
-      width: rowW,
-      height: rowH,
-      textScale: 1,
-      onClick: () => {
-        FxSettings.particlesEnabled = !FxSettings.particlesEnabled;
-        this.particlesButton.setLabelText(this.particlesLabel());
-      },
-    });
-    y += rowH + gap;
+    const swW = 30;
+    const swH = 16;
+    const swX = x + w - 8 - swW;
+    const swY = y + (h - swH) / 2;
+    const sw = this.add.graphics();
+    const paint = (): void => {
+      const on = opts.value();
+      sw.clear();
+      sw.fillStyle(on ? opts.track : PALETTE.metalMid, 1);
+      sw.fillRect(swX, swY, swW, swH);
+      sw.lineStyle(1, on ? opts.accent : PALETTE.metalEdge, 1);
+      sw.strokeRect(swX + 0.5, swY + 0.5, swW - 1, swH - 1);
+      sw.fillStyle(on ? opts.accent : PALETTE.textDisabled, 1);
+      sw.fillRect(on ? swX + swW - 15 : swX + 1, swY + 1, 14, 14);
+    };
+    paint();
 
-    this.shakeButton = new PixelButton(this, width / 2, y, this.shakeLabel(), {
-      width: rowW,
-      height: rowH,
-      textScale: 1,
-      onClick: () => {
-        FxSettings.shakeEnabled = !FxSettings.shakeEnabled;
-        this.shakeButton.setLabelText(this.shakeLabel());
-      },
+    const zone = this.add.zone(x + w / 2, y + h / 2, w, h).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+    zone.on('pointerup', () => {
+      playSfx('uiClick');
+      opts.toggle();
+      paint();
     });
-    y += rowH + gap;
+  }
 
-    this.ghostButton = new PixelButton(this, width / 2, y, this.ghostLabel(), {
-      width: rowW,
-      height: rowH,
-      textScale: 1,
-      onClick: () => {
-        GhostSettings.toggle();
-        this.ghostButton.setLabelText(this.ghostLabel());
-      },
-    });
-    y += rowH + gap;
+  private buildLanguageRow(x: number, y: number, w: number, h: number): void {
+    const gap = 6;
+    const halfW = Math.floor((w - gap) / 2);
+    const options: { locale: 'ru' | 'en'; label: string }[] = [
+      { locale: 'ru', label: t('settingsLangRu') },
+      { locale: 'en', label: t('settingsLangEn') },
+    ];
 
-    new PixelButton(this, width / 2, y, this.languageLabel(), {
-      width: rowW,
-      height: rowH,
-      textScale: 1,
-      onClick: () => {
-        LocaleState.set(LocaleState.current === 'ru' ? 'en' : 'ru');
-        this.refreshAllLabels();
-      },
-    });
-    y += rowH + gap;
+    options.forEach((option, i) => {
+      const bx = x + i * (halfW + gap);
+      const active = LocaleState.current === option.locale;
 
-    if (showAuthRow) {
-      this.authButton = new PixelButton(this, width / 2, y, this.authLabel(), {
-        width: rowW,
-        height: rowH,
-        textScale: 1,
-        onClick: () => {
-          // No sign-out path exists (the SDK has none) — once signed in,
-          // the row is a status display, not a button, matching master
-          // prompt §41's "conscious action" gate having exactly one direction.
-          if (this.authorized) return;
-          void YandexGamesService.requestAuthorization().then((ok) => {
-            this.authorized = ok;
-            this.authButton?.setLabelText(this.authLabel());
-          });
+      const g = this.add.graphics();
+      g.fillStyle(active ? PALETTE.panelHover : PALETTE.metalDark, 1);
+      g.fillRect(bx, y, halfW, h);
+      g.lineStyle(active ? 2 : 1, active ? PALETTE.cyan : PALETTE.metalEdge, 1);
+      g.strokeRect(bx + 1, y + 1, halfW - 2, h - 2);
+
+      this.domText.add(
+        bx + halfW / 2,
+        y + h / 2,
+        option.label,
+        {
+          color: hexToCss(active ? PALETTE.white : PALETTE.labelMuted),
+          strokeColor: hexToCss(PALETTE.outline),
+          sizePx: 14,
+          bold: true,
         },
-      });
-      y += rowH + gap;
-      void this.refreshAuthStatus();
-    }
+        0.5,
+        0.5,
+      );
 
-    new PixelButton(this, width / 2, y, t('back'), {
-      width: rowW,
-      height: rowH,
-      textScale: 1,
-      onClick: () => this.scene.stop(),
+      if (active) return;
+      const zone = this.add.zone(bx + halfW / 2, y + h / 2, halfW, h).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+      zone.on('pointerup', () => {
+        playSfx('uiClick');
+        LocaleState.set(option.locale);
+        // Every label on this screen (title included) is now in the wrong
+        // language, so the whole screen re-renders rather than a subset.
+        this.scene.restart();
+      });
     });
   }
 
-  private authLabel(): string {
-    return this.authorized ? t('yandexIdSignedIn') : t('yandexIdGuest');
-  }
+  private buildAuthRow(x: number, y: number, w: number, h: number): void {
+    const frame = this.add.graphics();
+    frame.fillStyle(PALETTE.metalDark, 1);
+    frame.fillRect(x, y, w, h);
+    frame.lineStyle(1, PALETTE.systemDim, 1);
+    frame.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
 
-  private async refreshAuthStatus(): Promise<void> {
-    this.authorized = await YandexGamesService.isPlayerAuthorized();
-    this.authButton?.setLabelText(this.authLabel());
-  }
+    const status = this.domText.add(
+      x + 10,
+      y + h / 2,
+      t('yandexIdGuest'),
+      { color: hexToCss(PALETTE.textMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 11, bold: true },
+      0,
+      0.5,
+    );
 
-  private soundLabel(): string {
-    return `${t('sound')}: ${AudioSettings.muted ? t('off') : t('on')}`;
-  }
+    const action = this.domText.add(
+      x + w - 10,
+      y + h / 2,
+      t('settingsSignIn'),
+      { color: hexToCss(PALETTE.system), strokeColor: hexToCss(PALETTE.outline), sizePx: 11, bold: true },
+      1,
+      0.5,
+    );
 
-  private particlesLabel(): string {
-    return `${t('particles')}: ${FxSettings.particlesEnabled ? t('on') : t('off')}`;
-  }
+    const applyState = (): void => {
+      status.setText(this.authorized ? t('yandexIdSignedIn') : t('yandexIdGuest'));
+      action.setVisible(!this.authorized);
+    };
 
-  private shakeLabel(): string {
-    return `${t('screenShake')}: ${FxSettings.shakeEnabled ? t('on') : t('off')}`;
-  }
+    void YandexGamesService.isPlayerAuthorized().then((ok) => {
+      this.authorized = ok;
+      applyState();
+    });
+    applyState();
 
-  private ghostLabel(): string {
-    return `${t('ghostReplay')}: ${GhostSettings.enabled ? t('on') : t('off')}`;
-  }
-
-  private languageLabel(): string {
-    return `${t('language')}: ${LocaleState.current.toUpperCase()}`;
-  }
-
-  /** Switching language mid-screen means every label on this screen (including the title) needs to re-render, not just the toggle rows. */
-  private refreshAllLabels(): void {
-    this.scene.restart();
+    const zone = this.add.zone(x + w / 2, y + h / 2, w, h).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+    zone.on('pointerup', () => {
+      // No sign-out path exists (the SDK has none) — once signed in, the row
+      // is a status display, not a button.
+      if (this.authorized) return;
+      playSfx('uiClick');
+      void YandexGamesService.requestAuthorization().then((ok) => {
+        this.authorized = ok;
+        applyState();
+      });
+    });
   }
 }

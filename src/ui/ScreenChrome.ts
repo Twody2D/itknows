@@ -1,0 +1,144 @@
+import Phaser from 'phaser';
+import { PALETTE } from '@/config/palette';
+import { hexToCss } from '@/utils/color';
+import { playSfx } from '@/audio/SfxManager';
+import type { DomTextOverlay } from './DomTextOverlay';
+
+/**
+ * The chrome every full-screen overlay in the Claude Design mockups shares
+ * (rounds 4d/4f/4g): a 28px top bar with a chevron on the left, and 20px
+ * section bands with a 3px bar in the section's own color. Kept here rather
+ * than copied into each scene so the three screens can't drift apart the way
+ * the old panel-and-button versions did.
+ */
+export const SCREEN_TOPBAR_H = 28;
+
+export interface ScreenTopbarOptions {
+  title: string;
+  subtitle?: string;
+  /** Right-aligned technical token (version, counter) — never something the player must read. */
+  right?: string;
+  rightColor?: number;
+  accent: number;
+  onBack: () => void;
+}
+
+export function buildScreenTopbar(scene: Phaser.Scene, domText: DomTextOverlay, opts: ScreenTopbarOptions): void {
+  const { width } = scene.scale;
+
+  const bg = scene.add.graphics();
+  bg.fillStyle(PALETTE.bgIndigo, 1);
+  bg.fillRect(0, 0, width, SCREEN_TOPBAR_H);
+  bg.fillStyle(opts.accent, 0.6);
+  bg.fillRect(0, SCREEN_TOPBAR_H - 1, width, 1);
+
+  const chev = scene.add.graphics();
+  chev.fillStyle(PALETTE.metalMid, 1);
+  chev.lineStyle(1, PALETTE.metalEdge, 1);
+  chev.fillRect(8, 4, 20, 20);
+  chev.strokeRect(8, 4, 20, 20);
+  chev.lineStyle(2, PALETTE.cyan, 1);
+  chev.beginPath();
+  chev.moveTo(21, 9);
+  chev.lineTo(15, 14);
+  chev.lineTo(21, 19);
+  chev.strokePath();
+
+  const zone = scene.add.zone(18, 14, 32, 28).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+  zone.on('pointerup', () => {
+    playSfx('uiClick');
+    opts.onBack();
+  });
+
+  const title = domText.add(
+    36,
+    14,
+    opts.title,
+    { color: hexToCss(PALETTE.white), strokeColor: hexToCss(PALETTE.outline), sizePx: 17, bold: true, uppercase: true },
+    0,
+    0.5,
+  );
+
+  // The subtitle is the first thing to go on a narrow canvas — it explains,
+  // it never instructs, so losing it costs the player nothing.
+  if (opts.subtitle !== undefined && width >= 520) {
+    domText.add(
+      40 + title.width,
+      15,
+      opts.subtitle,
+      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
+      0,
+      0.5,
+    );
+  }
+
+  if (opts.right !== undefined) {
+    domText.add(
+      width - 10,
+      15,
+      opts.right,
+      {
+        color: hexToCss(opts.rightColor ?? PALETTE.systemMuted),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 9,
+        bold: true,
+      },
+      1,
+      0.5,
+    );
+  }
+}
+
+/** A section header band: 20px tall, a 3px bar in `accent`, an optional right-aligned note. */
+export function buildSectionBand(
+  scene: Phaser.Scene,
+  domText: DomTextOverlay,
+  x: number,
+  y: number,
+  w: number,
+  label: string,
+  accent: number,
+  fill: number,
+  rightLabel?: string,
+): void {
+  const g = scene.add.graphics();
+  g.fillStyle(fill, 0.35);
+  g.fillRect(x, y, w, 20);
+  g.fillStyle(accent, 1);
+  g.fillRect(x, y, 3, 20);
+
+  domText.add(
+    x + 11,
+    y + 10,
+    label,
+    { color: hexToCss(accent), strokeColor: hexToCss(PALETTE.outline), sizePx: 11, bold: true },
+    0,
+    0.5,
+  );
+
+  if (rightLabel === undefined) return;
+  domText.add(
+    x + w - 8,
+    y + 10,
+    rightLabel,
+    { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
+    1,
+    0.5,
+  );
+}
+
+/**
+ * ESC closes any overlay screen, matching what the chevron does. Bound per
+ * scene and released on shutdown, so a stack of overlays can't leave a dead
+ * handler behind that closes the wrong screen later.
+ */
+export function attachEscape(scene: Phaser.Scene, onEscape: () => void): void {
+  const keyboard = scene.input.keyboard;
+  if (!keyboard) return;
+  const handler = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape') return;
+    onEscape();
+  };
+  keyboard.on('keydown', handler);
+  scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => keyboard.off('keydown', handler));
+}

@@ -5,6 +5,7 @@ import { t } from '@/i18n/ui';
 import { PixelLabel } from '@/ui/PixelLabel';
 import { PixelButton } from '@/ui/PixelButton';
 import { drawPanel, buildDimBackdrop } from '@/ui/Panel';
+import { attachEscape } from '@/ui/ScreenChrome';
 import { LEVELS_PER_SECTOR, SECTOR_COUNT, levelIdFor, sectorName } from '@/gameplay/sectors';
 import { SaveService } from '@/services/SaveService';
 import { DAILY_CHALLENGE_VARIANT_ID, getDailyChallenge } from '@/gameplay/DailyChallenge';
@@ -35,6 +36,7 @@ export class LevelSelectScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     buildDimBackdrop(this);
+    attachEscape(this, () => this.scene.stop());
 
     const panelW = Math.min(320, width - 24);
     const panelH = PANEL_H;
