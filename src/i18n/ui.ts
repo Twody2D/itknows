@@ -108,13 +108,30 @@ const UI_STRINGS = {
   shopTrialRun: { ru: 'ПРОБНЫЙ ЗАБЕГ', en: 'TEST RUN' },
   shopDeathPreview: { ru: 'ПРЕВЬЮ', en: 'PREVIEW' },
   shopSystemSample: { ru: 'ТРИ РЕПЛИКИ ПОДРЯД', en: 'THREE LINES IN A ROW' },
-  shopNoAdsFeature1: { ru: 'Без ролика между секторами — навсегда', en: 'No ad between sectors — ever again' },
-  shopNoAdsFeature2: { ru: 'Разовый платёж, не подписка', en: 'One-time payment, not a subscription' },
-  shopNoAdsFeature3: { ru: 'Подарок: 500 монет сразу', en: 'A gift: 500 credits right away' },
+  // Offer copy is written against what the build actually does: interstitials
+  // only ever fire at a sector break (`AdsService`), and the credits gift is a
+  // real one-time grant in `PurchaseManager`. Nothing here promises a faster
+  // respawn — the death-to-retry budget is the same for everyone (CLAUDE.md #5).
+  shopNoAdsForever: { ru: 'БЕЗ РЕКЛАМЫ НАВСЕГДА', en: 'NO ADS FOREVER' },
+  shopNoAdsFeature1: { ru: 'Никаких роликов между секторами', en: 'No video ads between sectors' },
+  shopNoAdsFeature2: { ru: 'Подарок: 500 монет сразу', en: 'A gift: 500 credits right away' },
+  shopNoAdsFeature3: { ru: 'Разовая покупка, не подписка', en: 'One-time purchase, not a subscription' },
+  shopNoAdsNote: { ru: 'Уровни и облик от этого не меняются.', en: 'Levels and looks stay exactly the same.' },
+  shopBundleFeature: { ru: 'Всё из «БЕЗ РЕКЛАМЫ», плюс:', en: 'Everything in NO ADS, plus:' },
+  // Deliberately terse: these sit inside a 134x36 showroom button next to an
+  // icon, where "Экипировать"/"Экипировано" ran the full width and read as a
+  // sentence rather than a control (showroom redesign, 2026-09-06).
   shopBuy: { ru: 'Купить', en: 'Buy' },
-  shopEquip: { ru: 'Экипировать', en: 'Equip' },
-  shopEquipped: { ru: 'Экипировано', en: 'Equipped' },
-  shopOwned: { ru: 'Уже получено', en: 'Owned' },
+  shopEquip: { ru: 'Надеть', en: 'Equip' },
+  shopEquipped: { ru: 'Надет', en: 'Worn' },
+  shopOwned: { ru: 'Есть', en: 'Owned' },
+  shopWorn: { ru: 'НАДЕТО', en: 'WORN' },
+  shopNotEnough: { ru: 'НЕ ХВАТАЕТ', en: 'NOT ENOUGH' },
+  shopReplay: { ru: 'ЕЩЁ РАЗ', en: 'AGAIN' },
+  shopSignalShort: { ru: 'Сигнал', en: 'Signal' },
+  shopRarityCommon: { ru: 'БАЗА', en: 'BASE' },
+  shopRarityRare: { ru: 'РЕДКИЙ', en: 'RARE' },
+  shopRarityPremium: { ru: 'ТОП', en: 'TOP' },
   shopInsufficientCredits: { ru: 'Недостаточно кредитов', en: 'Insufficient credits' },
   shopGetCredits: { ru: 'Получить кредиты', en: 'Get credits' },
   shopToArchive: { ru: 'В архив', en: 'To archive' },
@@ -132,18 +149,21 @@ const UI_STRINGS = {
   shopSkinVoid: { ru: 'VOID', en: 'VOID' },
   shopSkinVoidDesc: { ru: 'Тёмный корпус, лиловый визор.', en: 'A darkened chassis, a violet visor.' },
   shopSkinSignal: { ru: 'SIGNAL', en: 'SIGNAL' },
-  shopSkinSignalDesc: { ru: 'Тот же корпус, предупреждающий сигнальный визор.', en: 'The stock chassis, a warning-signal visor.' },
+  shopSkinSignalDesc: { ru: 'Тот же корпус, сигнальный визор.', en: 'The stock chassis, a signal visor.' },
   shopSkinError404: { ru: 'ERROR 404', en: 'ERROR 404' },
   shopSkinError404Desc: { ru: 'Тебе не должно быть это доступно.', en: 'You should not have access to this.' },
+  // The fitting-room legend is a fixed 126x22 slot (two 9px lines, ~44
+  // characters) — descriptions are written to that budget instead of being
+  // clipped mid-word with an ellipsis.
   shopSkinPatrol: { ru: 'ПАТРУЛЬ', en: 'PATROL' },
   shopSkinPatrolDesc: {
-    ru: 'Служебный корпус ночного обхода — раньше он проверял камеры, теперь камеры проверяют его.',
-    en: 'A night-patrol service chassis — it used to check the cameras, now the cameras check it.',
+    ru: 'Обход ночной смены. Камеры смотрят на него.',
+    en: 'The night shift round. Cameras watch him now.',
   },
   shopSkinEcho: { ru: 'ЭХО', en: 'ECHO' },
   shopSkinEchoDesc: {
-    ru: 'Копия сигнала, которую SYSTEM однажды отправила и забыла — она вернулась и решила остаться.',
-    en: 'A copy of a signal SYSTEM once sent and forgot about — it came back and decided to stay.',
+    ru: 'Сигнал, который SYSTEM забыла. Он вернулся.',
+    en: 'A signal SYSTEM forgot about. It came back.',
   },
   shopSkinCore: { ru: 'ЯДРО', en: 'CORE' },
   shopSkinCoreDesc: { ru: 'То, что остаётся после сектора 5.', en: 'What is left after sector 5.' },
@@ -164,23 +184,23 @@ const UI_STRINGS = {
 
   shopTrailDataTrail: { ru: 'СЛЕД ДАННЫХ', en: 'DATA TRAIL' },
   shopTrailDataTrailDesc: {
-    ru: 'Каждый твой шаг записывается — буквально, прямо в воздух за спиной.',
-    en: 'Every step you take gets logged — literally, right into the air behind you.',
+    ru: 'След из данных остаётся прямо за спиной.',
+    en: 'A trail of data stays right behind you.',
   },
   shopTrailLaunch: { ru: 'ЗАПУСК', en: 'LAUNCH' },
   shopTrailLaunchDesc: {
-    ru: 'Стартовые сопла в пятках — они не для полёта, а для того, чтобы было красиво.',
-    en: 'Launch thrusters in the heels — not for flight, just to look good doing it.',
+    ru: 'Сопла в пятках. Просто чтобы было красиво.',
+    en: 'Thrusters in the heels. Purely for the look.',
   },
   shopTrailInterference: { ru: 'ПОМЕХА', en: 'INTERFERENCE' },
   shopTrailInterferenceDesc: {
-    ru: 'На большой скорости картинка тебя не догоняет и рассыпается на строчки.',
-    en: 'At high speed the picture can\'t keep up and breaks into scan lines.',
+    ru: 'На скорости картинка рассыпается на строчки.',
+    en: 'At speed the picture breaks into scan lines.',
   },
   shopTrailBeep7: { ru: 'БИП-7', en: 'BEEP-7' },
   shopTrailBeep7Desc: {
-    ru: 'Дрон наблюдения, которому поручили следить за тобой — а он привязался.',
-    en: 'A surveillance drone assigned to watch you — it got attached instead.',
+    ru: 'Дрону поручили следить. Он привязался.',
+    en: 'A drone was told to watch you. It got attached.',
   },
 
   shopNoAds: { ru: 'NO ADS', en: 'NO ADS' },

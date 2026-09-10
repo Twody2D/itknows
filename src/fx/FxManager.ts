@@ -22,6 +22,7 @@ export class FxManager {
   private deathEmitter: Emitter;
   private victoryEmitter: Emitter;
   private pulses = new Map<string, Phaser.Tweens.Tween>();
+  private clipMask: Phaser.Display.Masks.GeometryMask | null = null;
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -99,7 +100,7 @@ export class FxManager {
    * Neither variant touches timing or the death itself, only what it looks
    * like.
    */
-  deathBurst(x: number, y: number, variant: 'static' | 'glitch' | 'data_wipe' = 'static'): void {
+  deathBurst(x: number, y: number, variant: 'static' | 'glitch' | 'data_wipe' = 'static', shake = true): void {
     if (FxSettings.particlesEnabled) this.deathEmitter.explode(variant === 'data_wipe' ? 22 : 14, x, y);
     this.flash(x, y, variant === 'data_wipe' ? PALETTE.white : PALETTE.danger, variant === 'data_wipe' ? 0.34 : 0.22);
     this.glitchSlice(x, y);
@@ -112,13 +113,29 @@ export class FxManager {
       this.glitchSlice(x, y + 5, 14);
       this.glitchSlice(x, y, 18);
     }
-    this.shake(140, variant === 'data_wipe' ? 0.01 : 0.006);
+    // `shake: false` is for the shop's looping preview — the same burst
+    // without jolting a screen the player is reading, never for real deaths.
+    if (shake) this.shake(140, variant === 'data_wipe' ? 0.01 : 0.006);
   }
 
   victoryBurst(x: number, y: number): void {
     if (FxSettings.particlesEnabled) this.victoryEmitter.explode(18, x, y);
     this.flash(x, y, PALETTE.reward, 0.16);
     this.pulseRing(x, y);
+  }
+
+  /**
+   * Clips everything this manager draws to `mask` — the shop's looping death
+   * preview plays the real burst inside a 62x64 stage, and fragments that
+   * flew out of it would otherwise land all over the panel. Gameplay never
+   * sets one (`null` is the normal state).
+   */
+  setClipMask(mask: Phaser.Display.Masks.GeometryMask | null): void {
+    this.clipMask = mask;
+    for (const emitter of [this.jumpDustEmitter, this.landDustEmitter, this.deathEmitter, this.victoryEmitter]) {
+      if (mask) emitter.setMask(mask);
+      else emitter.clearMask();
+    }
   }
 
   shake(durationMs: number, intensity: number): void {
@@ -150,6 +167,7 @@ export class FxManager {
 
   private flash(x: number, y: number, color: number, alpha: number): void {
     const rect = this.scene.add.rectangle(x, y, 24, 24, color, alpha).setDepth(140).setBlendMode(Phaser.BlendModes.ADD);
+    if (this.clipMask) rect.setMask(this.clipMask);
     this.scene.tweens.add({
       targets: rect,
       alpha: 0,
@@ -164,6 +182,7 @@ export class FxManager {
     for (let i = 0; i < 3; i++) {
       const w = 10 + i * 4;
       const slice = this.scene.add.rectangle(x, y - 6 + i * 5, w, 1, PALETTE.cyan, 0.5).setDepth(145);
+      if (this.clipMask) slice.setMask(this.clipMask);
       this.scene.tweens.add({
         targets: slice,
         x: x + (i % 2 === 0 ? kick : -kick),

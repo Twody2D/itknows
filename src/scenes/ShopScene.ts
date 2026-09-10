@@ -17,20 +17,21 @@ import { AdsService } from '@/services/AdsService';
 import { SaveService } from '@/services/SaveService';
 import { getAllLevels } from '@/gameplay/LevelFactory';
 import { SHOP_ITEMS } from '@/data/shop/items';
-import type { ShopCategory, ShopItem } from '@/data/shop/items';
+import type { ShopCategory, ShopItem, ShopRarity } from '@/data/shop/items';
 import { CREDIT_PACKS } from '@/data/shop/creditPacks';
 import { EARN_AMOUNTS } from '@/data/shop/economy';
 import { commentOnShop } from '@/data/dialogues/shop';
+import type { ShopCommentKind } from '@/data/dialogues/shop';
 import { playerTexturePrefix, skinColorsFor } from '@/data/shop/skinVisuals';
+import { PHYSICS } from '@/config/physics';
 import { TrailFx } from '@/gameplay/TrailFx';
 import type { TrailKind } from '@/gameplay/TrailFx';
 import { FxManager } from '@/fx/FxManager';
 import { PACKS } from '@/data/dialogues';
 
-// Rail order top-to-bottom (Claude Design showroom mockup, "ХОД 3/4",
-// 2026-09-06) — БЕЗ РЕК. moves to the bottom as its own visually distinct
-// gold diamond instead of the earlier "premium always first" placement, so
-// the mockup supersedes that older ordering call.
+// Rail order top-to-bottom, per the Claude Design showroom mockup — БЕЗ РЕК.
+// sits at the bottom as the one solid gold shape in the rail, which is what
+// separates the paid tab from the free ones visually instead of by position.
 const CATEGORIES: ShopCategory[] = ['character', 'trail', 'death_fx', 'system', 'premium'];
 const CATEGORY_LABEL: Record<ShopCategory, UiStringKey> = {
   character: 'shopCategoryCharacter',
@@ -39,7 +40,7 @@ const CATEGORY_LABEL: Record<ShopCategory, UiStringKey> = {
   system: 'shopCategorySystem',
   premium: 'shopCategoryPremium',
 };
-/** Each category's own identity color — rail active-state, detail panel border, and "equipped/owned" action-button accent. Money itself is always gold regardless of category (PALETTE.reward's own doc comment). */
+/** Each category's identity color — rail active state, panel border, equip-button accent. Money stays gold in every category (see `PALETTE.reward`'s own note). */
 const CATEGORY_ACCENT: Record<ShopCategory, number> = {
   character: PALETTE.cyan,
   trail: PALETTE.cyan,
@@ -47,12 +48,30 @@ const CATEGORY_ACCENT: Record<ShopCategory, number> = {
   system: PALETTE.system,
   premium: PALETTE.reward,
 };
-const CATEGORY_ACCENT_DIM: Record<ShopCategory, number> = {
+/** The darker step of each accent, used for a button's sole and a panel's dim border. */
+const CATEGORY_SOLE: Record<ShopCategory, number> = {
   character: PALETTE.cyanDim,
   trail: PALETTE.cyanDim,
-  death_fx: PALETTE.dangerAlt,
+  death_fx: PALETTE.goldSole,
   system: PALETTE.systemDim,
-  premium: PALETTE.goldDim,
+  premium: PALETTE.goldSole,
+};
+const CATEGORY_COMMENT: Record<ShopCategory, ShopCommentKind> = {
+  character: 'browse_character',
+  trail: 'browse_trail',
+  death_fx: 'browse_death_fx',
+  system: 'browse_system',
+  premium: 'browse_premium',
+};
+const RARITY_LABEL: Record<ShopRarity, UiStringKey> = {
+  common: 'shopRarityCommon',
+  rare: 'shopRarityRare',
+  premium: 'shopRarityPremium',
+};
+const RARITY_COLOR: Record<ShopRarity, number> = {
+  common: PALETTE.labelMuted,
+  rare: PALETTE.patrolVisor,
+  premium: PALETTE.echoVisor,
 };
 /** `ShopItem.category` values that map onto an `InventoryService` equip slot — `premium` products are owned-only, never equipped. */
 const INVENTORY_CATEGORY: Partial<Record<ShopCategory, InventoryCategory>> = {
@@ -62,16 +81,42 @@ const INVENTORY_CATEGORY: Partial<Record<ShopCategory, InventoryCategory>> = {
   trail: 'trail',
 };
 
+// Layout — virtual px on the fixed 270px-tall canvas (width floats 480..620).
 const TOPBAR_H = 28;
 const RAIL_W = 64;
-const RAIL_X = 0;
 const GRID_X = 70;
 const DETAIL_X = 330;
 const DETAIL_W = 146;
+const DETAIL_TOP = 32;
+const DETAIL_H = 206;
+const PREVIEW_TOP = 56;
+const BTN_X = DETAIL_X + 6;
+const BTN_W = DETAIL_W - 12;
+const BTN_TOP = 196;
+const BTN_H = 36;
 const RIGHT_COL_X = 492;
-const RIGHT_COL_MIN_W = 90;
-const SYSTEM_LINE_MS = 2600;
-const DEATH_PREVIEW_INTERVAL_MS = 1500;
+const RIGHT_COL_MIN_W = 80;
+const DEATH_PREVIEW_INTERVAL_MS = 1600;
+/**
+ * The test run hops often and lands hard on purpose: LAUNCH only emits on a
+ * jump and INTERFERENCE only above a real falling speed, so a lazy loop would
+ * leave two of the four trails looking like they do nothing. The run itself
+ * uses the real `PHYSICS.moveSpeed` — that is what sets how far apart a
+ * trail's particles land — while the hop is scaled down to fit a 64px stage.
+ */
+const TRAIL_JUMP_INTERVAL_MS = 800;
+const TRAIL_JUMP_SPEED = 300;
+const TRAIL_GRAVITY = 2000;
+const TRAIL_RUN_SPEED = PHYSICS.moveSpeed;
+const TRAIL_SPRITE_SCALE = 0.7;
+/**
+ * The floor sits inside the stage rather than on its bottom edge, and the
+ * runner is drawn small, because the four trails emit in opposite directions:
+ * LAUNCH fires its exhaust *downward* (it is thrust, same as in game) and
+ * needs room under the feet, while INTERFERENCE draws its scan lines a full
+ * sprite-height *above* the feet and needs room over the head.
+ */
+const TRAIL_FLOOR_OFFSET = 46;
 
 type Disposable = { destroy(): void };
 
@@ -85,19 +130,35 @@ interface RailHandle {
   h: number;
 }
 
+/** Live "test run" state for the trail preview — a real run/jump/fall cycle so every trail kind actually reaches its own spawn condition (`TrailFx` only emits above a speed/fall threshold). */
+interface TrailPreview {
+  fx: TrailFx;
+  sprite: Phaser.GameObjects.Sprite | null;
+  prefix: string;
+  anim: 'run' | 'jump' | 'fall';
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  flipX: boolean;
+  groundY: number;
+  leftX: number;
+  rightX: number;
+  onGround: boolean;
+  nextJumpAtMs: number;
+}
+
 /**
- * "SYSTEM ARCHIVE" — master-prompt §13. A full-bleed showroom (Claude Design
- * mockup "ХОД 3/4", 2026-09-06) replacing the earlier horizontal-tabs +
- * text-only-tile layout: a vertical category rail, a card grid with a real
- * preview per item (sprite / live trail / live death burst / sampled SYSTEM
- * lines), and a fixed "fitting room" detail panel on the right. `premium`
- * keeps its own hero-offer layout (real money, no grid).
+ * "SYSTEM ARCHIVE" — master-prompt §13, rebuilt as a full-bleed showroom
+ * (Claude Design mockups 3a/3b/4a/4b/4c): a vertical category rail, a card
+ * grid where every card shows the actual product, and a fixed fitting-room
+ * panel with a live preview — the same three-zone frame for all five
+ * categories, with `premium` swapping the grid for its single offer.
  *
- * All text here renders through `DomTextOverlay` (real browser text, project
- * owner's call) instead of the game's bitmap font. Every interactive shape
- * (card, rail button, action button) is hand-drawn `Graphics` + `Zone` — not
- * `PixelButton`/`MenuTile`, both of which are hardcoded to a single cyan
- * accent and can't take this screen's gold/orange/purple category colors.
+ * Text renders through `DomTextOverlay` (real browser text, project owner's
+ * call). Every interactive shape is hand-drawn `Graphics` + `Zone`, not
+ * `PixelButton`/`MenuTile` — both are hardcoded to one cyan accent and can't
+ * take this screen's gold/orange/purple palette.
  */
 export class ShopScene extends Phaser.Scene {
   private categoryIndex = 0;
@@ -111,21 +172,13 @@ export class ShopScene extends Phaser.Scene {
   private railHandles: RailHandle[] = [];
   private domText!: DomTextOverlay;
   private walletLabel!: DomTextHandle;
-  private chevron!: Phaser.GameObjects.Graphics;
   private systemLineLabel: DomTextHandle | null = null;
-  private systemLineTimer: number | null = null;
+  private systemLineText = '';
 
-  // Live preview state — trail (per-frame) and death FX (timer-driven).
-  // Both are torn down at the top of every `renderCategory()` call and never
-  // survive a category/selection switch (CLAUDE.md #9 — no stray per-frame
-  // work left running for a screen the player isn't looking at).
-  private previewTrailFx: TrailFx | null = null;
-  private previewTrailSprite: Phaser.GameObjects.Sprite | null = null;
-  private previewTrailState = { x: 0, y: 0, vx: 0, vy: 0, flipX: false };
-  private previewTrailBoxCx = 0;
-  private previewTrailBoxCy = 0;
+  private trailPreview: TrailPreview | null = null;
   private previewFx: FxManager | null = null;
   private deathPreviewTimer: Phaser.Time.TimerEvent | null = null;
+  private replayDeathPreview: (() => void) | null = null;
 
   constructor() {
     super('ShopScene');
@@ -134,13 +187,10 @@ export class ShopScene extends Phaser.Scene {
   create(): void {
     const { width, height } = this.scale;
 
-    // This scene instance is reused every time the player reopens the shop
-    // (`MainMenuScene.openOverlay` calls `scene.launch` again on the same
-    // persistent Scene object, which re-runs `create()`) — array fields
-    // populated during a previous `create()` must be reset here, or they'd
-    // keep referencing Zones/Graphics already destroyed by that previous
-    // session's shutdown, and the next `setRailVisible`/`disableInteractive`
-    // call throws on the first stale entry it reaches.
+    // The scene instance is reused every time the player reopens the shop
+    // (`MainMenuScene.openOverlay` calls `scene.launch` again), so anything
+    // holding Graphics/Zones from a previous run has to be dropped here —
+    // those objects were destroyed by that run's shutdown.
     this.railHandles = [];
     this.content = [];
     this.previewFx = null;
@@ -162,17 +212,15 @@ export class ShopScene extends Phaser.Scene {
     EventBus.on('system:comment', this.handleSystemComment, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       EventBus.off('system:comment', this.handleSystemComment, this);
-      if (this.systemLineTimer !== null) window.clearTimeout(this.systemLineTimer);
     });
 
-    commentOnShop('open');
     void this.loadCatalog();
     this.renderCategory();
+    commentOnShop('open');
   }
 
   override update(_time: number, delta: number): void {
-    if (!this.previewTrailFx) return;
-    this.stepTrailPreview(delta);
+    if (this.trailPreview) this.stepTrailPreview(delta);
   }
 
   // ---- topbar ----------------------------------------------------------
@@ -181,17 +229,20 @@ export class ShopScene extends Phaser.Scene {
     const bg = this.add.graphics();
     bg.fillStyle(PALETTE.bgIndigo, 1);
     bg.fillRect(0, 0, width, TOPBAR_H);
-    bg.lineStyle(1, PALETTE.cyanDim, 0.7);
-    bg.lineBetween(0, TOPBAR_H, width, TOPBAR_H);
+    bg.fillStyle(PALETTE.cyanDim, 1);
+    bg.fillRect(0, TOPBAR_H - 1, width, 1);
 
-    this.chevron = this.add.graphics();
-    this.chevron.lineStyle(2, PALETTE.cyan, 1);
-    this.chevron.beginPath();
-    this.chevron.moveTo(18, 9);
-    this.chevron.lineTo(11, 14);
-    this.chevron.lineTo(18, 19);
-    this.chevron.strokePath();
-    this.add.rectangle(18, 14, 20, 20, PALETTE.metalMid, 0.001).setDepth(-1);
+    const chev = this.add.graphics();
+    chev.fillStyle(PALETTE.metalMid, 1);
+    chev.lineStyle(1, PALETTE.metalEdge, 1);
+    chev.fillRect(8, 4, 20, 20);
+    chev.strokeRect(8, 4, 20, 20);
+    chev.lineStyle(2, PALETTE.cyan, 1);
+    chev.beginPath();
+    chev.moveTo(21, 9);
+    chev.lineTo(15, 14);
+    chev.lineTo(21, 19);
+    chev.strokePath();
     const chevronZone = this.add.zone(18, 14, 32, 28).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
     chevronZone.on('pointerup', () => {
       playSfx('uiClick');
@@ -202,54 +253,51 @@ export class ShopScene extends Phaser.Scene {
     this.domText.add(
       36,
       14,
-      t('shopTitle'),
-      { color: hexToCss(PALETTE.white), strokeColor: hexToCss(PALETTE.outline), scale: 2, bold: true },
+      t('shop'),
+      { color: hexToCss(PALETTE.white), strokeColor: hexToCss(PALETTE.outline), sizePx: 17, bold: true, uppercase: true },
       0,
       0.5,
     );
 
-    const walletW = 108;
+    const walletW = 116;
     const walletX = width - 8 - walletW;
-    const walletBg = this.add.graphics();
-    walletBg.fillStyle(PALETTE.metalDark, 1);
-    walletBg.lineStyle(1, PALETTE.goldDim, 1);
-    walletBg.fillRect(walletX, 4, walletW, 20);
-    walletBg.strokeRect(walletX, 4, walletW, 20);
+    if (walletX >= 150) {
+      this.domText.add(
+        142,
+        15,
+        t('shopTitle'),
+        { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9 },
+        0,
+        0.5,
+      );
+    }
+
+    const wallet = this.add.graphics();
+    wallet.fillStyle(PALETTE.metalDark, 1);
+    wallet.lineStyle(1, PALETTE.goldDim, 1);
+    wallet.fillRect(walletX, 4, walletW, 20);
+    wallet.strokeRect(walletX, 4, walletW, 20);
+    this.drawCoin(wallet, walletX + 14, 14, 5, false);
+    wallet.fillStyle(PALETTE.goldDim, 1);
+    wallet.fillRect(walletX + walletW - 20, 8, 13, 13);
+    wallet.fillStyle(PALETTE.reward, 1);
+    wallet.fillRect(walletX + walletW - 15, 11, 3, 7);
+    wallet.fillRect(walletX + walletW - 17, 13, 7, 3);
+
     this.walletLabel = this.domText.add(
-      walletX + walletW / 2 - 8,
+      walletX + 24,
       14,
       this.balanceText(),
-      { color: hexToCss(PALETTE.reward), strokeColor: hexToCss(PALETTE.outline), scale: 1 },
-      0.5,
+      { color: hexToCss(PALETTE.reward), strokeColor: hexToCss(PALETTE.outline), sizePx: 14, bold: true },
+      0,
       0.5,
     );
-    const plus = this.add.graphics();
-    plus.fillStyle(PALETTE.goldDim, 1);
-    plus.fillRect(walletX + walletW - 16, 8, 12, 12);
-    plus.fillStyle(PALETTE.reward, 1);
-    plus.fillRect(walletX + walletW - 12, 11, 4, 6);
-    plus.fillRect(walletX + walletW - 14, 13, 8, 2);
+
     const walletZone = this.add.zone(walletX + walletW / 2, 14, walletW, 20).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
     walletZone.on('pointerup', () => {
       playSfx('uiClick');
       if (this.view === 'main') this.openGetCredits();
     });
-
-    // "SYSTEM ONLINE" is purely decorative status text — only shown once the
-    // wallet pill has real breathing room to its left (a 480px-wide canvas
-    // never does), so it never fights the wallet for space.
-    if (walletX >= 470) {
-      const dot = this.add.circle(width - 118, 14, 2.5, PALETTE.cyan, 1);
-      this.tweens.add({ targets: dot, alpha: 0.3, duration: 800, yoyo: true, repeat: -1 });
-      this.domText.add(
-        width - 112,
-        14,
-        'SYSTEM ONLINE',
-        { color: hexToCss(PALETTE.cyan), strokeColor: hexToCss(PALETTE.outline), scale: 1 },
-        0,
-        0.5,
-      );
-    }
   }
 
   private balanceText(): string {
@@ -267,9 +315,36 @@ export class ShopScene extends Phaser.Scene {
     if (this.view === 'main') this.renderCategory();
   }
 
+  // ---- small shared painters ------------------------------------------
+
+  private drawCoin(g: Phaser.GameObjects.Graphics, cx: number, cy: number, r: number, dim: boolean): void {
+    g.fillStyle(dim ? PALETTE.goldDim : PALETTE.reward, 1);
+    g.fillCircle(cx, cy, r);
+    g.lineStyle(1, dim ? PALETTE.goldSole : PALETTE.goldEdge, 1);
+    g.strokeCircle(cx, cy, r);
+  }
+
+  private drawCheck(g: Phaser.GameObjects.Graphics, cx: number, cy: number, size: number, color: number): void {
+    g.lineStyle(1.8, color, 1);
+    g.beginPath();
+    g.moveTo(cx - size, cy);
+    g.lineTo(cx - size * 0.25, cy + size * 0.75);
+    g.lineTo(cx + size, cy - size * 0.8);
+    g.strokePath();
+  }
+
+  private drawLockGlyph(g: Phaser.GameObjects.Graphics, cx: number, cy: number): void {
+    g.fillStyle(PALETTE.metalEdge, 1);
+    g.fillRect(cx - 12, cy - 2, 24, 19);
+    g.lineStyle(3, PALETTE.metalEdge, 1);
+    g.strokeRect(cx - 6, cy - 15, 12, 13);
+    g.fillStyle(PALETTE.metalDark, 1);
+    g.fillRect(cx - 2, cy + 3, 4, 7);
+  }
+
   // ---- rail --------------------------------------------------------------
 
-  /** Same procedural glyphs the old tab bar used (CLAUDE.md #3), just repainted per the new spec's БЕЗ РЕК. diamond. */
+  /** Category glyphs per the mockup's own geometry notes — БЕЗ РЕК. is the one solid gold diamond, so the paid tab reads as different at a glance. */
   private drawCategoryIcon(g: Phaser.GameObjects.Graphics, category: ShopCategory, cx: number, cy: number, color: number): void {
     switch (category) {
       case 'premium':
@@ -281,38 +356,34 @@ export class ShopScene extends Phaser.Scene {
         g.restore();
         break;
       case 'character':
-        g.fillStyle(PALETTE.white, 1);
-        g.fillRect(cx - 3, cy - 5, 6, 5);
         g.fillStyle(color, 1);
-        g.fillRect(cx - 2, cy - 4, 4, 2);
-        g.fillStyle(PALETTE.white, 0.85);
-        g.fillRect(cx - 4, cy, 8, 4);
+        g.fillRect(cx - 4, cy - 8, 8, 6);
+        g.fillRect(cx - 6, cy - 1, 12, 8);
+        g.fillRect(cx - 5, cy + 8, 3, 3);
+        g.fillRect(cx + 2, cy + 8, 3, 3);
+        break;
+      case 'trail':
+        g.fillStyle(color, 0.4);
+        g.fillRect(cx - 9, cy + 3, 3, 3);
+        g.fillStyle(color, 0.7);
+        g.fillRect(cx - 3, cy - 1, 4, 4);
+        g.fillStyle(color, 1);
+        g.fillRect(cx + 4, cy - 6, 6, 6);
         break;
       case 'death_fx':
         g.fillStyle(color, 1);
-        g.fillRect(cx - 1, cy - 5, 2, 10);
-        g.fillRect(cx - 5, cy - 1, 10, 2);
-        g.fillRect(cx - 3, cy - 3, 2, 2);
-        g.fillRect(cx + 1, cy - 3, 2, 2);
-        g.fillRect(cx - 3, cy + 1, 2, 2);
-        g.fillRect(cx + 1, cy + 1, 2, 2);
+        g.fillRect(cx - 7, cy - 6, 4, 4);
+        g.fillRect(cx + 3, cy - 4, 4, 4);
+        g.fillRect(cx - 2, cy + 1, 4, 4);
+        g.fillStyle(color, 0.5);
+        g.fillRect(cx - 8, cy + 5, 3, 3);
+        g.fillRect(cx + 4, cy + 6, 3, 3);
         break;
       case 'system':
-        g.lineStyle(1.4, color, 1);
-        g.strokeRect(cx - 4, cy - 4, 8, 8);
+        g.lineStyle(2, color, 1);
+        g.strokeRect(cx - 8, cy - 8, 16, 16);
         g.fillStyle(color, 1);
-        g.fillRect(cx - 6, cy - 3, 2, 1);
-        g.fillRect(cx - 6, cy + 2, 2, 1);
-        g.fillRect(cx + 4, cy - 3, 2, 1);
-        g.fillRect(cx + 4, cy + 2, 2, 1);
-        break;
-      case 'trail':
-        g.fillStyle(color, 1);
-        g.fillRect(cx + 2, cy - 2, 4, 4);
-        g.fillStyle(color, 0.55);
-        g.fillRect(cx - 3, cy + 1, 3, 3);
-        g.fillStyle(color, 0.25);
-        g.fillRect(cx - 6, cy + 3, 2, 2);
+        g.fillRect(cx - 3, cy - 3, 6, 6);
         break;
     }
   }
@@ -323,25 +394,31 @@ export class ShopScene extends Phaser.Scene {
     const gap = 2;
     let y = TOPBAR_H + 4;
 
+    const railBg = this.add.graphics();
+    railBg.fillStyle(PALETTE.metalDark, 1);
+    railBg.fillRect(0, TOPBAR_H, RAIL_W, height - TOPBAR_H);
+    railBg.fillStyle(PALETTE.metalMid, 1);
+    railBg.fillRect(RAIL_W - 1, TOPBAR_H, 1, height - TOPBAR_H);
+
     CATEGORIES.forEach((category, i) => {
       const isLast = i === CATEGORIES.length - 1;
       const rowTop = y;
-      const rowHeight = isLast ? height - rowTop : rowH;
+      const rowHeight = isLast ? height - rowTop - 4 : rowH;
       const cy = rowTop + rowHeight / 2;
 
       const bg = this.add.graphics();
       const icon = this.add.graphics();
       const label = this.domText.add(
         RAIL_W / 2,
-        rowTop + rowHeight - 9,
+        rowTop + rowHeight - 10,
         t(CATEGORY_LABEL[category]),
-        { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), scale: 1, wordWrapWidth: RAIL_W - 6 },
+        { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
         0.5,
         0.5,
       );
 
       const zone = this.add
-        .zone(RAIL_X + RAIL_W / 2, cy, RAIL_W, rowHeight)
+        .zone(RAIL_W / 2, cy, RAIL_W, rowHeight)
         .setOrigin(0.5, 0.5)
         .setInteractive({ useHandCursor: true });
       zone.on('pointerup', () => {
@@ -364,10 +441,10 @@ export class ShopScene extends Phaser.Scene {
 
       rail.bg.clear();
       if (isActive) {
-        rail.bg.fillStyle(PALETTE.panelHover, 1);
-        rail.bg.fillRect(RAIL_X, rail.top, RAIL_W, rail.h);
+        rail.bg.fillStyle(accent, 0.14);
+        rail.bg.fillRect(0, rail.top, RAIL_W, rail.h);
         rail.bg.fillStyle(accent, 1);
-        rail.bg.fillRect(RAIL_X, rail.top, 3, rail.h);
+        rail.bg.fillRect(0, rail.top, 3, rail.h);
       }
 
       rail.icon.clear();
@@ -390,6 +467,7 @@ export class ShopScene extends Phaser.Scene {
     if (this.categoryIndex === index) return;
     this.categoryIndex = index;
     this.renderCategory();
+    commentOnShop(CATEGORY_COMMENT[this.currentCategory()]);
   }
 
   private currentCategory(): ShopCategory {
@@ -413,14 +491,10 @@ export class ShopScene extends Phaser.Scene {
   }
 
   /**
-   * A `campaign_complete` item has no price/productId — it was never meant
-   * to be "bought" once its condition is met. Without this, the first time
-   * the condition became true `buildActionRow` would still fall into its
-   * `!owned` branch and draw a "КУПИТЬ" button that does nothing (`handleBuy`
-   * no-ops without a price or productId). Granting it into the inventory the
-   * moment the shop notices the condition is met turns that into a normal
-   * "ЭКИПИРОВАТЬ" state instead — called once per `renderCategory()`, cheap
-   * and idempotent (`InventoryService.unlock` already no-ops if owned).
+   * A `campaign_complete` item has no price and no productId — it was never
+   * meant to be bought once its condition is met. Granting it the moment the
+   * shop notices keeps the UI in a real state (a "НАДЕТЬ" button) instead of
+   * a dead "КУПИТЬ" that `handleBuy` would no-op on. Idempotent.
    */
   private syncProgressUnlocks(): void {
     for (const item of SHOP_ITEMS) {
@@ -431,7 +505,7 @@ export class ShopScene extends Phaser.Scene {
     }
   }
 
-  /** Bundle-exclusive cosmetics (no price, no productId) show once owned; a `campaign_complete`-gated item shows always, locked or not, as its own dedicated "???" card (master-prompt §28 honesty — never a fake purchase, but a real progress goal is fine to display ahead of time). */
+  /** Bundle-exclusive cosmetics show once owned; a `campaign_complete` item always shows, locked or not, as its own "???" goal card (master-prompt §28 — a real goal may be displayed, a fake purchase may not). */
   private visibleItems(category: ShopCategory): ShopItem[] {
     return SHOP_ITEMS.filter((item) => {
       if (item.category !== category) return false;
@@ -447,7 +521,12 @@ export class ShopScene extends Phaser.Scene {
     return items.find((item) => item.id === selectedId) ?? items[0]!;
   }
 
-  // ---- shared render plumbing -----------------------------------------
+  private isEquipped(item: ShopItem): boolean {
+    const slot = INVENTORY_CATEGORY[item.category];
+    return slot ? InventoryService.getEquipped(slot) === item.id : false;
+  }
+
+  // ---- render pipeline -------------------------------------------------
 
   private clearContent(): void {
     for (const item of this.content) item.destroy();
@@ -455,9 +534,9 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private teardownLivePreview(): void {
-    this.previewTrailFx?.destroy();
-    this.previewTrailFx = null;
-    this.previewTrailSprite = null;
+    this.trailPreview?.fx.destroy();
+    this.trailPreview = null;
+    this.replayDeathPreview = null;
     if (this.deathPreviewTimer) {
       this.deathPreviewTimer.remove();
       this.deathPreviewTimer = null;
@@ -476,23 +555,19 @@ export class ShopScene extends Phaser.Scene {
     this.refreshRail();
   }
 
-  private sectionHeaderText(category: ShopCategory, items: ShopItem[]): string {
-    const owned = items.filter((item) => this.isOwned(item)).length;
-    return `${t(CATEGORY_LABEL[category])} · ${owned} ${t('shopOf')} ${items.length} ${t('shopUnlockedSuffix')}`;
-  }
-
-  // ---- cosmetic categories (character / trail / death_fx / system) ------
+  // ---- cosmetic categories ---------------------------------------------
 
   private renderCosmeticShowroom(category: ShopCategory): void {
     const items = this.visibleItems(category);
     if (!this.selectedByCategory.has(category)) this.selectedByCategory.set(category, items[0]!.id);
     const selected = this.selectedItem(category);
 
+    const owned = items.filter((item) => this.isOwned(item)).length;
     const header = this.domText.add(
       GRID_X,
-      32,
-      this.sectionHeaderText(category, items),
-      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), scale: 1, wordWrapWidth: DETAIL_X - GRID_X - 8, clampLines: 1 },
+      31,
+      `${t(CATEGORY_LABEL[category])} · ${owned} ${t('shopOf')} ${items.length} ${t('shopUnlockedSuffix')}`,
+      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9 },
       0,
       0,
     );
@@ -504,27 +579,24 @@ export class ShopScene extends Phaser.Scene {
     const gapY = 8;
     const gridTop = 46;
     const rows = Math.ceil(items.length / cols);
-    // `character` is the one category that can grow past 6 items (the
-    // SYSTEM ACCESS bundle's exclusive ERROR 404 skin, plus the
-    // campaign-complete-locked CORE skin, both stacking onto the base 5) —
-    // shrink the row height to whatever still fits the fixed 270px canvas
-    // instead of letting a 3rd row run off the bottom edge.
-    const bottomMargin = 6;
-    const cardH = Math.min(92, Math.floor((this.scale.height - gridTop - bottomMargin - (rows - 1) * gapY) / rows));
+    // `character` can grow past 6 items (ERROR 404 from the SYSTEM ACCESS
+    // bundle plus the campaign-locked CORE) — shrink the row instead of
+    // letting a third row run off the fixed 270px canvas.
+    const cardH = Math.min(92, Math.floor((this.scale.height - gridTop - 6 - (rows - 1) * gapY) / rows));
 
     items.forEach((item, i) => {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const x = GRID_X + col * (cardW + gapX);
-      const y = gridTop + row * (cardH + gapY);
-      this.buildShowroomCard(item, x, y, cardW, cardH, category, item.id === selected.id);
+      const x = GRID_X + (i % cols) * (cardW + gapX);
+      const y = gridTop + Math.floor(i / cols) * (cardH + gapY);
+      this.buildCard(item, x, y, cardW, cardH, category, item.id === selected.id);
     });
 
     this.buildDetailPanel(category, selected);
     this.buildRightColumn(category, items);
   }
 
-  private buildShowroomCard(
+  // ---- cards ------------------------------------------------------------
+
+  private buildCard(
     item: ShopItem,
     x: number,
     y: number,
@@ -535,109 +607,138 @@ export class ShopScene extends Phaser.Scene {
   ): void {
     const unlocked = this.isUnlocked(item);
     const owned = unlocked && this.isOwned(item);
-    const equipSlot = INVENTORY_CATEGORY[category];
-    const isEquipped = owned && equipSlot ? InventoryService.getEquipped(equipSlot) === item.id : false;
+    const equipped = owned && this.isEquipped(item);
     const affordable = item.priceCredits === undefined || CurrencyService.canAfford(item.priceCredits);
-    const previewH = Math.round(h * 0.65);
     const accent = CATEGORY_ACCENT[category];
+    const plateH = 28;
+    const previewH = h - plateH;
+    const centered = category === 'character';
 
     const g = this.add.graphics();
     this.content.push(g);
 
-    g.fillStyle(PALETTE.metalDark, 1);
-    g.fillRect(x, y, w, h);
-    g.fillStyle(unlocked ? PALETTE.metalDark : PALETTE.metalDark, 1);
+    // Preview well — a shade darker than the card, lightened when the item is
+    // out of reach so the silhouette still reads (mockup: never alpha the art).
+    g.fillStyle(!unlocked || affordable ? PALETTE.bgVoid : PALETTE.metalDark, 1);
     g.fillRect(x, y, w, previewH);
+    g.fillStyle(equipped ? PALETTE.panelHover : owned || affordable ? PALETTE.metalMid : PALETTE.bgGraphite, 1);
+    g.fillRect(x, y + previewH, w, plateH);
+    g.fillStyle(PALETTE.metalMid, 1);
+    g.fillRect(x, y + previewH, w, 1);
 
-    let borderColor: number = PALETTE.metalEdge;
-    let borderWidth = 1;
-    if (isEquipped) {
-      borderColor = accent;
-      borderWidth = 2;
-    } else if (!unlocked) {
-      borderColor = PALETTE.metalMid;
-    } else if (!owned && item.priceCredits !== undefined) {
-      borderColor = affordable ? PALETTE.goldDim : PALETTE.metalMid;
-    }
-    // The card currently shown in the fitting-room panel gets its own
-    // highlight, distinct from "equipped" — otherwise clicking around an
-    // unowned item's card to preview it gives no feedback about which one
-    // is now on display.
-    if (isSelected && !isEquipped) {
-      borderColor = PALETTE.white;
-      borderWidth = Math.max(borderWidth, 1.5);
-    }
-    g.lineStyle(borderWidth, borderColor, 1);
-    g.strokeRect(x + borderWidth / 2, y + borderWidth / 2, w - borderWidth, h - borderWidth);
-    g.lineStyle(1, PALETTE.metalMid, 1);
-    g.lineBetween(x, y + previewH, x + w, y + previewH);
+    if (unlocked) this.drawCardArt(category, item, x, y, w, previewH, affordable || owned);
+    else this.drawLockGlyph(g, x + w / 2, y + previewH / 2);
 
-    // Preview glyph.
-    const cx = x + w / 2;
-    const cy = y + previewH / 2;
-    if (!unlocked) {
-      this.drawLockGlyph(g, cx, cy);
+    // Border last so the art never paints over it.
+    const border = this.add.graphics();
+    this.content.push(border);
+    if (equipped) {
+      border.lineStyle(1, accent, 0.25);
+      border.strokeRect(x - 2, y - 2, w + 4, h + 4);
+      border.lineStyle(2, accent, 1);
+      border.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    } else if (isSelected) {
+      border.lineStyle(2, PALETTE.white, 1);
+      border.strokeRect(x + 1, y + 1, w - 2, h - 2);
     } else {
-      this.drawCardPreview(category, item, cx, cy, w, previewH, owned && affordable);
+      const color = !unlocked ? PALETTE.metalMid : owned ? PALETTE.metalEdge : affordable ? PALETTE.goldDim : PALETTE.metalMid;
+      border.lineStyle(1, color, 1);
+      border.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     }
 
-    // Label plate.
-    const plateBg = isEquipped ? PALETTE.panelHover : PALETTE.metalMid;
-    g.fillStyle(plateBg, 1);
-    g.fillRect(x, y + previewH, w, h - previewH);
+    // Rarity flag for the top tier, top-left of the well (mockup's "ТОП" tab).
+    if (unlocked && item.rarity === 'premium') {
+      const flag = this.add.graphics();
+      flag.fillStyle(PALETTE.echoVisor, 1);
+      flag.fillRect(x + 1, y + 1, 24, 10);
+      this.content.push(flag);
+      const flagLabel = this.domText.add(
+        x + 13,
+        y + 6,
+        t('shopRarityPremium'),
+        { color: hexToCss(PALETTE.bgVoid), strokeColor: hexToCss(PALETTE.outline), sizePx: 8, bold: true },
+        0.5,
+        0.5,
+      );
+      this.content.push(flagLabel);
+    }
 
-    const nameText = unlocked ? t(item.nameKey) : t('shopLockedName');
+    const labelX = centered ? x + w / 2 : x + 8;
+    const labelOrigin = centered ? 0.5 : 0;
     const name = this.domText.add(
-      x + 6,
-      y + previewH + 5,
-      nameText,
-      { color: hexToCss(unlocked ? PALETTE.white : PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), scale: 1, bold: true, wordWrapWidth: w - 12, clampLines: 1 },
-      0,
-      0,
+      labelX,
+      y + previewH + 9,
+      unlocked ? t(item.nameKey) : t('shopLockedName'),
+      {
+        color: hexToCss(unlocked ? (equipped ? PALETTE.white : PALETTE.white) : PALETTE.labelMuted),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: centered ? 10 : 11,
+        bold: true,
+      },
+      labelOrigin,
+      0.5,
     );
     this.content.push(name);
 
-    let subtitleText = '';
-    let subtitleColor: number = PALETTE.labelMuted;
+    const stateY = y + previewH + 21;
     if (!unlocked) {
-      subtitleText = t('shopLockedCondition');
-      subtitleColor = PALETTE.system;
-    } else if (isEquipped) {
-      subtitleText = t('shopEquipped');
-      subtitleColor = accent;
-    } else if (owned) {
-      subtitleText = t('shopOwned');
-      subtitleColor = PALETTE.labelMuted;
-    } else if (item.priceCredits !== undefined) {
-      subtitleText = `${item.priceCredits} CR`;
-      subtitleColor = affordable ? PALETTE.reward : PALETTE.goldDim;
-    }
-    if (subtitleText) {
-      const subtitle = this.domText.add(
-        x + 6,
-        y + previewH + 17,
-        subtitleText,
-        { color: hexToCss(subtitleColor), strokeColor: hexToCss(PALETTE.outline), scale: 1, wordWrapWidth: w - 12, clampLines: 1 },
-        0,
-        0,
+      const cond = this.domText.add(
+        labelX,
+        stateY,
+        t('shopLockedCondition'),
+        { color: hexToCss(PALETTE.system), strokeColor: hexToCss(PALETTE.outline), sizePx: 9 },
+        labelOrigin,
+        0.5,
       );
-      this.content.push(subtitle);
+      this.content.push(cond);
+    } else if (equipped || owned) {
+      const state = this.domText.add(
+        labelX,
+        stateY,
+        equipped ? t('shopEquipped') : t('shopOwned'),
+        {
+          color: hexToCss(equipped ? accent : PALETTE.labelMuted),
+          strokeColor: hexToCss(PALETTE.outline),
+          sizePx: 9,
+          uppercase: true,
+        },
+        labelOrigin,
+        0.5,
+      );
+      this.content.push(state);
+    } else if (item.priceCredits !== undefined) {
+      // Coin + number, the same money shape the wallet uses — never a bare
+      // "150 CR" string (mockup: price always reads as currency).
+      const coin = this.add.graphics();
+      const coinX = centered ? x + w / 2 - 14 : x + 12;
+      this.drawCoin(coin, coinX, stateY, 4, !affordable);
+      this.content.push(coin);
+      const price = this.domText.add(
+        coinX + 8,
+        stateY,
+        String(item.priceCredits),
+        {
+          color: hexToCss(affordable ? PALETTE.reward : PALETTE.goldSole),
+          strokeColor: hexToCss(PALETTE.outline),
+          sizePx: 12,
+          bold: true,
+        },
+        0,
+        0.5,
+      );
+      this.content.push(price);
     }
 
-    if (isEquipped) {
-      const badge = this.add.circle(x + w - 6, y + 6, 5, accent, 1);
-      const check = this.add.graphics();
-      check.lineStyle(1.4, PALETTE.bgVoid, 1);
-      check.beginPath();
-      check.moveTo(x + w - 8.2, y + 6);
-      check.lineTo(x + w - 6.5, y + 8);
-      check.lineTo(x + w - 3.5, y + 3.5);
-      check.strokePath();
-      this.content.push(badge, check);
+    if (equipped) {
+      const badge = this.add.graphics();
+      badge.fillStyle(accent, 1);
+      badge.fillRect(x + w - 12, y - 4, 16, 16);
+      this.drawCheck(badge, x + w - 4, y + 4, 4, PALETTE.bgVoid);
+      this.content.push(badge);
     }
 
     if (unlocked) {
-      const zone = this.add.zone(cx, y + h / 2, w, h).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+      const zone = this.add.zone(x + w / 2, y + h / 2, w, h).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
       zone.on('pointerup', () => {
         playSfx('uiClick');
         this.selectedByCategory.set(category, item.id);
@@ -647,125 +748,250 @@ export class ShopScene extends Phaser.Scene {
     }
   }
 
-  private drawLockGlyph(g: Phaser.GameObjects.Graphics, cx: number, cy: number): void {
-    g.fillStyle(PALETTE.metalEdge, 1);
-    g.fillRect(cx - 12, cy - 2, 24, 19);
-    g.lineStyle(3, PALETTE.metalEdge, 1);
-    g.strokeRect(cx - 6, cy - 15, 12, 13);
-    g.fillStyle(PALETTE.metalDark, 1);
-    g.fillRect(cx - 2, cy + 3, 4, 7);
-  }
-
-  private drawCardPreview(
+  /** Card art: a real mini-scene per category, so two items in the same category never look alike. */
+  private drawCardArt(
     category: ShopCategory,
     item: ShopItem,
-    cx: number,
-    cy: number,
+    x: number,
+    y: number,
     w: number,
-    previewH: number,
-    fullColor: boolean,
+    h: number,
+    litColors: boolean,
   ): void {
+    const g = this.add.graphics();
+    this.content.push(g);
+    const cx = x + w / 2;
+    const groundY = y + h - 4;
+
     if (category === 'character') {
-      const prefix = playerTexturePrefix(item.id);
-      if (this.textures.exists(`${prefix}-idle-0`)) {
-        const sprite = this.add.sprite(cx, cy + previewH / 2 - 4, `${prefix}-idle-0`).setOrigin(0.5, 1).setScale(1.05);
-        if (!fullColor) sprite.setTint(PALETTE.metalEdge);
-        this.content.push(sprite);
+      this.addSprite(item.id, cx, y + h - 2, 1.45, litColors ? undefined : PALETTE.textDisabled);
+      return;
+    }
+
+    if (category === 'system') {
+      this.drawSystemCardArt(g, item, x, y, w, h);
+      return;
+    }
+
+    // trail / death_fx share the same "character on a floor strip" staging.
+    const equippedSkin = InventoryService.getEquipped('character');
+    const spriteX = category === 'trail' ? x + w - 30 : x + 26;
+    g.fillStyle(CATEGORY_ACCENT[category], 0.16);
+    g.fillRect(x, groundY, w, 4);
+
+    if (category === 'trail') {
+      this.drawTrailCardArt(g, item.id as TrailKind, x, y, h, spriteX, groundY);
+      this.addSprite(equippedSkin, spriteX, groundY, 0.9, litColors ? undefined : PALETTE.textDisabled);
+      return;
+    }
+
+    this.drawDeathCardArt(g, item.id, x, y, w, h, spriteX, groundY);
+  }
+
+  private drawTrailCardArt(
+    g: Phaser.GameObjects.Graphics,
+    kind: TrailKind,
+    x: number,
+    y: number,
+    h: number,
+    spriteX: number,
+    groundY: number,
+  ): void {
+    switch (kind) {
+      case 'data_trail': {
+        // The real `data_trail` colors: cyan fading to cyanDim, 2px squares.
+        const shades = [PALETTE.cyanDim, PALETTE.cyanDim, PALETTE.cyanSoleHover, PALETTE.cyan];
+        shades.forEach((color, i) => {
+          g.fillStyle(color, 0.5 + i * 0.16);
+          g.fillRect(x + 10 + i * 14, groundY - 12 - (i % 2) * 6, 4, 4);
+        });
+        break;
+      }
+      case 'launch': {
+        g.fillStyle(PALETTE.reward, 1);
+        g.fillRect(spriteX - 3, groundY - 6, 6, 6);
+        g.fillStyle(PALETTE.dangerAlt, 1);
+        g.fillRect(spriteX - 16, groundY - 10, 5, 5);
+        g.fillRect(spriteX + 12, groundY - 8, 5, 5);
+        g.fillStyle(PALETTE.reward, 0.7);
+        g.fillRect(spriteX - 26, groundY - 4, 3, 3);
+        g.fillRect(spriteX + 22, groundY - 2, 3, 3);
+        break;
+      }
+      case 'interference': {
+        // The real streaks: white / metalEdge 1px scan lines above the body.
+        const rows = [0, 8, 16, 24];
+        rows.forEach((dy, i) => {
+          g.fillStyle(i % 2 === 0 ? PALETTE.white : PALETTE.metalEdge, 0.9 - i * 0.18);
+          g.fillRect(spriteX - 22 + (i % 2) * 6, y + 8 + dy, 24 - i * 3, 2);
+        });
+        break;
+      }
+      case 'beep7': {
+        g.fillStyle(PALETTE.metalEdge, 1);
+        g.fillRect(x + 16, y + 16, 16, 6);
+        g.fillStyle(PALETTE.system, 1);
+        g.fillRect(x + 22, y + 22, 4, 4);
+        g.fillStyle(PALETTE.system, 0.5);
+        g.fillRect(x + 23, y + 30, 2, 2);
+        g.fillStyle(PALETTE.system, 0.25);
+        g.fillRect(x + 23, y + 36, 2, 2);
+        break;
+      }
+    }
+    void h;
+  }
+
+  private drawDeathCardArt(
+    g: Phaser.GameObjects.Graphics,
+    id: string,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    spriteX: number,
+    groundY: number,
+  ): void {
+    // Every variant draws with the colors its real effect uses
+    // (`FxManager.deathBurst`): white/danger fragments, cyan glitch slices,
+    // and the wider white wipe for the bundle-exclusive DATA WIPE.
+    this.addSprite(InventoryService.getEquipped('character'), spriteX, groundY, 0.9, PALETTE.textDisabled);
+
+    if (id === 'static') {
+      const bits: [number, number, number][] = [
+        [26, -34, 5],
+        [44, -22, 4],
+        [60, -38, 4],
+        [38, -12, 4],
+        [58, -8, 3],
+        [72, -26, 3],
+      ];
+      for (const [dx, dy, size] of bits) {
+        g.fillStyle(size >= 4 ? PALETTE.white : PALETTE.danger, 1);
+        g.fillRect(x + dx, groundY + dy, size, size);
       }
       return;
     }
 
-    const g = this.add.graphics();
-    this.content.push(g);
-    const dim = fullColor ? 1 : 0.35;
-
-    if (category === 'trail') this.drawTrailGlyph(g, item.id as TrailKind, cx, cy, dim);
-    else if (category === 'death_fx') this.drawDeathFxGlyph(g, item.id, cx, cy, dim);
-    else if (category === 'system') this.drawSystemGlyph(g, cx, cy, dim);
-    void w;
-  }
-
-  private drawTrailGlyph(g: Phaser.GameObjects.Graphics, kind: TrailKind, cx: number, cy: number, dim: number): void {
-    switch (kind) {
-      case 'data_trail':
-        g.fillStyle(PALETTE.cyanDim, dim);
-        g.fillRect(cx - 16, cy + 6, 4, 4);
-        g.fillStyle(PALETTE.cyan, dim * 0.75);
-        g.fillRect(cx - 6, cy, 4, 4);
-        g.fillStyle(PALETTE.cyan, dim);
-        g.fillRect(cx + 6, cy - 6, 5, 5);
-        break;
-      case 'launch':
-        g.fillStyle(PALETTE.reward, dim);
-        g.fillRect(cx - 2, cy - 10, 4, 4);
-        g.fillStyle(PALETTE.dangerAlt, dim);
-        g.fillRect(cx - 10, cy, 4, 4);
-        g.fillRect(cx + 8, cy + 2, 4, 4);
-        g.fillStyle(PALETTE.reward, dim * 0.7);
-        g.fillRect(cx + 2, cy + 10, 3, 3);
-        break;
-      case 'interference':
-        g.fillStyle(PALETTE.white, dim);
-        g.fillRect(cx - 14, cy - 6, 28, 2);
-        g.fillStyle(PALETTE.metalEdge, dim);
-        g.fillRect(cx - 10, cy, 22, 2);
-        g.fillStyle(PALETTE.white, dim * 0.6);
-        g.fillRect(cx - 16, cy + 6, 24, 2);
-        break;
-      case 'beep7':
-        g.fillStyle(PALETTE.metalEdge, dim);
-        g.fillRect(cx - 8, cy - 2, 16, 6);
-        g.fillStyle(PALETTE.system, dim);
-        g.fillRect(cx - 2, cy + 4, 4, 4);
-        break;
+    if (id === 'glitch') {
+      for (let i = 0; i < 4; i++) {
+        g.fillStyle(PALETTE.cyan, 0.85 - i * 0.18);
+        g.fillRect(x + 12 + (i % 2) * 10, y + 10 + i * 10, w - 30, 2);
+      }
+      g.fillStyle(PALETTE.danger, 0.9);
+      g.fillRect(spriteX - 10, groundY - 20, 4, 4);
+      return;
     }
-  }
 
-  private drawDeathFxGlyph(g: Phaser.GameObjects.Graphics, id: string, cx: number, cy: number, dim: number): void {
-    const spread = id === 'data_wipe' ? 1.5 : id === 'glitch' ? 1.2 : 1;
-    g.fillStyle(PALETTE.white, dim);
-    g.fillRect(cx - 1, cy - 5 * spread, 2, 10 * spread);
-    g.fillRect(cx - 5 * spread, cy - 1, 10 * spread, 2);
-    g.fillStyle(id === 'data_wipe' ? PALETTE.white : PALETTE.dangerAlt, dim);
-    g.fillRect(cx - 3 * spread, cy - 3 * spread, 2, 2);
-    g.fillRect(cx + 1 * spread, cy - 3 * spread, 2, 2);
-    g.fillRect(cx - 3 * spread, cy + 1 * spread, 2, 2);
-    g.fillRect(cx + 1 * spread, cy + 1 * spread, 2, 2);
-    if (id !== 'static') {
-      g.fillStyle(PALETTE.cyan, dim * 0.7);
-      g.fillRect(cx - 10, cy + 8, 20, 1);
+    // data_wipe — the widest, brightest pass, the way the real variant reads.
+    for (let i = 0; i < 5; i++) {
+      g.fillStyle(PALETTE.white, 0.9 - i * 0.16);
+      g.fillRect(x + 6, y + 8 + i * 9, w - 12 - i * 8, 3);
     }
+    g.fillStyle(PALETTE.white, 1);
+    g.fillRect(x + 6, groundY - 6, w - 12, 2);
+    void h;
   }
 
-  private drawSystemGlyph(g: Phaser.GameObjects.Graphics, cx: number, cy: number, dim: number): void {
-    g.lineStyle(1.6, PALETTE.system, dim);
-    g.strokeRect(cx - 14, cy - 9, 24, 15);
-    g.fillStyle(PALETTE.system, dim);
-    g.fillRect(cx - 10, cy - 4, 10, 2);
-    g.fillRect(cx - 10, cy, 6, 2);
-    g.fillStyle(PALETTE.system, dim * 0.8);
-    g.fillRect(cx + 4, cy + 9, 6, 5);
+  private drawSystemCardArt(
+    g: Phaser.GameObjects.Graphics,
+    item: ShopItem,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ): void {
+    const lines = this.packLines(item.id);
+    const accent = lines.length > 0 ? (item.id === 'cold' ? PALETTE.cyan : PALETTE.system) : PALETTE.metalEdge;
+
+    g.fillStyle(accent, 1);
+    g.fillRect(x + 8, y + 8, 2, h - 16);
+
+    if (lines.length === 0) {
+      // No pack lines wired up yet (`corrupted`) — three dim beats instead of
+      // inventing dialogue for a tone that does not exist yet.
+      for (let i = 0; i < 3; i++) {
+        g.fillStyle(PALETTE.metalEdge, 1);
+        g.fillRect(x + 16 + i * 8, y + h / 2 - 2, 4, 4);
+      }
+      return;
+    }
+
+    const quote = this.domText.add(
+      x + 15,
+      y + 10,
+      lines[0]!.ru.toUpperCase(),
+      {
+        color: hexToCss(item.id === 'cold' ? PALETTE.cyanBright : PALETTE.systemLight),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 9,
+        wordWrapWidth: w - 24,
+        clampLines: 3,
+      },
+      0,
+      0,
+    );
+    this.content.push(quote);
+
+    // Voice-meter bars, bottom-right — the mockup's own "someone is talking" cue.
+    const bars = item.id === 'cold' ? [4, 4, 4] : [5, 9, 4, 11];
+    bars.forEach((barH, i) => {
+      g.fillStyle(accent, 1);
+      g.fillRect(x + w - 8 - (bars.length - i) * 4, y + h - 6 - barH, 2, barH);
+    });
   }
 
-  // ---- detail panel ("fitting room") ------------------------------------
+  private addSprite(skinId: string, x: number, y: number, scale: number, tint?: number): Phaser.GameObjects.Sprite | null {
+    const prefix = playerTexturePrefix(skinId);
+    if (!this.textures.exists(`${prefix}-idle-0`)) return null;
+    const sprite = this.add.sprite(x, y, `${prefix}-idle-0`).setOrigin(0.5, 1).setScale(scale);
+    if (tint !== undefined) sprite.setTint(tint);
+    this.content.push(sprite);
+    return sprite;
+  }
 
-  private detailFrame(accent: number, headerText: string, top = 32, height = 206): void {
+  /**
+   * The pack's three shortest real lines, across all of its situations. A
+   * quote row is 130px of 9px text — roughly twenty characters — and a line
+   * cut off as "ПОЛ БЫЛ ВОН ТАМ,…" sells a tone worse than a short one that
+   * lands whole. Picking by length rather than by a fixed situation also
+   * keeps two packs from previewing identically, which is what happened when
+   * this took `general[0]` from each (both open with the same word).
+   */
+  private packLines(packId: string): { ru: string; en: string }[] {
+    const pool = (PACKS as Record<string, (typeof PACKS)['standard'] | undefined>)[packId];
+    if (!pool) return [];
+    const seen = new Set<string>();
+    return Object.values(pool)
+      .flat()
+      .filter((line) => {
+        if (seen.has(line.ru)) return false;
+        seen.add(line.ru);
+        return true;
+      })
+      .sort((a, b) => a.ru.length - b.ru.length)
+      .slice(0, 3);
+  }
+
+  // ---- fitting-room panel ------------------------------------------------
+
+  private detailFrame(border: number, headerText: string, headerColor: number): void {
     const g = this.add.graphics();
     g.fillStyle(PALETTE.bgGraphite, 1);
-    g.lineStyle(1, accent, 1);
-    g.fillRect(DETAIL_X, top, DETAIL_W, height);
-    g.strokeRect(DETAIL_X, top, DETAIL_W, height);
+    g.fillRect(DETAIL_X, DETAIL_TOP, DETAIL_W, DETAIL_H);
     g.fillStyle(PALETTE.bgIndigo, 1);
-    g.fillRect(DETAIL_X, top, DETAIL_W, 18);
-    g.lineStyle(1, PALETTE.metalMid, 1);
-    g.lineBetween(DETAIL_X, top + 18, DETAIL_X + DETAIL_W, top + 18);
+    g.fillRect(DETAIL_X, DETAIL_TOP, DETAIL_W, 18);
+    g.fillStyle(PALETTE.metalMid, 1);
+    g.fillRect(DETAIL_X, DETAIL_TOP + 18, DETAIL_W, 1);
+    g.lineStyle(1, border, 1);
+    g.strokeRect(DETAIL_X + 0.5, DETAIL_TOP + 0.5, DETAIL_W - 1, DETAIL_H - 1);
     this.content.push(g);
 
     const header = this.domText.add(
       DETAIL_X + DETAIL_W / 2,
-      top + 9,
+      DETAIL_TOP + 9,
       headerText,
-      { color: hexToCss(accent), strokeColor: hexToCss(PALETTE.outline), scale: 1, sizePx: 9, wordWrapWidth: DETAIL_W - 12 },
+      { color: hexToCss(headerColor), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
       0.5,
       0.5,
     );
@@ -777,327 +1003,659 @@ export class ShopScene extends Phaser.Scene {
     const unlocked = this.isUnlocked(item);
 
     if (category === 'character') {
-      this.detailFrame(PALETTE.cyanDim, t('shopFittingRoom'));
-      this.buildCharacterPreview(item, unlocked);
-    } else if (category === 'trail') {
-      this.detailFrame(PALETTE.cyanDim, t('shopTrialRun'));
-      this.buildTrailPreview(item);
-    } else if (category === 'death_fx') {
-      this.detailFrame(PALETTE.dangerAlt, t('shopDeathPreview'));
-      this.buildDeathFxPreview(item, unlocked);
+      this.detailFrame(PALETTE.cyanDim, t('shopFittingRoom'), PALETTE.cyan);
+      this.buildCharacterScene(item, unlocked);
+      this.buildLegend(item, 156);
     } else {
-      this.detailFrame(PALETTE.systemDim, t('shopSystemSample'));
-      this.buildSystemPreview(item);
+      if (category === 'trail') {
+        this.detailFrame(PALETTE.cyanDim, t('shopTrialRun'), PALETTE.cyan);
+        this.buildTrailScene(item);
+      } else if (category === 'death_fx') {
+        this.detailFrame(PALETTE.goldSole, t('shopDeathPreview'), PALETTE.dangerAlt);
+        this.buildDeathScene(item, unlocked);
+      } else {
+        this.detailFrame(PALETTE.systemDim, t('shopSystemSample'), PALETTE.system);
+        this.buildSystemScene(item);
+      }
+      // One rhythm for all three: the stage ends at 120 (SYSTEM's third quote
+      // row at 124), the name sits clear of it, and the legend's two lines
+      // stop just above the status row at 180.
+      this.buildNameRow(item, 132);
+      this.buildLegend(item, 150);
     }
 
-    this.buildNameRarityDesc(item, 122);
-    this.buildActionRow(category, item, accent, unlocked);
+    this.buildStatusRow(category, item, unlocked);
+    this.buildDetailButton(category, item, unlocked, accent);
   }
 
-  private buildNameRarityDesc(item: ShopItem, y: number): void {
+  /** Name + rarity badge on one line — the layout every non-character panel uses (the character panel puts them in its own right-hand column instead). */
+  private buildNameRow(item: ShopItem, y: number): void {
     const name = this.domText.add(
       DETAIL_X + 8,
       y,
       t(item.nameKey),
-      { color: hexToCss(PALETTE.white), strokeColor: hexToCss(PALETTE.outline), scale: 1, bold: true, wordWrapWidth: DETAIL_W - 16, clampLines: 1 },
+      { color: hexToCss(PALETTE.white), strokeColor: hexToCss(PALETTE.outline), sizePx: 12, bold: true },
       0,
-      0,
+      0.5,
     );
     this.content.push(name);
+    this.buildRarityBadge(item, DETAIL_X + DETAIL_W - 8, y, 1);
+  }
 
-    const desc = this.domText.add(
+  private buildRarityBadge(item: ShopItem, x: number, y: number, originX: number): void {
+    const rarity = item.rarity ?? 'common';
+    const color = RARITY_COLOR[rarity];
+    const label = t(RARITY_LABEL[rarity]);
+    const w = label.length * 5 + 8;
+    const boxX = originX === 1 ? x - w : x;
+
+    const g = this.add.graphics();
+    g.fillStyle(color, 0.16);
+    g.fillRect(boxX, y - 6, w, 12);
+    g.lineStyle(1, color, 1);
+    g.strokeRect(boxX + 0.5, y - 5.5, w - 1, 11);
+    this.content.push(g);
+
+    const text = this.domText.add(
+      boxX + w / 2,
+      y,
+      label,
+      { color: hexToCss(color), strokeColor: hexToCss(PALETTE.outline), sizePx: 8, bold: true },
+      0.5,
+      0.5,
+    );
+    this.content.push(text);
+  }
+
+  private buildLegend(item: ShopItem, y: number): void {
+    const legend = this.domText.add(
       DETAIL_X + 8,
-      y + 20,
+      y,
       t(item.descriptionKey),
-      { color: hexToCss(PALETTE.textMuted), strokeColor: hexToCss(PALETTE.outline), scale: 1, sizePx: 9, wordWrapWidth: DETAIL_W - 16, clampLines: 2 },
+      {
+        color: hexToCss(PALETTE.textMuted),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 9,
+        wordWrapWidth: DETAIL_W - 16,
+        clampLines: 2,
+      },
       0,
       0,
     );
-    this.content.push(desc);
+    this.content.push(legend);
   }
 
-  private buildActionRow(category: ShopCategory, item: ShopItem, accent: number, unlocked: boolean): void {
-    const equipSlot = INVENTORY_CATEGORY[category];
+  /** The row above the button: what the purchase costs you on the left, the price (or a live action) on the right. */
+  private buildStatusRow(category: ShopCategory, item: ShopItem, unlocked: boolean): void {
+    const y = 180;
+    const leftX = DETAIL_X + 8;
+    const rightX = DETAIL_X + DETAIL_W - 8;
     const owned = unlocked && this.isOwned(item);
-    const isEquipped = owned && equipSlot ? InventoryService.getEquipped(equipSlot) === item.id : false;
-    const affordable = item.priceCredits === undefined || CurrencyService.canAfford(item.priceCredits);
+    const equipped = owned && this.isEquipped(item);
+    const price = item.priceCredits;
+    const balance = CurrencyService.getBalance();
 
-    const priceY = 180;
     if (!unlocked) {
       const cond = this.domText.add(
-        DETAIL_X + 8,
-        priceY,
+        leftX,
+        y,
         t('shopLockedCondition'),
-        { color: hexToCss(PALETTE.system), strokeColor: hexToCss(PALETTE.outline), scale: 1 },
+        { color: hexToCss(PALETTE.system), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
         0,
-        0,
+        0.5,
       );
       this.content.push(cond);
       return;
     }
 
-    if (owned && item.priceCredits !== undefined) {
-      const remain = CurrencyService.getBalance();
-      const priceLabel = this.domText.add(
-        DETAIL_X + 8,
-        priceY,
-        `${t('shopWillRemain')} ${remain}`,
-        { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), scale: 1 },
+    if (owned) {
+      const left = this.domText.add(
+        leftX,
+        y,
+        equipped ? t('shopWorn') : t('shopOwned'),
+        { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, uppercase: true },
         0,
-        0,
+        0.5,
       );
-      this.content.push(priceLabel);
-    } else if (!owned && item.priceCredits !== undefined) {
-      const priceLabel = this.domText.add(
-        DETAIL_X + 8,
-        priceY,
-        `${item.priceCredits} CREDITS`,
-        { color: hexToCss(affordable ? PALETTE.reward : PALETTE.goldDim), strokeColor: hexToCss(PALETTE.outline), scale: 1 },
-        0,
-        0,
-      );
-      this.content.push(priceLabel);
-    } else if (!owned && item.productId) {
-      const priceText = this.catalogPricesById.get(item.productId) ?? (this.catalogLoaded ? t('shopCatalogUnavailable') : '…');
-      const priceLabel = this.domText.add(
-        DETAIL_X + 8,
-        priceY,
-        priceText,
-        { color: hexToCss(PALETTE.reward), strokeColor: hexToCss(PALETTE.outline), scale: 1 },
-        0,
-        0,
-      );
-      this.content.push(priceLabel);
+      this.content.push(left);
+
+      // "ЕЩЁ РАЗ" replays the death effect on demand — the one secondary
+      // action in this row that maps onto something the preview really does.
+      if (category === 'death_fx' && this.replayDeathPreview) {
+        const replay = this.domText.add(
+          rightX,
+          y,
+          t('shopReplay'),
+          { color: hexToCss(PALETTE.dangerAlt), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
+          1,
+          0.5,
+        );
+        this.content.push(replay);
+        const zone = this.add.zone(rightX - 24, y, 56, 14).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+        zone.on('pointerup', () => {
+          playSfx('uiClick');
+          this.replayDeathPreview?.();
+        });
+        this.content.push(zone);
+      }
+      return;
     }
 
-    const btnCx = DETAIL_X + DETAIL_W / 2;
-    const btnCy = 216;
-    const btnW = DETAIL_W - 12;
-    const btnH = 34;
+    if (price === undefined) return;
 
-    if (isEquipped) {
-      this.drawActionButton(btnCx, btnCy, btnW, btnH, t('shopEquipped'), accent, CATEGORY_ACCENT_DIM[category], false, () => {});
-    } else if (owned) {
-      const onEquip = (): void => {
-        if (!equipSlot) return;
-        InventoryService.equip(equipSlot, item.id);
-        this.renderCategory();
-      };
-      this.drawActionButton(btnCx, btnCy, btnW, btnH, t('shopEquip'), accent, CATEGORY_ACCENT_DIM[category], true, onEquip);
-    } else if (item.priceCredits !== undefined || item.productId) {
-      const onBuy = (): void => void this.handleBuy(item);
-      this.drawActionButton(btnCx, btnCy, btnW, btnH, t('shopBuy'), PALETTE.reward, PALETTE.goldEdge, true, onBuy);
-    }
-    // `unlocked && !owned` with neither a price nor a productId would mean a
-    // `campaign_complete` item slipped past `syncProgressUnlocks()` — no
-    // button is the honest state (never a dead "КУПИТЬ" that does nothing).
+    const affordable = balance >= price;
+    const left = this.domText.add(
+      leftX,
+      y,
+      affordable ? `${t('shopWillRemain')} ${balance - price}` : `${t('shopNotEnough')} ${price - balance}`,
+      {
+        color: hexToCss(affordable ? PALETTE.labelMuted : PALETTE.dangerAlt),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 9,
+      },
+      0,
+      0.5,
+    );
+    this.content.push(left);
+
+    const priceText = this.domText.add(
+      rightX,
+      y,
+      String(price),
+      {
+        color: hexToCss(affordable ? PALETTE.reward : PALETTE.goldSole),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 14,
+        bold: true,
+      },
+      1,
+      0.5,
+    );
+    this.content.push(priceText);
+    const coin = this.add.graphics();
+    this.drawCoin(coin, rightX - priceText.width - 8, y, 5, !affordable);
+    this.content.push(coin);
   }
 
-  /** Hand-drawn so every category/money accent is reachable — `PixelButton`/`MenuTile` are both hardcoded to cyan. `sole` is a flat rect drawn a few px below the face, the same "pressed-in shadow" trick `PixelButton` draws via its underline, just as a full base coat here for the chunkier showroom buttons. */
-  private drawActionButton(
-    cx: number,
-    cy: number,
-    w: number,
-    h: number,
-    label: string,
-    face: number,
-    sole: number,
-    interactive: boolean,
-    onClick: () => void,
-  ): void {
+  private buildDetailButton(category: ShopCategory, item: ShopItem, unlocked: boolean, accent: number): void {
+    if (!unlocked) return;
+    const owned = this.isOwned(item);
+    const equipped = owned && this.isEquipped(item);
+    const slot = INVENTORY_CATEGORY[item.category];
+
+    if (equipped) {
+      this.drawShowroomButton({
+        label: t('shopEquipped'),
+        style: 'accent',
+        accent,
+        sole: CATEGORY_SOLE[category],
+        icon: 'check',
+        interactive: false,
+      });
+      return;
+    }
+
+    if (owned) {
+      this.drawShowroomButton({
+        label: t('shopEquip'),
+        style: 'accent',
+        accent,
+        sole: CATEGORY_SOLE[category],
+        icon: 'check',
+        interactive: true,
+        onClick: () => {
+          if (!slot) return;
+          InventoryService.equip(slot, item.id);
+          this.renderCategory();
+        },
+      });
+      return;
+    }
+
+    if (item.priceCredits === undefined && !item.productId) return;
+
+    const affordable = item.priceCredits === undefined || CurrencyService.canAfford(item.priceCredits);
+    if (affordable) {
+      this.drawShowroomButton({
+        label: t('shopBuy'),
+        style: 'gold',
+        accent: PALETTE.reward,
+        sole: PALETTE.goldSole,
+        icon: 'coin',
+        interactive: true,
+        onClick: () => void this.handleBuy(item),
+      });
+      return;
+    }
+
+    // Out of reach: the button turns into the one real way forward — a
+    // voluntary rewarded ad — instead of a dead "buy" the player can't use.
+    if (!AdsService.isAdsDisabled()) {
+      this.drawShowroomButton({
+        label: `${t('shopSignalShort')} +${EARN_AMOUNTS.rewardedAd}`,
+        style: 'accent',
+        accent: PALETTE.cyan,
+        sole: PALETTE.cyanDim,
+        icon: 'none',
+        interactive: true,
+        onClick: () => {
+          AdsService.requestRewarded((granted) => {
+            if (!granted) return;
+            CurrencyService.earnCredits(EARN_AMOUNTS.rewardedAd, 'rewarded_ad');
+            this.refreshBalance();
+            this.renderCategory();
+          });
+        },
+      });
+      return;
+    }
+
+    this.drawShowroomButton({
+      label: t('shopNotEnough'),
+      style: 'muted',
+      accent: PALETTE.metalEdge,
+      sole: PALETTE.metalDark,
+      icon: 'none',
+      interactive: false,
+    });
+  }
+
+  /**
+   * The showroom's one button shape: a lit face standing on a 4px sole that
+   * disappears when pressed (the face drops onto it), exactly like the
+   * mockup's `box-shadow: 0 4px 0`. `gold` is the money button (gradient face,
+   * white rim, dark text); `accent` is the category-colored equip button
+   * (dark face, colored rim and icon, white text).
+   */
+  private drawShowroomButton(opts: {
+    label: string;
+    style: 'gold' | 'accent' | 'muted';
+    accent: number;
+    sole: number;
+    icon: 'coin' | 'check' | 'none';
+    interactive: boolean;
+    onClick?: () => void;
+    x?: number;
+    y?: number;
+    w?: number;
+    h?: number;
+  }): void {
+    const x = opts.x ?? BTN_X;
+    const y = opts.y ?? BTN_TOP;
+    const w = opts.w ?? BTN_W;
+    const h = opts.h ?? BTN_H;
+    const textColor = opts.style === 'gold' ? PALETTE.bgVoid : opts.style === 'accent' ? PALETTE.white : PALETTE.labelMuted;
+
     const g = this.add.graphics();
-    const textColor = interactive ? PALETTE.bgVoid : PALETTE.white;
-    const domLabel = this.domText.add(
-      cx,
-      cy,
-      label.toUpperCase(),
-      { color: hexToCss(textColor), strokeColor: hexToCss(PALETTE.outline), scale: 1, bold: true },
+    const label = this.domText.add(
+      x + w / 2 + (opts.icon === 'none' ? 0 : 9),
+      y + h / 2,
+      opts.label,
+      { color: hexToCss(textColor), strokeColor: hexToCss(PALETTE.outline), sizePx: 17, bold: true, uppercase: true },
       0.5,
       0.5,
     );
-    this.content.push(g, domLabel);
+    this.content.push(g, label);
 
     const redraw = (hover: boolean, press: boolean): void => {
       g.clear();
-      const offsetY = press ? 2 : 0;
-      g.fillStyle(sole, 1);
-      g.fillRect(cx - w / 2, cy - h / 2 + 4, w, h);
-      g.fillStyle(face, hover ? 1 : 0.92);
-      g.fillRect(cx - w / 2, cy - h / 2 + offsetY, w, h - 4);
-      g.lineStyle(1.5, interactive ? PALETTE.white : PALETTE.metalEdge, interactive ? 0.9 : 0.6);
-      g.strokeRect(cx - w / 2, cy - h / 2 + offsetY, w, h - 4);
-      domLabel.setPosition(cx, cy + offsetY);
+      const dy = press ? 4 : 0;
+      if (!press) {
+        g.fillStyle(opts.sole, 1);
+        g.fillRect(x, y + h, w, 4);
+      }
+
+      if (opts.style === 'gold') {
+        const top = hover ? PALETTE.white : PALETTE.goldLight;
+        g.fillGradientStyle(top, top, PALETTE.reward, PALETTE.reward, 1);
+        g.fillRect(x, y + dy, w, h);
+        g.lineStyle(2, PALETTE.white, hover ? 1 : 0.9);
+      } else if (opts.style === 'accent') {
+        g.fillStyle(PALETTE.metalDark, 1);
+        g.fillRect(x, y + dy, w, h);
+        g.fillStyle(opts.accent, hover ? 0.28 : 0.16);
+        g.fillRect(x, y + dy, w, h);
+        g.lineStyle(2, opts.accent, 1);
+      } else {
+        g.fillStyle(PALETTE.metalMid, 1);
+        g.fillRect(x, y + dy, w, h);
+        g.lineStyle(1, PALETTE.metalEdge, 1);
+      }
+      g.strokeRect(x + 1, y + dy + 1, w - 2, h - 2);
+
+      const iconCx = x + w / 2 - (label.width / 2 + 7);
+      const iconCy = y + dy + h / 2;
+      if (opts.icon === 'coin') {
+        g.fillStyle(PALETTE.bgVoid, 1);
+        g.fillCircle(iconCx, iconCy, 7);
+        g.fillStyle(PALETTE.reward, 1);
+        g.fillCircle(iconCx, iconCy, 2.5);
+      } else if (opts.icon === 'check') {
+        g.fillStyle(opts.accent, 1);
+        g.fillRect(iconCx - 7, iconCy - 7, 14, 14);
+        this.drawCheck(g, iconCx, iconCy, 4, PALETTE.bgVoid);
+      }
+
+      label.setPosition(x + w / 2 + (opts.icon === 'none' ? 0 : 9), y + dy + h / 2);
     };
     redraw(false, false);
 
-    if (!interactive) return;
-    const zone = this.add.zone(cx, cy, w, h).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+    if (!opts.interactive) return;
+    const zone = this.add.zone(x + w / 2, y + h / 2 + 2, w + 8, h + 10).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
     zone.on('pointerover', () => redraw(true, false));
     zone.on('pointerout', () => redraw(false, false));
     zone.on('pointerdown', () => redraw(true, true));
     zone.on('pointerup', () => {
       redraw(true, false);
       playSfx('uiClick');
-      onClick();
+      opts.onClick?.();
     });
     this.content.push(zone);
   }
 
-  // ---- character preview -------------------------------------------------
+  // ---- character scene ---------------------------------------------------
 
-  private buildCharacterPreview(item: ShopItem, unlocked: boolean): void {
-    const boxX = DETAIL_X + 8;
-    const boxY = 54;
-    const boxW = DETAIL_W - 16;
-    const boxH = 62;
+  private buildCharacterScene(item: ShopItem, unlocked: boolean): void {
+    const boxX = DETAIL_X + 14;
+    const boxW = 56;
+    const boxH = 96;
     const g = this.add.graphics();
     g.fillStyle(PALETTE.bgVoid, 1);
+    g.fillRect(boxX, PREVIEW_TOP, boxW, boxH);
     g.lineStyle(1, PALETTE.metalMid, 1);
-    g.fillRect(boxX, boxY, boxW, boxH);
-    g.strokeRect(boxX, boxY, boxW, boxH);
+    g.strokeRect(boxX + 0.5, PREVIEW_TOP + 0.5, boxW - 1, boxH - 1);
     this.content.push(g);
 
     if (!unlocked) {
-      this.drawLockGlyph(g, boxX + boxW / 2, boxY + boxH / 2);
+      this.drawLockGlyph(g, boxX + boxW / 2, PREVIEW_TOP + boxH / 2);
       return;
     }
 
-    const visor = skinColorsFor(item.id)?.visor ?? PALETTE.cyan;
+    const colors = skinColorsFor(item.id);
+    const visor = colors?.visor ?? PALETTE.cyan;
+    const body = colors?.body ?? PALETTE.white;
+
+    // Spot light down the box + a pedestal glow, tinted by the skin's own
+    // visor — the one thing that changes color from skin to skin.
     const cone = this.add.graphics();
-    cone.fillStyle(visor, 0.18);
-    cone.fillTriangle(boxX + boxW / 2 - 12, boxY + 2, boxX + boxW / 2 + 12, boxY + 2, boxX + boxW / 2, boxY + boxH - 2);
+    const cx = boxX + boxW / 2;
+    cone.fillStyle(visor, 0.1);
+    cone.fillPoints(
+      [
+        new Phaser.Geom.Point(cx - 10, PREVIEW_TOP + 2),
+        new Phaser.Geom.Point(cx + 10, PREVIEW_TOP + 2),
+        new Phaser.Geom.Point(cx + 24, PREVIEW_TOP + boxH - 8),
+        new Phaser.Geom.Point(cx - 24, PREVIEW_TOP + boxH - 8),
+      ],
+      true,
+    );
+    cone.fillStyle(visor, 0.22);
+    cone.fillEllipse(cx, PREVIEW_TOP + boxH - 8, 44, 10);
     this.content.push(cone);
 
+    const sprite = this.addSprite(item.id, cx, PREVIEW_TOP + boxH - 8, 1.7, undefined);
     const prefix = playerTexturePrefix(item.id);
-    if (this.textures.exists(`${prefix}-idle-0`)) {
-      const sprite = this.add.sprite(boxX + boxW / 2, boxY + boxH - 2, `${prefix}-idle-0`).setOrigin(0.5, 1).setScale(1.3);
-      if (this.anims.exists(`${prefix}-idle`)) sprite.play(`${prefix}-idle`);
-      this.content.push(sprite);
-    }
+    if (sprite && this.anims.exists(`${prefix}-idle`)) sprite.play(`${prefix}-idle`);
+
+    const pedestal = this.add.graphics();
+    pedestal.fillStyle(PALETTE.cyanDim, 1);
+    pedestal.fillRect(cx - 18, PREVIEW_TOP + boxH - 9, 36, 4);
+    this.content.push(pedestal);
+
+    // Right column: name, rarity, and the three colors the skin is made of.
+    const colX = DETAIL_X + 78;
+    const name = this.domText.add(
+      colX,
+      PREVIEW_TOP + 6,
+      t(item.nameKey),
+      {
+        color: hexToCss(PALETTE.white),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 12,
+        bold: true,
+        wordWrapWidth: DETAIL_W - 86,
+        clampLines: 2,
+      },
+      0,
+      0,
+    );
+    this.content.push(name);
+
+    this.buildRarityBadge(item, colX, PREVIEW_TOP + 38, 0);
+
+    const swatches = [body, this.dimBody(body), visor];
+    const sw = this.add.graphics();
+    swatches.forEach((color, i) => {
+      sw.fillStyle(color, 1);
+      sw.fillRect(colX + i * 15, PREVIEW_TOP + 52, 12, 12);
+      sw.lineStyle(1, PALETTE.metalMid, 1);
+      sw.strokeRect(colX + i * 15 + 0.5, PREVIEW_TOP + 52.5, 11, 11);
+    });
+    this.content.push(sw);
   }
 
-  // ---- trail preview (live TrailFx) ---------------------------------------
+  /** The limb tone `drawPlayerFrame` paints (body at ~0.85 alpha over the dark well) — computed, not a second hand-picked color. */
+  private dimBody(body: number): number {
+    const r = Math.round(((body >> 16) & 0xff) * 0.62);
+    const g = Math.round(((body >> 8) & 0xff) * 0.62);
+    const b = Math.round((body & 0xff) * 0.62);
+    return (r << 16) | (g << 8) | b;
+  }
 
-  private buildTrailPreview(item: ShopItem): void {
+  // ---- trail scene (live test run) ---------------------------------------
+
+  private buildTrailScene(item: ShopItem): void {
     const boxX = DETAIL_X + 8;
-    const boxY = 54;
     const boxW = DETAIL_W - 16;
-    const boxH = 62;
-    const g = this.add.graphics();
-    g.fillStyle(PALETTE.bgVoid, 1);
-    g.lineStyle(1, PALETTE.metalMid, 1);
-    g.fillRect(boxX, boxY, boxW, boxH);
-    g.strokeRect(boxX, boxY, boxW, boxH);
-    this.content.push(g);
+    const boxH = 64;
+    const groundY = PREVIEW_TOP + TRAIL_FLOOR_OFFSET;
 
-    this.previewTrailBoxCx = boxX + boxW / 2;
-    this.previewTrailBoxCy = boxY + boxH - 4;
-    this.previewTrailState = { x: this.previewTrailBoxCx, y: this.previewTrailBoxCy, vx: 60, vy: 0, flipX: false };
-
-    const kind = item.id as TrailKind;
-    this.previewTrailFx = new TrailFx(this, kind, this.previewTrailBoxCx, this.previewTrailBoxCy);
+    const back = this.add.graphics();
+    back.fillStyle(PALETTE.bgVoid, 1);
+    back.fillRect(boxX, PREVIEW_TOP, boxW, boxH);
+    back.fillStyle(PALETTE.cyanDim, 0.6);
+    back.fillRect(boxX, groundY, boxW, 2);
+    back.fillStyle(PALETTE.cyanDim, 0.12);
+    back.fillRect(boxX, groundY + 2, boxW, boxH - TRAIL_FLOOR_OFFSET - 2);
+    this.content.push(back);
 
     const prefix = playerTexturePrefix(InventoryService.getEquipped('character'));
-    if (this.textures.exists(`${prefix}-idle-0`)) {
-      const sprite = this.add.sprite(this.previewTrailBoxCx, this.previewTrailBoxCy, `${prefix}-idle-0`).setOrigin(0.5, 1).setScale(0.75);
-      this.previewTrailSprite = sprite;
+    const fx = new TrailFx(this, item.id as TrailKind, DETAIL_X + DETAIL_W / 2, groundY);
+    this.content.push({ destroy: () => fx.destroy() });
+
+    const sprite = this.textures.exists(`${prefix}-idle-0`)
+      ? this.add.sprite(DETAIL_X + DETAIL_W / 2, groundY, `${prefix}-idle-0`).setOrigin(0.5, 1).setScale(TRAIL_SPRITE_SCALE)
+      : null;
+    if (sprite) {
+      sprite.play(`${prefix}-run`);
       this.content.push(sprite);
     }
 
-    // Ownership check happens once here rather than gating `update()` per
-    // frame — an unowned trail still previews live (that's the entire point
-    // of a fitting room), it just can't be equipped yet (`buildActionRow`).
-    void item;
+    this.trailPreview = {
+      fx,
+      sprite,
+      prefix,
+      anim: 'run',
+      x: DETAIL_X + DETAIL_W / 2,
+      y: groundY,
+      vx: TRAIL_RUN_SPEED,
+      vy: 0,
+      flipX: false,
+      groundY,
+      leftX: boxX + 22,
+      rightX: boxX + boxW - 22,
+      onGround: true,
+      nextJumpAtMs: this.time.now + 700,
+    };
+
+    // `TrailFx` owns its particle pool internally, so the way to keep it on
+    // stage is to repaint the panel around the box right after the pool is
+    // created — later elements (name, badge, button) still draw on top.
+    this.coverBand(boxX, PREVIEW_TOP, boxW, boxH, PALETTE.cyanDim);
   }
 
   private stepTrailPreview(delta: number): void {
-    const boxHalfW = (DETAIL_W - 16) / 2 - 8;
-    const periodMs = 1400;
-    this.previewTrailState.x += (this.previewTrailState.vx * delta) / 1000;
-    if (this.previewTrailState.x > this.previewTrailBoxCx + boxHalfW) {
-      this.previewTrailState.vx = -Math.abs(this.previewTrailState.vx);
-      this.previewTrailState.flipX = true;
-    } else if (this.previewTrailState.x < this.previewTrailBoxCx - boxHalfW) {
-      this.previewTrailState.vx = Math.abs(this.previewTrailState.vx);
-      this.previewTrailState.flipX = false;
+    const p = this.trailPreview;
+    if (!p) return;
+    const dt = delta / 1000;
+    const now = this.time.now;
+
+    p.x += p.vx * dt;
+    if (p.x >= p.rightX) {
+      p.x = p.rightX;
+      p.vx = -TRAIL_RUN_SPEED;
+      p.flipX = true;
+    } else if (p.x <= p.leftX) {
+      p.x = p.leftX;
+      p.vx = TRAIL_RUN_SPEED;
+      p.flipX = false;
     }
 
-    const phase = (this.time.now % periodMs) / periodMs;
-    this.previewTrailState.vy = phase < 0.5 ? -260 * Math.sin(phase * Math.PI * 2) : 0;
-    if (phase < 0.02 && this.previewTrailFx) this.previewTrailFx.onJump(this.previewTrailState.x, this.previewTrailBoxCy);
-
-    if (this.previewTrailSprite) {
-      this.previewTrailSprite.setPosition(Math.round(this.previewTrailState.x), this.previewTrailBoxCy);
-      this.previewTrailSprite.setFlipX(this.previewTrailState.flipX);
+    if (!p.onGround) {
+      p.vy += TRAIL_GRAVITY * dt;
+      p.y += p.vy * dt;
+      if (p.y >= p.groundY) {
+        p.y = p.groundY;
+        p.vy = 0;
+        p.onGround = true;
+        p.nextJumpAtMs = now + TRAIL_JUMP_INTERVAL_MS;
+      }
+    } else if (now >= p.nextJumpAtMs) {
+      // A real jump, so LAUNCH gets its burst and INTERFERENCE reaches the
+      // falling speed its own spawn condition needs — the preview runs the
+      // production `TrailFx`, not a lookalike.
+      p.vy = -TRAIL_JUMP_SPEED;
+      p.onGround = false;
+      p.fx.onJump(p.x, p.groundY);
     }
-    this.previewTrailFx?.update(this.time.now, delta, this.previewTrailState, true);
+
+    const wanted: TrailPreview['anim'] = p.onGround ? 'run' : p.vy < 0 ? 'jump' : 'fall';
+    if (wanted !== p.anim && p.sprite) {
+      p.anim = wanted;
+      p.sprite.play(`${p.prefix}-${wanted}`, true);
+    }
+    if (p.sprite) {
+      p.sprite.setPosition(Math.round(p.x), Math.round(p.y));
+      p.sprite.setFlipX(p.flipX);
+    }
+
+    p.fx.update(now, delta, { x: p.x, y: p.y, vx: p.vx, vy: p.vy, flipX: p.flipX }, true);
   }
 
-  // ---- death FX preview (real FxManager burst, looped) --------------------
+  // ---- death FX scene (two frames: intact -> the real burst) -------------
 
-  private buildDeathFxPreview(item: ShopItem, unlocked: boolean): void {
-    const boxX = DETAIL_X + 8;
-    const boxY = 54;
-    const boxW = DETAIL_W - 16;
-    const boxH = 62;
+  private buildDeathScene(item: ShopItem, unlocked: boolean): void {
+    const boxW = 62;
+    const boxH = 64;
+    const leftX = DETAIL_X + 8;
+    const rightX = DETAIL_X + DETAIL_W - 8 - boxW;
+
     const g = this.add.graphics();
     g.fillStyle(PALETTE.bgVoid, 1);
+    g.fillRect(leftX, PREVIEW_TOP, boxW, boxH);
+    g.fillRect(rightX, PREVIEW_TOP, boxW, boxH);
     g.lineStyle(1, PALETTE.metalMid, 1);
-    g.fillRect(boxX, boxY, boxW, boxH);
-    g.strokeRect(boxX, boxY, boxW, boxH);
+    g.strokeRect(leftX + 0.5, PREVIEW_TOP + 0.5, boxW - 1, boxH - 1);
+    g.lineStyle(1, PALETTE.dangerAlt, 0.6);
+    g.strokeRect(rightX + 0.5, PREVIEW_TOP + 0.5, boxW - 1, boxH - 1);
     this.content.push(g);
+
+    const arrow = this.add.graphics();
+    arrow.fillStyle(PALETTE.dangerAlt, 1);
+    const arrowY = PREVIEW_TOP + boxH / 2;
+    arrow.fillRect(leftX + boxW + 2, arrowY - 1, 8, 2);
+    arrow.fillTriangle(leftX + boxW + 10, arrowY - 4, leftX + boxW + 10, arrowY + 4, leftX + boxW + 14, arrowY);
+    this.content.push(arrow);
+
     if (!unlocked) {
-      this.drawLockGlyph(g, boxX + boxW / 2, boxY + boxH / 2);
+      this.drawLockGlyph(g, rightX + boxW / 2, PREVIEW_TOP + boxH / 2);
       return;
     }
 
-    const cx = boxX + boxW / 2;
-    const cy = boxY + boxH - 6;
-    const prefix = playerTexturePrefix(InventoryService.getEquipped('character'));
-    let sprite: Phaser.GameObjects.Sprite | null = null;
-    if (this.textures.exists(`${prefix}-idle-0`)) {
-      sprite = this.add.sprite(cx, cy, `${prefix}-idle-0`).setOrigin(0.5, 1).setScale(0.85);
-      this.content.push(sprite);
-    }
+    const skin = InventoryService.getEquipped('character');
+    this.addSprite(skin, leftX + boxW / 2, PREVIEW_TOP + boxH - 6, 1.1, undefined);
+
+    const burstCx = rightX + boxW / 2;
+    const burstCy = PREVIEW_TOP + boxH - 12;
+    const sprite = this.addSprite(skin, burstCx, PREVIEW_TOP + boxH - 6, 1.1, undefined);
 
     this.previewFx ??= new FxManager(this);
+    // The burst is the real gameplay effect, so it also has the real spread —
+    // clip it to the little stage instead of letting fragments rain across
+    // the panel (emitters sit at depth 120-150, above any drawn cover).
+    const clip = this.make.graphics({}, false);
+    clip.fillStyle(0xffffff, 1);
+    clip.fillRect(rightX, PREVIEW_TOP, boxW, boxH);
+    const mask = clip.createGeometryMask();
+    this.previewFx.setClipMask(mask);
+    this.content.push({
+      destroy: () => {
+        this.previewFx?.setClipMask(null);
+        mask.destroy();
+        clip.destroy();
+      },
+    });
+
     const variant = item.id as 'static' | 'glitch' | 'data_wipe';
     const trigger = (): void => {
-      if (!sprite) return;
-      this.previewFx?.deathBurst(cx, cy - 8, variant);
-      sprite.setVisible(false);
-      this.time.delayedCall(240, () => sprite?.setVisible(true));
+      // `shake: false` — the real death shakes the gameplay camera, which in
+      // a shop would jolt the whole screen every couple of seconds.
+      this.previewFx?.deathBurst(burstCx, burstCy, variant, false);
+      sprite?.setVisible(false);
+      this.time.delayedCall(320, () => sprite?.setVisible(true));
     };
-    trigger();
+    this.replayDeathPreview = trigger;
+    this.time.delayedCall(220, trigger);
     this.deathPreviewTimer = this.time.addEvent({ delay: DEATH_PREVIEW_INTERVAL_MS, loop: true, callback: trigger });
   }
 
-  // ---- system voice preview (real sampled dialogue lines) -----------------
+  /** Repaints the panel background in a band around a preview stage, so loose particles never leak past it. Drawn before the rest of the panel, so labels and the button still paint on top. */
+  private coverBand(x: number, y: number, w: number, h: number, border: number): void {
+    const bandBottom = y + h + 4;
+    const cover = this.add.graphics();
+    cover.fillStyle(PALETTE.bgGraphite, 1);
+    cover.fillRect(DETAIL_X + 1, DETAIL_TOP + 19, DETAIL_W - 2, y - DETAIL_TOP - 19);
+    cover.fillRect(DETAIL_X + 1, y + h, DETAIL_W - 2, bandBottom - (y + h));
+    cover.fillRect(DETAIL_X + 1, y, x - DETAIL_X - 1, h);
+    cover.fillRect(x + w, y, DETAIL_X + DETAIL_W - (x + w) - 1, h);
+    cover.lineStyle(1, border, 0.6);
+    cover.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    this.content.push(cover);
+  }
 
-  private buildSystemPreview(item: ShopItem): void {
+  // ---- SYSTEM pack scene (real sampled lines) ----------------------------
+
+  private buildSystemScene(item: ShopItem): void {
     const boxX = DETAIL_X + 8;
-    const boxY = 54;
     const boxW = DETAIL_W - 16;
-    const rowH = 15;
-
-    const pool = (PACKS as Record<string, (typeof PACKS)['standard']>)[item.id];
-    const lines = pool ? [pool.general[0], pool.fall[0], pool.successful_adaptation[0]].filter((l): l is NonNullable<typeof l> => !!l) : [];
+    const rowH = 20;
+    const lines = this.packLines(item.id);
 
     if (lines.length === 0) {
+      const g = this.add.graphics();
+      g.fillStyle(PALETTE.systemDim, 0.25);
+      g.fillRect(boxX, PREVIEW_TOP, boxW, 64);
+      this.content.push(g);
       const fallback = this.domText.add(
-        boxX,
-        boxY + 4,
+        boxX + 8,
+        PREVIEW_TOP + 32,
         t('shopSystemSampleUnavailable'),
-        { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), scale: 1, sizePx: 9, wordWrapWidth: boxW },
+        {
+          color: hexToCss(PALETTE.labelMuted),
+          strokeColor: hexToCss(PALETTE.outline),
+          sizePx: 9,
+          wordWrapWidth: boxW - 16,
+          clampLines: 2,
+        },
         0,
-        0,
+        0.5,
       );
       this.content.push(fallback);
       return;
     }
 
-    lines.forEach((line, i) => {
-      const y = boxY + i * (rowH + 2);
+    lines.slice(0, 3).forEach((line, i) => {
+      const y = PREVIEW_TOP + i * (rowH + 4);
       const g = this.add.graphics();
       g.fillStyle(PALETTE.systemDim, 0.35);
       g.fillRect(boxX, y, boxW, rowH);
@@ -1106,10 +1664,16 @@ export class ShopScene extends Phaser.Scene {
       this.content.push(g);
 
       const text = this.domText.add(
-        boxX + 5,
+        boxX + 6,
         y + rowH / 2,
         line.ru.toUpperCase(),
-        { color: hexToCss(PALETTE.systemLight), strokeColor: hexToCss(PALETTE.outline), scale: 1, sizePx: 9, clampLines: 1, wordWrapWidth: boxW - 8 },
+        {
+          color: hexToCss(PALETTE.systemLight),
+          strokeColor: hexToCss(PALETTE.outline),
+          sizePx: 9,
+          wordWrapWidth: boxW - 12,
+          clampLines: 1,
+        },
         0,
         0.5,
       );
@@ -1117,228 +1681,260 @@ export class ShopScene extends Phaser.Scene {
     });
   }
 
-  // ---- right column (SYSTEM comment [+ collection], W >= ~600) -----------
+  // ---- right column ------------------------------------------------------
 
   private buildRightColumn(category: ShopCategory, items: ShopItem[]): void {
-    const width = this.scale.width;
-    const colW = width - RIGHT_COL_X - 8;
+    const colW = this.scale.width - RIGHT_COL_X - 8;
     if (colW < RIGHT_COL_MIN_W) {
       this.systemLineLabel = null;
       return;
     }
 
-    const systemH = category === 'character' ? 96 : 206;
-    const sysBg = this.add.rectangle(RIGHT_COL_X, 32, colW, systemH, PALETTE.system, 0.12).setOrigin(0, 0);
-    const sysEdge = this.add.rectangle(RIGHT_COL_X, 32, 2, systemH, PALETTE.system, 1).setOrigin(0, 0);
-    this.content.push(sysBg, sysEdge);
+    const systemH = category === 'character' ? 96 : DETAIL_H;
+    const bg = this.add.rectangle(RIGHT_COL_X, DETAIL_TOP, colW, systemH, PALETTE.system, 0.12).setOrigin(0, 0);
+    const edge = this.add.rectangle(RIGHT_COL_X, DETAIL_TOP, 2, systemH, PALETTE.system, 1).setOrigin(0, 0);
+    this.content.push(bg, edge);
 
     const heading = this.domText.add(
       RIGHT_COL_X + 8,
-      40,
+      DETAIL_TOP + 9,
       'SYSTEM',
-      { color: hexToCss(PALETTE.system), strokeColor: hexToCss(PALETTE.outline), scale: 1 },
+      { color: hexToCss(PALETTE.system), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
       0,
-      0,
+      0.5,
     );
     this.content.push(heading);
+
     const label = this.domText.add(
       RIGHT_COL_X + 8,
-      56,
-      '',
-      { color: hexToCss(PALETTE.systemLight), strokeColor: hexToCss(PALETTE.outline), scale: 1, sizePx: 10, wordWrapWidth: colW - 16, clampLines: 6 },
+      DETAIL_TOP + 22,
+      this.systemLineText,
+      {
+        color: hexToCss(PALETTE.systemLight),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 10,
+        wordWrapWidth: colW - 16,
+        clampLines: category === 'character' ? 5 : 12,
+      },
       0,
       0,
     );
-    this.content.push({ destroy: () => label.destroy() });
+    this.content.push(label);
     this.systemLineLabel = label;
 
     if (category !== 'character') return;
 
-    const collY = 32 + systemH + 10;
-    const collH = 206 - systemH - 10;
+    const collY = DETAIL_TOP + systemH + 10;
+    const collH = DETAIL_H - systemH - 10;
     const collBg = this.add.rectangle(RIGHT_COL_X, collY, colW, collH, PALETTE.metalDark, 1).setOrigin(0, 0);
     this.content.push(collBg);
 
     const collHeading = this.domText.add(
       RIGHT_COL_X + 8,
-      collY + 8,
+      collY + 10,
       t('shopCollection'),
-      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), scale: 1, sizePx: 9 },
+      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 9 },
       0,
-      0,
+      0.5,
     );
     this.content.push(collHeading);
 
-    const chipSize = 9;
+    const chip = 9;
     const chipGap = 3;
-    const perRow = Math.max(1, Math.floor((colW - 16) / (chipSize + chipGap)));
+    const perRow = Math.max(1, Math.floor((colW - 16) / (chip + chipGap)));
+    const chips = this.add.graphics();
     items.forEach((item, i) => {
       const owned = this.isUnlocked(item) && this.isOwned(item);
-      const chipColor = owned ? skinColorsFor(item.id)?.visor ?? PALETTE.cyan : PALETTE.metalEdge;
-      const col = i % perRow;
-      const row = Math.floor(i / perRow);
-      const chip = this.add.rectangle(
-        RIGHT_COL_X + 8 + col * (chipSize + chipGap),
-        collY + 22 + row * (chipSize + chipGap),
-        chipSize,
-        chipSize,
-        chipColor,
-        1,
-      ).setOrigin(0, 0);
-      this.content.push(chip);
+      chips.fillStyle(owned ? skinColorsFor(item.id)?.visor ?? PALETTE.cyan : PALETTE.metalEdge, 1);
+      chips.fillRect(
+        RIGHT_COL_X + 8 + (i % perRow) * (chip + chipGap),
+        collY + 22 + Math.floor(i / perRow) * (chip + chipGap),
+        chip,
+        chip,
+      );
     });
+    this.content.push(chips);
 
     const ownedCount = items.filter((item) => this.isUnlocked(item) && this.isOwned(item)).length;
     const count = this.domText.add(
       RIGHT_COL_X + 8,
-      collY + collH - 16,
+      collY + collH - 14,
       `${ownedCount} / ${items.length}`,
-      { color: hexToCss(PALETTE.textMuted), strokeColor: hexToCss(PALETTE.outline), scale: 1 },
+      { color: hexToCss(PALETTE.textMuted), strokeColor: hexToCss(PALETTE.outline), sizePx: 12, bold: true },
       0,
-      0,
+      0.5,
     );
     this.content.push(count);
   }
 
   private handleSystemComment(payload: { text: string; category: string }): void {
     if (payload.category !== 'shop') return;
-    if (this.view !== 'main') return;
-    if (!this.systemLineLabel) return;
-    this.systemLineLabel.setText(payload.text);
-    if (this.systemLineTimer !== null) window.clearTimeout(this.systemLineTimer);
-    this.systemLineTimer = window.setTimeout(() => this.systemLineLabel?.setText(''), SYSTEM_LINE_MS);
+    // Kept on screen until the next line replaces it — the SYSTEM panel is a
+    // fixture of the showroom, not a toast that blinks out and leaves a hole.
+    this.systemLineText = payload.text;
+    this.systemLineLabel?.setText(payload.text);
   }
 
-  // ---- premium showroom (real money — the one screen with a price in ₽) --
+  // ---- premium ("БЕЗ РЕК.") ----------------------------------------------
 
   private renderPremiumShowroom(): void {
     const items = this.visibleItems('premium');
     if (!this.selectedByCategory.has('premium')) this.selectedByCategory.set('premium', items[0]!.id);
     const selected = this.selectedItem('premium');
+    const owned = this.isOwned(selected);
 
     const offerX = GRID_X;
     const offerY = 40;
     const offerW = 252;
+    const offerH = 198;
     const headerH = 26;
 
-    if (items.length > 1) {
-      const segW = offerW / items.length;
-      items.forEach((it, i) => {
-        const active = it.id === selected.id;
-        const segX = offerX + i * segW;
-        const g = this.add.graphics();
-        g.fillStyle(active ? PALETTE.reward : PALETTE.goldDim, 1);
-        g.fillRect(segX, offerY, segW, headerH);
-        this.content.push(g);
-        const label = this.domText.add(
-          segX + segW / 2,
-          offerY + headerH / 2,
-          t(it.nameKey),
-          { color: hexToCss(active ? PALETTE.bgVoid : PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), scale: 1, bold: true, clampLines: 1, wordWrapWidth: segW - 6 },
-          0.5,
-          0.5,
-        );
-        this.content.push(label);
-        const zone = this.add.zone(segX + segW / 2, offerY + headerH / 2, segW, headerH).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
-        zone.on('pointerup', () => {
-          playSfx('uiClick');
-          this.selectedByCategory.set('premium', it.id);
-          this.renderCategory();
-        });
-        this.content.push(zone);
-      });
-    } else {
+    const body = this.add.graphics();
+    body.fillStyle(PALETTE.metalDark, 1);
+    body.fillRect(offerX, offerY, offerW, offerH);
+    body.lineStyle(2, PALETTE.reward, 1);
+    body.strokeRect(offerX + 1, offerY + 1, offerW - 2, offerH - 2);
+    this.content.push(body);
+
+    // Two real products share this tab, so the gold bar doubles as the
+    // selector between them — short labels, because the offer's own headline
+    // moves inside the card where it has the full 252px to breathe.
+    const segW = offerW / items.length;
+    items.forEach((it, i) => {
+      const active = it.id === selected.id;
+      const segX = offerX + i * segW;
       const g = this.add.graphics();
-      g.fillStyle(PALETTE.reward, 1);
-      g.fillRect(offerX, offerY, offerW, headerH);
+      g.fillStyle(active ? PALETTE.reward : PALETTE.goldDim, 1);
+      g.fillRect(segX, offerY, segW, headerH);
       this.content.push(g);
+
       const label = this.domText.add(
-        offerX + offerW / 2,
+        segX + segW / 2,
         offerY + headerH / 2,
-        t(selected.nameKey),
-        { color: hexToCss(PALETTE.bgVoid), strokeColor: hexToCss(PALETTE.outline), scale: 1, bold: true },
+        it.id === 'remove_ads' ? t('shopCategoryPremium') : t(it.nameKey),
+        {
+          color: hexToCss(active ? PALETTE.bgVoid : PALETTE.labelMuted),
+          strokeColor: hexToCss(PALETTE.outline),
+          sizePx: 11,
+          bold: true,
+          uppercase: true,
+        },
         0.5,
         0.5,
       );
       this.content.push(label);
-    }
 
-    const bodyG = this.add.graphics();
-    bodyG.fillStyle(PALETTE.metalDark, 1);
-    bodyG.lineStyle(2, PALETTE.reward, 1);
-    bodyG.fillRect(offerX, offerY + headerH, offerW, 198 - headerH);
-    bodyG.strokeRect(offerX, offerY, offerW, 198);
-    this.content.push(bodyG);
+      const zone = this.add.zone(segX + segW / 2, offerY + headerH / 2, segW, headerH).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+      zone.on('pointerup', () => {
+        playSfx('uiClick');
+        this.selectedByCategory.set('premium', it.id);
+        this.renderCategory();
+      });
+      this.content.push(zone);
+    });
+
+    // Headline row — the gold diamond plus the promise, at full card width.
+    const bannerY = offerY + headerH + 18;
+    const diamond = this.add.graphics();
+    diamond.fillStyle(PALETTE.reward, 1);
+    diamond.save();
+    diamond.translateCanvas(offerX + 20, bannerY);
+    diamond.rotateCanvas(Math.PI / 4);
+    diamond.fillRect(-6, -6, 12, 12);
+    diamond.restore();
+    this.content.push(diamond);
+
+    const banner = this.domText.add(
+      offerX + 34,
+      bannerY,
+      selected.id === 'remove_ads' ? t('shopNoAdsForever') : t('shopSystemAccess'),
+      { color: hexToCss(PALETTE.reward), strokeColor: hexToCss(PALETTE.outline), sizePx: 14, bold: true, uppercase: true },
+      0,
+      0.5,
+    );
+    this.content.push(banner);
 
     const features =
       selected.id === 'remove_ads'
         ? [t('shopNoAdsFeature1'), t('shopNoAdsFeature2'), t('shopNoAdsFeature3')]
-        : [t('shopNoAds'), t('shopSkinError404'), t('shopFxDataWipe'), t('shopPackCorrupted')];
+        : [t('shopBundleFeature'), t('shopSkinError404'), t('shopFxDataWipe'), t('shopPackCorrupted')];
 
     features.forEach((line, i) => {
-      const y = offerY + headerH + 14 + i * 20;
+      const y = bannerY + 24 + i * 22;
       const check = this.add.graphics();
       check.fillStyle(PALETTE.patrolVisor, 1);
-      check.fillRect(offerX + 12, y, 10, 10);
-      check.lineStyle(1.4, PALETTE.bgVoid, 1);
-      check.beginPath();
-      check.moveTo(offerX + 14, y + 5);
-      check.lineTo(offerX + 16.5, y + 8);
-      check.lineTo(offerX + 20, y + 2.5);
-      check.strokePath();
+      check.fillRect(offerX + 14, y - 6, 12, 12);
+      this.drawCheck(check, offerX + 20, y, 3.5, PALETTE.bgVoid);
       this.content.push(check);
 
       const text = this.domText.add(
-        offerX + 28,
-        y + 5,
+        offerX + 32,
+        y,
         line,
-        { color: hexToCss(PALETTE.white), strokeColor: hexToCss(PALETTE.outline), scale: 1, sizePx: 10, wordWrapWidth: offerW - 40, clampLines: 1 },
+        {
+          color: hexToCss(PALETTE.white),
+          strokeColor: hexToCss(PALETTE.outline),
+          sizePx: 11,
+          bold: true,
+          wordWrapWidth: offerW - 46,
+          clampLines: 1,
+        },
         0,
         0.5,
       );
       this.content.push(text);
     });
 
-    this.buildPremiumPurchasePanel(selected, offerY);
+    // The quiet honesty line, in the mockup's own "empty checkbox" style.
+    const noteY = offerY + offerH - 22;
+    const noteBox = this.add.graphics();
+    noteBox.lineStyle(2, PALETTE.labelMuted, 1);
+    noteBox.strokeRect(offerX + 14, noteY - 6, 12, 12);
+    this.content.push(noteBox);
+    const note = this.domText.add(
+      offerX + 32,
+      noteY,
+      selected.id === 'remove_ads' ? t('shopNoAdsNote') : t(selected.descriptionKey),
+      {
+        color: hexToCss(PALETTE.labelMuted),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 10,
+        wordWrapWidth: offerW - 46,
+        clampLines: 1,
+      },
+      0,
+      0.5,
+    );
+    this.content.push(note);
 
-    const colW = this.scale.width - RIGHT_COL_X - 8;
-    if (colW >= RIGHT_COL_MIN_W) {
-      const sysBg = this.add.rectangle(RIGHT_COL_X, offerY, colW, 198, PALETTE.system, 0.12).setOrigin(0, 0);
-      const sysEdge = this.add.rectangle(RIGHT_COL_X, offerY, 2, 198, PALETTE.system, 1).setOrigin(0, 0);
-      this.content.push(sysBg, sysEdge);
-      const label = this.domText.add(
-        RIGHT_COL_X + 8,
-        offerY + 16,
-        '',
-        { color: hexToCss(PALETTE.systemLight), strokeColor: hexToCss(PALETTE.outline), scale: 1, sizePx: 10, wordWrapWidth: colW - 16, clampLines: 8 },
-        0,
-        0,
-      );
-      this.content.push({ destroy: () => label.destroy() });
-      this.systemLineLabel = label;
-    } else {
-      this.systemLineLabel = null;
-    }
+    this.buildPremiumPurchasePanel(selected, owned, offerY, offerH);
+    this.buildPremiumSystemColumn(offerY, offerH);
   }
 
-  /** Purchase panel amendments (owner, this round): no "ask an adult" copy, no "restore purchase" button (`PurchaseManager.restorePurchases()` already runs automatically at boot — a manual duplicate added nothing but visual noise) — the button centers in the freed vertical space instead of sitting at its old fixed offset. */
-  private buildPremiumPurchasePanel(item: ShopItem, top: number): void {
+  /** Owner's amendments over the mockup: no "ask an adult" line, no manual restore button (`PurchaseManager.restorePurchases()` already runs at every boot) — the buy button centers in the space they freed. */
+  private buildPremiumPurchasePanel(item: ShopItem, owned: boolean, top: number, h: number): void {
     const x = DETAIL_X;
     const w = DETAIL_W;
-    const h = 198;
 
     const g = this.add.graphics();
     g.fillStyle(PALETTE.bgGraphite, 1);
-    g.lineStyle(1, PALETTE.goldDim, 1);
     g.fillRect(x, top, w, h);
-    g.strokeRect(x, top, w, h);
+    g.lineStyle(1, PALETTE.goldDim, 1);
+    g.strokeRect(x + 0.5, top + 0.5, w - 1, h - 1);
     this.content.push(g);
 
     const title = this.domText.add(
       x + w / 2,
       top + 16,
-      t('shopOneTimePurchase'),
-      { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), scale: 1 },
+      owned ? t('shopNoAdsOwned') : t('shopOneTimePurchase'),
+      {
+        // No `clampLines` on a centered label — a centered -webkit-box sizes
+        // to its first break opportunity, which cuts short strings mid-word.
+        color: hexToCss(owned ? PALETTE.patrolVisor : PALETTE.labelMuted),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 9,
+        bold: true,
+      },
       0.5,
       0.5,
     );
@@ -1346,47 +1942,89 @@ export class ShopScene extends Phaser.Scene {
 
     const realPrice = item.productId ? this.catalogPricesById.get(item.productId) : undefined;
     const priceText = realPrice ?? (this.catalogLoaded ? t('shopCatalogUnavailable') : '…');
-    // A real price ("99 ₽") is short by construction and reads as the hero
-    // number; the "catalog unavailable"/loading fallback is a full sentence
-    // that must never blow past the panel at the same giant size.
     const price = this.domText.add(
       x + w / 2,
-      top + 40,
-      priceText,
-      realPrice
-        ? { color: hexToCss(PALETTE.reward), strokeColor: hexToCss(PALETTE.outline), scale: 3, bold: true, wordWrapWidth: w - 16, clampLines: 1 }
-        : { color: hexToCss(PALETTE.labelMuted), strokeColor: hexToCss(PALETTE.outline), scale: 1, sizePx: 11, wordWrapWidth: w - 16, clampLines: 2 },
+      top + 44,
+      owned ? t('shopEquipped') : priceText,
+      realPrice && !owned
+        ? { color: hexToCss(PALETTE.reward), strokeColor: hexToCss(PALETTE.outline), sizePx: 28, bold: true }
+        : {
+            color: hexToCss(owned ? PALETTE.reward : PALETTE.labelMuted),
+            strokeColor: hexToCss(PALETTE.outline),
+            sizePx: owned ? 16 : 11,
+            bold: true,
+            wordWrapWidth: w - 20,
+            clampLines: 2,
+          },
       0.5,
       0.5,
     );
     this.content.push(price);
 
-    const dividerY = top + 66;
-    const divider = this.add.rectangle(x + 12, dividerY, w - 24, 1, PALETTE.goldDim, 1).setOrigin(0, 0.5);
+    const dividerY = top + 68;
+    const divider = this.add.graphics();
+    divider.fillStyle(PALETTE.goldDim, 1);
+    divider.fillRect(x + 12, dividerY, w - 24, 1);
     this.content.push(divider);
 
-    const owned = this.isOwned(item);
-    if (owned) {
-      const ownedLabel = this.domText.add(
-        x + w / 2,
-        (dividerY + top + h - 8) / 2,
-        t('shopOwned'),
-        { color: hexToCss(PALETTE.reward), strokeColor: hexToCss(PALETTE.outline), scale: 1, bold: true },
-        0.5,
-        0.5,
-      );
-      this.content.push(ownedLabel);
-      return;
-    }
+    if (owned) return;
 
     const btnH = 44;
-    const regionTop = dividerY;
-    const regionBottom = top + h - 8;
-    const btnCy = regionTop + (regionBottom - regionTop) / 2;
-    this.drawActionButton(x + w / 2, btnCy, w - 12, btnH, t('shopBuy'), PALETTE.reward, PALETTE.goldEdge, true, () => void this.handleBuy(item));
+    const btnTop = Math.round(dividerY + (top + h - 8 - dividerY - btnH) / 2);
+    this.drawShowroomButton({
+      label: t('shopBuy'),
+      style: 'gold',
+      accent: PALETTE.reward,
+      sole: PALETTE.goldSole,
+      icon: 'coin',
+      interactive: true,
+      onClick: () => void this.handleBuy(item),
+      x: x + 10,
+      y: btnTop,
+      w: w - 20,
+      h: btnH,
+    });
   }
 
-  // ---- purchase flow (unchanged behavior from the tab-based shop) --------
+  private buildPremiumSystemColumn(top: number, h: number): void {
+    const colW = this.scale.width - RIGHT_COL_X - 8;
+    if (colW < RIGHT_COL_MIN_W) {
+      this.systemLineLabel = null;
+      return;
+    }
+    const bg = this.add.rectangle(RIGHT_COL_X, top, colW, h, PALETTE.system, 0.12).setOrigin(0, 0);
+    const edge = this.add.rectangle(RIGHT_COL_X, top, 2, h, PALETTE.system, 1).setOrigin(0, 0);
+    this.content.push(bg, edge);
+
+    const heading = this.domText.add(
+      RIGHT_COL_X + 8,
+      top + 12,
+      'SYSTEM',
+      { color: hexToCss(PALETTE.system), strokeColor: hexToCss(PALETTE.outline), sizePx: 9, bold: true },
+      0,
+      0.5,
+    );
+    this.content.push(heading);
+
+    const label = this.domText.add(
+      RIGHT_COL_X + 8,
+      top + 26,
+      this.systemLineText,
+      {
+        color: hexToCss(PALETTE.systemLight),
+        strokeColor: hexToCss(PALETTE.outline),
+        sizePx: 10,
+        wordWrapWidth: colW - 16,
+        clampLines: 12,
+      },
+      0,
+      0,
+    );
+    this.content.push(label);
+    this.systemLineLabel = label;
+  }
+
+  // ---- purchase flow -----------------------------------------------------
 
   private async handleBuy(item: ShopItem): Promise<void> {
     if (this.purchaseInProgress) return;
@@ -1403,8 +2041,8 @@ export class ShopScene extends Phaser.Scene {
       CurrencyService.spendCredits(item.priceCredits, 'shop_item');
       InventoryService.unlock(equipSlot, item.id);
       this.refreshBalance();
-      commentOnShop(isFirstCosmetic ? 'first_cosmetic' : 'purchase_confirmed');
       this.renderCategory();
+      commentOnShop(isFirstCosmetic ? 'first_cosmetic' : 'purchase_confirmed');
       return;
     }
 
@@ -1419,10 +2057,10 @@ export class ShopScene extends Phaser.Scene {
 
     this.purchaseInProgress = false;
     this.refreshBalance();
+    this.renderCategory();
     if (result === 'success') {
       commentOnShop(item.productId === 'remove_ads' || item.productId === 'system_access' ? 'no_ads' : 'purchase_confirmed');
     }
-    this.renderCategory();
   }
 
   private hasAnyPurchasedCosmetic(): boolean {
@@ -1440,20 +2078,21 @@ export class ShopScene extends Phaser.Scene {
     );
   }
 
-  // ---- GET CREDITS sub-view (unchanged design, out of this round's scope) -
+  // ---- GET CREDITS sub-view ---------------------------------------------
 
   private openGetCredits(): void {
     this.view = 'credits';
     this.setRailVisible(false);
     this.teardownLivePreview();
     this.clearContent();
+    this.systemLineLabel = null;
     const { width } = this.scale;
 
     const title = this.domText.add(
       width / 2,
       44,
       t('shopGetCredits'),
-      { color: hexToCss(PALETTE.cyan), strokeColor: hexToCss(PALETTE.outline), scale: 2, bold: true },
+      { color: hexToCss(PALETTE.cyan), strokeColor: hexToCss(PALETTE.outline), sizePx: 16, bold: true, uppercase: true },
       0.5,
       0.5,
     );
@@ -1485,7 +2124,7 @@ export class ShopScene extends Phaser.Scene {
       cx,
       cy,
       text,
-      { color: hexToCss(PALETTE.cyan), strokeColor: hexToCss(PALETTE.outline), scale: 1 },
+      { color: hexToCss(PALETTE.cyan), strokeColor: hexToCss(PALETTE.outline), sizePx: 10 },
       0.5,
       0.5,
     );
@@ -1495,8 +2134,8 @@ export class ShopScene extends Phaser.Scene {
     const redraw = (hover: boolean): void => {
       g.clear();
       g.fillStyle(PALETTE.metalMid, hover ? 0.42 : 0.22);
-      g.lineStyle(1, hover ? PALETTE.cyan : PALETTE.cyanDim, 1);
       g.fillRect(cx - w / 2, cy - h / 2, w, h);
+      g.lineStyle(1, hover ? PALETTE.cyan : PALETTE.cyanDim, 1);
       g.strokeRect(cx - w / 2, cy - h / 2, w, h);
       domLabel.setColor(hexToCss(hover ? PALETTE.white : PALETTE.cyan));
     };

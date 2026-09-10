@@ -42,6 +42,9 @@ export const PALETTE = {
   /** Gold is the money channel only — the credits counter and the shop tile's accent, never decoration. */
   goldDim: 0x4a3d14,
   goldEdge: 0xa8912b,
+  /** The shop's BUY button: a lit gradient face (`goldLight` → `reward`) standing on a darker sole. */
+  goldLight: 0xfff0a0,
+  goldSole: 0x8a6b14,
 
   /** THE SYSTEM's quieter registers: version/technical text, and its spoken line. */
   systemMuted: 0x8a6bb0,
