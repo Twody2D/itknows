@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import '@/ui/fonts';
 import { PALETTE } from '@/config/palette';
 import { PHYSICS } from '@/config/physics';
 import { MIN_VIRTUAL_WIDTH, VIRTUAL_HEIGHT } from '@/config/display';

@@ -4,10 +4,9 @@ import { hexToCss } from '@/utils/color';
 import { t } from '@/i18n/ui';
 import type { UiStringKey } from '@/i18n/ui';
 import { DomTextOverlay } from '@/ui/DomTextOverlay';
-import type { DomTextHandle } from '@/ui/DomTextOverlay';
+import type { DomTextHandle, DomTextOptions } from '@/ui/DomTextOverlay';
 import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
 import { fadeIn } from '@/ui/SceneFade';
-import { PixelLabel } from '@/ui/PixelLabel';
 import { attachEscape } from '@/ui/ScreenChrome';
 import { playSfx } from '@/audio/SfxManager';
 import { EventBus } from '@/core/EventBus';
@@ -198,7 +197,7 @@ export class ShopScene extends Phaser.Scene {
   private content: Disposable[] = [];
   private railHandles: RailHandle[] = [];
   private domText!: DomTextOverlay;
-  private walletLabel!: PixelLabel;
+  private walletLabel!: DomTextHandle;
   /** Width-dependent columns — see `WIDE_DETAIL_X` and `layout()`. */
   private detailX = WIDE_DETAIL_X;
   private detailW = WIDE_DETAIL_W;
@@ -206,9 +205,9 @@ export class ShopScene extends Phaser.Scene {
   private sysW = 120;
   private btnX = WIDE_DETAIL_X + 6;
   private btnW = WIDE_DETAIL_W - 12;
-  private titleLabel!: PixelLabel;
-  private subtitleLabel: PixelLabel | null = null;
-  private systemLineLabel: PixelLabel | null = null;
+  private titleLabel!: DomTextHandle;
+  private subtitleLabel: DomTextHandle | null = null;
+  private systemLineLabel: DomTextHandle | null = null;
   private systemLineText = '';
 
   private trailPreview: TrailPreview | null = null;
@@ -320,12 +319,17 @@ export class ShopScene extends Phaser.Scene {
       else this.backToMain();
     });
 
-    this.titleLabel = this.pixel(36, 14, t('shop'), PALETTE.white, 2);
+    this.titleLabel = this.pixel(36, 14, t('shop'), PALETTE.white, 2, 0, 0.5, false, { sizePx: 19, letterSpacing: 2 });
 
     const walletW = 116;
     const walletX = width - 8 - walletW;
     if (walletX >= 150) {
-      this.subtitleLabel = this.pixel(142, 15, t('shopTitle'), PALETTE.labelMuted, 1);
+      // Positioned off the title's own measured width rather than a fixed
+      // offset — a fixed number went stale the moment the type it was tuned
+      // for changed.
+      this.subtitleLabel = this.pixel(40 + this.titleLabel.width, 15, t('shopTitle'), PALETTE.labelMuted, 1, 0, 0.5, false, {
+        sizePx: 10,
+      });
     }
 
     const wallet = this.add.graphics();
@@ -333,14 +337,14 @@ export class ShopScene extends Phaser.Scene {
     wallet.lineStyle(1, PALETTE.goldDim, 1);
     wallet.fillRect(walletX, 4, walletW, 20);
     wallet.strokeRect(walletX, 4, walletW, 20);
-    this.drawCoin(wallet, walletX + 14, 14, 5, false);
+    this.coin(walletX + 14, 14, 11, false, false);
     wallet.fillStyle(PALETTE.goldDim, 1);
     wallet.fillRect(walletX + walletW - 20, 8, 13, 13);
     wallet.fillStyle(PALETTE.reward, 1);
     wallet.fillRect(walletX + walletW - 15, 11, 3, 7);
     wallet.fillRect(walletX + walletW - 17, 13, 7, 3);
 
-    this.walletLabel = this.pixel(walletX + 24, 14, this.balanceText(), PALETTE.reward, 2);
+    this.walletLabel = this.pixel(walletX + 24, 14, this.balanceText(), PALETTE.reward, 2, 0, 0.5, false, { sizePx: 15 });
 
     const walletZone = this.add.zone(walletX + walletW / 2, 14, walletW, 20).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
     walletZone.on('pointerup', () => {
@@ -350,30 +354,57 @@ export class ShopScene extends Phaser.Scene {
   }
 
   /**
-   * The mockup sets every technical label — titles, counters, prices, SYSTEM's
-   * own voice — in a pixel typeface and only the prose in a proportional one.
-   * This is that first half: the project's own bitmap font (`art/font`), whose
-   * glyphs are hard pixels and therefore stay crisp through the canvas's
-   * nearest-neighbour upscale. Sizes map to the only scales a bitmap font has:
-   * 9-12px -> 1, 15-19px -> 2, 22-26px -> 3.
+   * A label in the mockup's pixel typeface (Pixelify Sans — see `ui/fonts`),
+   * which is every technical string on the screen: titles, counters, prices,
+   * statuses, SYSTEM's own voice. Drawn as DOM text over the canvas, so the
+   * browser paints it at native screen resolution instead of it being
+   * rasterised into the 270px game canvas and then blown up.
+   *
+   * `step` is the mockup's size ladder (its pixel labels cluster at 9-12,
+   * 15-19 and 22-30px); `extra` overrides the exact size or spacing where the
+   * mockup names one.
    */
   private pixel(
     x: number,
     y: number,
     text: string,
     color: number,
-    scale: number,
+    step: number,
     originX = 0,
     originY = 0.5,
     track = false,
-  ): PixelLabel {
-    const label = new PixelLabel(this, Math.round(x), Math.round(y), text, {
-      color: hexToCss(color),
-      scale,
-    });
-    label.setOrigin(originX, originY);
+    extra?: Partial<DomTextOptions>,
+  ): DomTextHandle {
+    const sizePx = step >= 4 ? 30 : step === 3 ? 22 : step === 2 ? 16 : 11;
+    const label = this.domText.add(
+      x,
+      y,
+      text,
+      { color: hexToCss(color), font: 'pixel', sizePx, letterSpacing: 1, uppercase: true, ...extra },
+      originX,
+      originY,
+    );
     if (track) this.content.push(label);
     return label;
+  }
+
+  /** The mockup's coin: a real circle with a rim, on the DOM layer so its edge stays round. */
+  private coin(cx: number, cy: number, d: number, dim: boolean, track = true): DomTextHandle {
+    const handle = this.domText.addShape(
+      cx,
+      cy,
+      d,
+      d,
+      {
+        background: hexToCss(dim ? PALETTE.goldDim : PALETTE.reward),
+        border: hexToCss(dim ? PALETTE.goldSole : PALETTE.goldEdge),
+        radius: d / 2,
+      },
+      0.5,
+      0.5,
+    );
+    if (track) this.content.push(handle);
+    return handle;
   }
 
   private balanceText(): string {
@@ -381,7 +412,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   private refreshBalance(): void {
-    this.walletLabel.setPixelText(this.balanceText());
+    this.walletLabel.setText(this.balanceText());
   }
 
   private async loadCatalog(): Promise<void> {
@@ -398,12 +429,6 @@ export class ShopScene extends Phaser.Scene {
 
   // ---- small shared painters ------------------------------------------
 
-  private drawCoin(g: Phaser.GameObjects.Graphics, cx: number, cy: number, r: number, dim: boolean): void {
-    g.fillStyle(dim ? PALETTE.goldDim : PALETTE.reward, 1);
-    g.fillCircle(cx, cy, r);
-    g.lineStyle(1, dim ? PALETTE.goldSole : PALETTE.goldEdge, 1);
-    g.strokeCircle(cx, cy, r);
-  }
 
   /**
    * The mockup's tick is a CSS border pair rotated -45deg, which the browser
@@ -671,6 +696,7 @@ export class ShopScene extends Phaser.Scene {
       0,
       0.5,
       true,
+      { sizePx: 10 },
     );
 
     // The grid takes whatever the rail, the fitting panel and SYSTEM's column
@@ -767,15 +793,34 @@ export class ShopScene extends Phaser.Scene {
     const labelX = centered ? x + w / 2 : x + 8;
     const labelOrigin = centered ? 0.5 : 0;
     const plateMid = y + previewH + plateH / 2;
+    const cardNameText = unlocked ? t(item.nameKey) : t('shopLockedName');
+    const cardNameColor = unlocked ? PALETTE.white : PALETTE.labelMuted;
+    const cardNameAvailable = w - (centered ? 6 : 16);
+
+    // The longest item names ("СЛЕД ДАННЫХ") don't fit an 11px bold label at
+    // the card widths a narrow canvas leaves (two columns instead of three)
+    // — shrink one card-name at a time rather than letting it print over the
+    // neighboring card.
+    let cardNameSize = centered ? 10 : 11;
+    while (cardNameSize > 8) {
+      const probe = this.domText.add(-1000, -1000, cardNameText, { color: hexToCss(cardNameColor), sizePx: cardNameSize, bold: true }, 0, 0.5);
+      const fits = probe.width <= cardNameAvailable;
+      probe.destroy();
+      if (fits) break;
+      cardNameSize -= 1;
+    }
+
     const name = this.domText.add(
       labelX,
       plateMid - 6,
-      unlocked ? t(item.nameKey) : t('shopLockedName'),
+      cardNameText,
       {
-        color: hexToCss(unlocked ? (equipped ? PALETTE.white : PALETTE.white) : PALETTE.labelMuted),
+        color: hexToCss(cardNameColor),
         strokeColor: hexToCss(PALETTE.outline),
-        sizePx: centered ? 10 : 11,
+        sizePx: cardNameSize,
         bold: true,
+        wordWrapWidth: cardNameAvailable,
+        clampLines: 1,
       },
       labelOrigin,
       0.5,
@@ -784,7 +829,7 @@ export class ShopScene extends Phaser.Scene {
 
     const stateY = plateMid + 6;
     if (!unlocked) {
-      this.pixel(labelX, stateY, t('shopLockedCondition'), PALETTE.system, 1, labelOrigin, 0.5, true);
+      this.pixel(labelX, stateY, t('shopLockedCondition'), PALETTE.system, 1, labelOrigin, 0.5, true, { sizePx: 9 });
     } else if (equipped || owned) {
       this.pixel(
         labelX,
@@ -795,14 +840,13 @@ export class ShopScene extends Phaser.Scene {
         labelOrigin,
         0.5,
         true,
+        { sizePx: 9 },
       );
     } else if (item.priceCredits !== undefined) {
       // Coin + number, the same money shape the wallet uses — never a bare
       // "150 CR" string (mockup: price always reads as currency).
-      const coin = this.add.graphics();
       const coinX = centered ? x + w / 2 - 14 : x + 12;
-      this.drawCoin(coin, coinX, stateY, 4, !affordable);
-      this.content.push(coin);
+      this.coin(coinX, stateY, 8, !affordable);
       this.pixel(
         coinX + 8,
         stateY,
@@ -812,6 +856,7 @@ export class ShopScene extends Phaser.Scene {
         0,
         0.5,
         true,
+        { sizePx: 12 },
       );
     }
 
@@ -1079,7 +1124,20 @@ export class ShopScene extends Phaser.Scene {
     g.strokeRect(this.detailX + 0.5, DETAIL_TOP + 0.5, this.detailW - 1, DETAIL_H - 1);
     this.content.push(g);
 
-    this.pixel(this.detailX + this.detailW / 2, DETAIL_TOP + 10, headerText, headerColor, 1, 0.5, 0.5, true);
+    const headerAvailable = this.detailW - 12;
+    let headerSize = 10;
+    while (headerSize > 7) {
+      const probe = this.pixel(-1000, -1000, headerText, headerColor, 1, 0, 0.5, false, { sizePx: headerSize });
+      const fits = probe.width <= headerAvailable;
+      probe.destroy();
+      if (fits) break;
+      headerSize -= 1;
+    }
+    this.pixel(this.detailX + this.detailW / 2, DETAIL_TOP + 10, headerText, headerColor, 1, 0.5, 0.5, true, {
+      sizePx: headerSize,
+      wordWrapWidth: headerAvailable,
+      clampLines: 1,
+    });
   }
 
   private buildDetailPanel(category: ShopCategory, item: ShopItem): void {
@@ -1113,34 +1171,59 @@ export class ShopScene extends Phaser.Scene {
 
   /** Name + rarity badge on one line — the layout every non-character panel uses (the character panel puts them in its own right-hand column instead). */
   private buildNameRow(item: ShopItem, y: number): void {
-    // The badge is measured first so the name can be told how much room is
-    // actually left — on a narrow panel the two used to print over each other.
-    const badgeW = t(RARITY_LABEL[item.rarity ?? 'common']).length * 6 + 8;
+    // The badge is built first and its *real* rendered width read back, so
+    // the name label knows exactly how much room is left — a character-count
+    // estimate went stale the moment the type behind it changed, and printed
+    // straight through the badge.
+    const badgeW = this.buildRarityBadge(item, this.detailX + this.detailW - 8, y, 1);
+    const available = this.detailX + this.detailW - 8 - badgeW - 6 - (this.detailX + 8);
+    const nameText = t(item.nameKey);
+
+    // A long item name against a wide rarity pill ("СЛЕД ДАННЫХ" + "БАЗА")
+    // doesn't always fit the mockup's 12px in the space left over — shrink
+    // one step at a time rather than clamping to one line and losing the
+    // second word to an ellipsis. Measured in the name's own font (Rubik,
+    // bold) — probing with the pixel font would measure the wrong glyphs.
+    let sizePx = this.detailW >= WIDE_DETAIL_W ? 12 : 10;
+    while (sizePx > 9) {
+      const probe = this.domText.add(-1000, -1000, nameText, { color: hexToCss(PALETTE.white), sizePx, bold: true }, 0, 0.5);
+      const fits = probe.width <= available;
+      probe.destroy();
+      if (fits) break;
+      sizePx -= 1;
+    }
+
     const name = this.domText.add(
       this.detailX + 8,
       y,
-      t(item.nameKey),
+      nameText,
       {
         color: hexToCss(PALETTE.white),
         strokeColor: hexToCss(PALETTE.outline),
-        sizePx: this.detailW >= WIDE_DETAIL_W ? 12 : 10,
+        sizePx,
         bold: true,
-        wordWrapWidth: this.detailW - 22 - badgeW,
+        wordWrapWidth: available,
         clampLines: 1,
       },
       0,
       0.5,
     );
     this.content.push(name);
-    this.buildRarityBadge(item, this.detailX + this.detailW - 8, y, 1);
   }
 
-  private buildRarityBadge(item: ShopItem, x: number, y: number, originX: number): void {
+  /** Draws the rarity pill and returns its actual rendered width, so a caller laying out a sibling doesn't have to guess it. */
+  private buildRarityBadge(item: ShopItem, x: number, y: number, originX: number): number {
     const rarity = item.rarity ?? 'common';
     const color = RARITY_COLOR[rarity];
     const label = t(RARITY_LABEL[rarity]);
-    const w = label.length * 6 + 8;
+
+    // Built off-screen first purely to measure its real width in the live
+    // font — moved into place once the box beneath it is sized to match.
+    const text = this.pixel(-1000, -1000, label, color, 1, 0.5, 0.5, false, { sizePx: 9 });
+    const w = text.width + 8;
     const boxX = originX === 1 ? x - w : x;
+    text.setPosition(boxX + w / 2, y);
+    this.content.push(text);
 
     const g = this.add.graphics();
     g.fillStyle(color, 0.16);
@@ -1148,8 +1231,7 @@ export class ShopScene extends Phaser.Scene {
     g.lineStyle(1, color, 1);
     g.strokeRect(boxX + 0.5, y - 6.5, w - 1, 13);
     this.content.push(g);
-
-    this.pixel(boxX + w / 2, y, label, color, 1, 0.5, 0.5, true);
+    return w;
   }
 
   private buildLegend(item: ShopItem, y: number): void {
@@ -1181,17 +1263,19 @@ export class ShopScene extends Phaser.Scene {
     const balance = CurrencyService.getBalance();
 
     if (!unlocked) {
-      this.pixel(leftX, y, t('shopLockedCondition'), PALETTE.system, 1, 0, 0.5, true);
+      this.pixel(leftX, y, t('shopLockedCondition'), PALETTE.system, 1, 0, 0.5, true, { sizePx: 9 });
       return;
     }
 
     if (owned) {
-      this.pixel(leftX, y, equipped ? t('shopWorn') : t('shopOwned'), PALETTE.labelMuted, 1, 0, 0.5, true);
+      this.pixel(leftX, y, equipped ? t('shopWorn') : t('shopOwned'), PALETTE.labelMuted, 1, 0, 0.5, true, {
+        sizePx: 9,
+      });
 
       // "ЕЩЁ РАЗ" replays the death effect on demand — the one secondary
       // action in this row that maps onto something the preview really does.
       if (category === 'death_fx' && this.replayDeathPreview) {
-        this.pixel(rightX, y, t('shopReplay'), PALETTE.dangerAlt, 1, 1, 0.5, true);
+        this.pixel(rightX, y, t('shopReplay'), PALETTE.dangerAlt, 1, 1, 0.5, true, { sizePx: 9 });
         const zone = this.add.zone(rightX - 24, y, 56, 14).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
         zone.on('pointerup', () => {
           playSfx('uiClick');
@@ -1205,30 +1289,56 @@ export class ShopScene extends Phaser.Scene {
     if (price === undefined) return;
 
     const affordable = balance >= price;
-    this.pixel(
-      leftX,
-      y,
-      affordable ? `${t('shopWillRemain')} ${balance - price}` : `${t('shopNotEnough')} ${price - balance}`,
-      affordable ? PALETTE.labelMuted : PALETTE.dangerAlt,
-      1,
-      0,
-      0.5,
-      true,
-    );
+    const delta = affordable ? balance - price : price - balance;
+    const captionColor = affordable ? PALETTE.labelMuted : PALETTE.dangerAlt;
+    const rowW = rightX - leftX;
 
-    const priceText = this.pixel(
-      rightX,
-      y,
-      String(price),
-      affordable ? PALETTE.reward : PALETTE.goldSole,
-      2,
-      1,
-      0.5,
-      true,
-    );
-    const coin = this.add.graphics();
-    this.drawCoin(coin, rightX - priceText.displayWidth - 9, y, 5, !affordable);
-    this.content.push(coin);
+    const fits = (text: string, sizePx: number, priceW: number): boolean => {
+      const probe = this.pixel(-1000, -1000, text, PALETTE.white, 1, 0, 0.5, false, { sizePx });
+      const w = probe.width;
+      probe.destroy();
+      return w + 8 + priceW + 14 <= rowW;
+    };
+
+    // Rubik Mono One runs noticeably wider per glyph than the mockup's own
+    // pixel face, so a 3-digit price ("ОСТАНЕТСЯ 680" beside "680") no longer
+    // fits this row at the mockup's fixed 15px/9px pair on this panel's fixed
+    // width. The price shrinks first (it has more headroom before turning
+    // illegible); if the full caption still doesn't fit even at a small
+    // floor size, it swaps for the rail's own abbreviation convention
+    // ("БЕЗ РЕК.") rather than clipping mid-word into an ellipsis.
+    const full = `${affordable ? t('shopWillRemain') : t('shopNotEnough')} ${delta}`;
+    const short = `${affordable ? t('shopWillRemainShort') : t('shopNotEnoughShort')} ${delta}`;
+    let priceSize = 15;
+    let caption = full;
+    let captionSize = 9;
+    outer: for (; priceSize >= 11; priceSize -= 1) {
+      const priceProbe = this.pixel(-1000, -1000, String(price), PALETTE.white, 2, 0, 0.5, false, { sizePx: priceSize });
+      const priceW = priceProbe.width;
+      priceProbe.destroy();
+      for (const text of [full, short]) {
+        for (let size = 9; size >= 7; size -= 1) {
+          if (fits(text, size, priceW)) {
+            caption = text;
+            captionSize = size;
+            break outer;
+          }
+        }
+      }
+      caption = short;
+      captionSize = 7;
+    }
+
+    const priceText = this.pixel(rightX, y, String(price), affordable ? PALETTE.reward : PALETTE.goldSole, 2, 1, 0.5, true, {
+      sizePx: priceSize,
+    });
+    this.coin(rightX - priceText.width - 9, y, 10, !affordable);
+
+    this.pixel(leftX, y, caption, captionColor, 1, 0, 0.5, true, {
+      sizePx: captionSize,
+      wordWrapWidth: Math.max(40, rightX - priceText.width - 14 - leftX),
+      clampLines: 1,
+    });
   }
 
   private buildDetailButton(category: ShopCategory, item: ShopItem, unlocked: boolean, accent: number): void {
@@ -1318,12 +1428,9 @@ export class ShopScene extends Phaser.Scene {
    * The showroom's one button shape: a lit face standing on a 4px sole that
    * disappears when pressed (the face drops onto it), exactly like the
    * mockup's `box-shadow: 0 4px 0`. `gold` is the money button (gradient face,
-   * white rim); `accent` is the category-colored equip button (dark face,
-   * colored rim and icon). Both carry a white label: the mockup specs the
-   * gold one's text as near-black, but at this size dark-on-gold read as a
-   * gap punched in the face rather than as a word — owner's call after
-   * seeing it live, so the label color is one constant across all three
-   * styles (white over a black hairline) and only the face changes.
+   * white rim, near-black label — white on that lit face was unreadable);
+   * `accent` is the category-colored equip button (dark face, colored rim and
+   * icon, white label). Both label colors are the mockup's own.
    */
   private drawShowroomButton(opts: {
     label: string;
@@ -1342,22 +1449,35 @@ export class ShopScene extends Phaser.Scene {
     const y = opts.y ?? BTN_TOP;
     const w = opts.w ?? this.btnW;
     const h = opts.h ?? BTN_H;
-    const textColor = opts.style === 'muted' ? PALETTE.labelMuted : PALETTE.white;
+    const textColor =
+      opts.style === 'muted' ? PALETTE.labelMuted : opts.style === 'gold' ? PALETTE.bgVoid : PALETTE.white;
 
     const g = this.add.graphics();
     const label = this.domText.add(
       x + w / 2 + (opts.icon === 'none' ? 0 : 9),
       y + h / 2,
       opts.label,
-      // No outline: the mockup's button label is plain heavy type on a solid
-      // face, and a hairline around every glyph at this size read as dirt.
-      // The size follows the button, which shrinks with the panel on a narrow
-      // canvas — at a fixed 19px the word ran off both ends of its own face.
-      { color: hexToCss(textColor), sizePx: w >= 120 ? 19 : w >= 100 ? 16 : 13, bold: true, uppercase: true },
+      // Mockup: Rubik 800 at 20px, no outline. The size follows the button,
+      // which shrinks with the panel on a narrow canvas.
+      { color: hexToCss(textColor), sizePx: w >= 120 ? 20 : w >= 100 ? 16 : 13, bold: true, uppercase: true },
       0.5,
       0.5,
     );
     this.content.push(g, label);
+
+    // The mockup's coin is a round disc with a lit centre; drawn into the game
+    // canvas at 14px it upscales into a visibly square-edged blob, so it lives
+    // on the DOM layer with the label and follows the button's press offset.
+    const iconDisc =
+      opts.icon === 'coin'
+        ? this.domText.addShape(x, y, 14, 14, { background: hexToCss(PALETTE.bgVoid), radius: 7 }, 0.5, 0.5)
+        : null;
+    const iconPip =
+      opts.icon === 'coin'
+        ? this.domText.addShape(x, y, 5, 5, { background: hexToCss(PALETTE.reward), radius: 2.5 }, 0.5, 0.5)
+        : null;
+    if (iconDisc) this.content.push(iconDisc);
+    if (iconPip) this.content.push(iconPip);
 
     const redraw = (hover: boolean, press: boolean): void => {
       g.clear();
@@ -1388,10 +1508,8 @@ export class ShopScene extends Phaser.Scene {
       const iconCx = x + w / 2 - (label.width / 2 + 7);
       const iconCy = y + dy + h / 2;
       if (opts.icon === 'coin') {
-        g.fillStyle(PALETTE.bgVoid, 1);
-        g.fillCircle(iconCx, iconCy, 7);
-        g.fillStyle(PALETTE.reward, 1);
-        g.fillCircle(iconCx, iconCy, 2.5);
+        iconDisc?.setPosition(iconCx, iconCy);
+        iconPip?.setPosition(iconCx, iconCy);
       } else if (opts.icon === 'check') {
         g.fillStyle(opts.accent, 1);
         g.fillRect(iconCx - 7, iconCy - 7, 14, 14);
@@ -1765,16 +1883,22 @@ export class ShopScene extends Phaser.Scene {
     const edge = this.add.rectangle(this.sysX, DETAIL_TOP, 2, systemH, PALETTE.system, 1).setOrigin(0, 0);
     this.content.push(bg, edge);
 
-    this.pixel(this.sysX + 8, DETAIL_TOP + 10, 'SYSTEM', PALETTE.system, 1, 0, 0.5, true);
+    this.pixel(this.sysX + 8, DETAIL_TOP + 10, 'SYSTEM', PALETTE.system, 1, 0, 0.5, true, { sizePx: 10 });
 
-    const label = new PixelLabel(this, this.sysX + 8, DETAIL_TOP + 20, this.systemLineText, {
-      color: hexToCss(PALETTE.systemLight),
-      scale: 1,
-      wordWrapWidth: colW - 14,
+    // Rubik Mono One wraps noticeably sooner per line than the mockup's own
+    // pixel face at this column width, so an uncapped label could grow past
+    // `systemH` into whatever sits below it (the skin-collection box, for
+    // character). Capped to exactly the lines the box actually has room for.
+    const sysLineSize = 11;
+    const sysLineHeight = 1.5;
+    const sysTextTop = DETAIL_TOP + 22;
+    const sysMaxLines = Math.max(1, Math.floor((DETAIL_TOP + systemH - sysTextTop) / (sysLineSize * sysLineHeight)));
+    this.systemLineLabel = this.pixel(this.sysX + 8, sysTextTop, this.systemLineText, PALETTE.systemLight, 1, 0, 0, true, {
+      sizePx: sysLineSize,
+      lineHeight: sysLineHeight,
+      wordWrapWidth: colW - 16,
+      clampLines: sysMaxLines,
     });
-    label.setOrigin(0, 0);
-    this.content.push(label);
-    this.systemLineLabel = label;
 
     if (category !== 'character') return;
 
@@ -1783,13 +1907,10 @@ export class ShopScene extends Phaser.Scene {
     const collBg = this.add.rectangle(this.sysX, collY, colW, collH, PALETTE.metalDark, 1).setOrigin(0, 0);
     this.content.push(collBg);
 
-    const collHeading = new PixelLabel(this, this.sysX + 8, collY + 4, t('shopCollection'), {
-      color: hexToCss(PALETTE.labelMuted),
-      scale: 1,
-      wordWrapWidth: colW - 14,
+    this.pixel(this.sysX + 8, collY + 6, t('shopCollection'), PALETTE.labelMuted, 1, 0, 0, true, {
+      sizePx: 9,
+      wordWrapWidth: colW - 16,
     });
-    collHeading.setOrigin(0, 0);
-    this.content.push(collHeading);
 
     const chip = 9;
     const chipGap = 3;
@@ -1816,7 +1937,7 @@ export class ShopScene extends Phaser.Scene {
     // Kept on screen until the next line replaces it — the SYSTEM panel is a
     // fixture of the showroom, not a toast that blinks out and leaves a hole.
     this.systemLineText = payload.text;
-    this.systemLineLabel?.setPixelText(payload.text);
+    this.systemLineLabel?.setText(payload.text);
   }
 
   // ---- premium ("БЕЗ РЕК.") ----------------------------------------------
@@ -1852,15 +1973,30 @@ export class ShopScene extends Phaser.Scene {
       g.fillRect(segX, offerY, segW, headerH);
       this.content.push(g);
 
+      const segLabel = it.id === 'remove_ads' ? t('shopCategoryPremium') : t(it.nameKey);
+      // "SYSTEM ACCESS" at the mockup's own size runs wider than one segment
+      // of a two-way split card — shrink until it actually fits. A
+      // `wordWrapWidth` floor underneath the shrink loop means an even
+      // narrower canvas clips to one line instead of running into the
+      // neighboring card, whatever the loop's own floor turns out to be.
+      let segSize = 11;
+      while (segSize > 6) {
+        const probe = this.pixel(-1000, -1000, segLabel, PALETTE.white, 1, 0.5, 0.5, false, { sizePx: segSize });
+        const fits = probe.width <= segW - 12;
+        probe.destroy();
+        if (fits) break;
+        segSize -= 1;
+      }
       this.pixel(
         segX + segW / 2,
         offerY + headerH / 2,
-        it.id === 'remove_ads' ? t('shopCategoryPremium') : t(it.nameKey),
+        segLabel,
         active ? PALETTE.bgVoid : PALETTE.labelMuted,
         1,
         0.5,
         0.5,
         true,
+        { sizePx: segSize, wordWrapWidth: segW - 12, clampLines: 1 },
       );
 
       const zone = this.add
@@ -1887,16 +2023,12 @@ export class ShopScene extends Phaser.Scene {
     diamond.restore();
     this.content.push(diamond);
 
-    // The bitmap font only scales in whole steps, so the headline takes the
-    // bigger one only when it actually fits the card — rebuilt at the smaller
-    // scale rather than squashed, which would land its pixels off the grid.
+    // Mockup: 15px. A narrow canvas shrinks the card, so the headline drops a
+    // step rather than running off its own gold bar.
     const headline = selected.id === 'remove_ads' ? t('shopNoAdsForever') : t('shopSystemAccess');
-    const big = this.pixel(offerX + 34, bannerY, headline, PALETTE.reward, 2, 0, 0.5, true);
-    if (big.displayWidth > offerW - 46) {
-      this.content.pop();
-      big.destroy();
-      this.pixel(offerX + 34, bannerY, headline, PALETTE.reward, 1, 0, 0.5, true);
-    }
+    this.pixel(offerX + 34, bannerY, headline, PALETTE.reward, 2, 0, 0.5, true, {
+      sizePx: offerW >= 240 ? 15 : 11,
+    });
 
     const features =
       selected.id === 'remove_ads'
@@ -2035,16 +2167,18 @@ export class ShopScene extends Phaser.Scene {
     const edge = this.add.rectangle(this.sysX, top, 2, h, PALETTE.system, 1).setOrigin(0, 0);
     this.content.push(bg, edge);
 
-    this.pixel(this.sysX + 8, top + 10, 'SYSTEM', PALETTE.system, 1, 0, 0.5, true);
+    this.pixel(this.sysX + 8, top + 10, 'SYSTEM', PALETTE.system, 1, 0, 0.5, true, { sizePx: 10 });
 
-    const label = new PixelLabel(this, this.sysX + 8, top + 20, this.systemLineText, {
-      color: hexToCss(PALETTE.systemLight),
-      scale: 1,
-      wordWrapWidth: colW - 14,
+    const sysLineSize = 11;
+    const sysLineHeight = 1.5;
+    const sysTextTop = top + 22;
+    const sysMaxLines = Math.max(1, Math.floor((top + h - sysTextTop) / (sysLineSize * sysLineHeight)));
+    this.systemLineLabel = this.pixel(this.sysX + 8, sysTextTop, this.systemLineText, PALETTE.systemLight, 1, 0, 0, true, {
+      sizePx: sysLineSize,
+      lineHeight: sysLineHeight,
+      wordWrapWidth: colW - 16,
+      clampLines: sysMaxLines,
     });
-    label.setOrigin(0, 0);
-    this.content.push(label);
-    this.systemLineLabel = label;
   }
 
   // ---- purchase flow -----------------------------------------------------
@@ -2112,14 +2246,26 @@ export class ShopScene extends Phaser.Scene {
    * per-level pay, and sector pay, the last with a real progress bar over the
    * player's own completed levels.
    */
+  /**
+   * Sets the topbar's title text and repositions the subtitle off its *new*
+   * width — a subtitle pinned once at creation time went stale the moment
+   * the title text (and therefore its rendered width) changed underneath it,
+   * which is exactly what happened switching between "МАГАЗИН" and
+   * "КРЕДИТЫ".
+   */
+  private retitle(title: string, subtitle: string): void {
+    this.titleLabel.setText(title);
+    this.subtitleLabel?.setPosition(40 + this.titleLabel.width, 15);
+    this.subtitleLabel?.setText(subtitle);
+  }
+
   private openGetCredits(): void {
     this.view = 'credits';
     this.setRailVisible(false);
     this.teardownLivePreview();
     this.clearContent();
     this.systemLineLabel = null;
-    this.titleLabel.setPixelText(t('creditsTitle'));
-    this.subtitleLabel?.setPixelText(t('creditsSubtitle'));
+    this.retitle(t('creditsTitle'), t('creditsSubtitle'));
 
     const x = 12;
     // Stops short of SYSTEM's column instead of running under it — the same
@@ -2198,9 +2344,7 @@ export class ShopScene extends Phaser.Scene {
 
   /** Coin + "+N", the shop's one money shape, at a card's bottom-left. */
   private buildEarnAmount(x: number, y: number, amount: number): void {
-    const coin = this.add.graphics();
-    this.drawCoin(coin, x + 6, y, 5, false);
-    this.content.push(coin);
+    this.coin(x + 6, y, 11, false);
     this.pixel(x + 15, y, `+${amount}`, PALETTE.reward, 2, 0, 0.5, true);
   }
 
@@ -2226,6 +2370,7 @@ export class ShopScene extends Phaser.Scene {
       1,
       0.5,
       true,
+      { sizePx: 9, wordWrapWidth: w - 16, clampLines: 1 },
     );
 
     if (disabled) return;
@@ -2262,6 +2407,7 @@ export class ShopScene extends Phaser.Scene {
       1,
       0.5,
       true,
+      { sizePx: 9, wordWrapWidth: w - 16, clampLines: 1 },
     );
   }
 
@@ -2325,9 +2471,7 @@ export class ShopScene extends Phaser.Scene {
     // Coin stack — one coin per tier, so the tiles read as a ladder before a
     // single number is parsed.
     const coins = Math.min(3, 1 + Math.floor(CREDIT_PACKS.indexOf(pack) / 2));
-    const stack = this.add.graphics();
-    for (let i = 0; i < coins; i++) this.drawCoin(stack, x + w / 2 - (coins - 1) * 7 + i * 14, y + 18, 5, false);
-    this.content.push(stack);
+    for (let i = 0; i < coins; i++) this.coin(x + w / 2 - (coins - 1) * 7 + i * 14, y + 18, 11, false);
 
     this.pixel(x + w / 2, y + 34, String(pack.credits), PALETTE.reward, 2, 0.5, 0.5, true);
     this.pixel(x + w / 2, y + 48, t('creditsUnits'), PALETTE.labelMuted, 1, 0.5, 0.5, true);
@@ -2386,8 +2530,7 @@ export class ShopScene extends Phaser.Scene {
 
   private backToMain(): void {
     this.view = 'main';
-    this.titleLabel.setPixelText(t('shop'));
-    this.subtitleLabel?.setPixelText(t('shopTitle'));
+    this.retitle(t('shop'), t('shopTitle'));
     this.setRailVisible(true);
     this.renderCategory();
   }

@@ -149,12 +149,16 @@ const UI_STRINGS = {
   shopSystemSampleUnavailable: { ru: 'Тон ещё не настроен.', en: 'This tone isn’t wired up yet.' },
   shopCollection: { ru: 'СОБРАНО ОБЛИКОВ', en: 'SKINS COLLECTED' },
   shopWillRemain: { ru: 'ОСТАНЕТСЯ', en: 'LEFT' },
+  // Same abbreviation convention the rail already uses ("БЕЗ РЕК.") — the
+  // fallback for a 3-digit price beside a 3-digit balance, where Rubik Mono
+  // One's own width no longer leaves room for the whole word.
+  shopWillRemainShort: { ru: 'ОСТ.', en: 'LEFT' },
   shopLockedName: { ru: '???', en: '???' },
   shopLockedCondition: { ru: '5 СЕКТОРОВ', en: '5 SECTORS' },
   shopOneTimePurchase: { ru: 'РАЗОВАЯ ПОКУПКА', en: 'ONE-TIME PURCHASE' },
   shopTrialRun: { ru: 'ПРОБНЫЙ ЗАБЕГ', en: 'TEST RUN' },
   shopDeathPreview: { ru: 'ПРЕВЬЮ', en: 'PREVIEW' },
-  shopSystemSample: { ru: 'ТРИ РЕПЛИКИ ПОДРЯД', en: 'THREE LINES IN A ROW' },
+  shopSystemSample: { ru: '3 РЕПЛИКИ', en: '3 LINES' },
   // Offer copy is written against what the build actually does: interstitials
   // only ever fire at a sector break (`AdsService`), and the credits gift is a
   // real one-time grant in `PurchaseManager`. Nothing here promises a faster
@@ -174,6 +178,7 @@ const UI_STRINGS = {
   shopOwned: { ru: 'Есть', en: 'Owned' },
   shopWorn: { ru: 'НАДЕТО', en: 'WORN' },
   shopNotEnough: { ru: 'НЕ ХВАТАЕТ', en: 'NOT ENOUGH' },
+  shopNotEnoughShort: { ru: 'НУЖНО', en: 'NEED' },
   shopReplay: { ru: 'ЕЩЁ РАЗ', en: 'AGAIN' },
   shopSignalShort: { ru: 'Сигнал', en: 'Signal' },
   shopRarityCommon: { ru: 'БАЗА', en: 'BASE' },

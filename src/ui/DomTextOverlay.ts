@@ -1,7 +1,18 @@
 import Phaser from 'phaser';
+import { PIXEL_FONT, PROSE_FONT } from './fonts';
 
 export interface DomTextOptions {
   color: string;
+  /**
+   * Which of the mockup's two typefaces to set the label in: `pixel` is
+   * Pixelify Sans (titles, counters, prices, SYSTEM's voice), `prose` is
+   * Rubik (descriptions, item names, button labels). Defaults to `prose`.
+   */
+  font?: 'pixel' | 'prose';
+  /** Letter spacing in *virtual* px — the mockup gives its pixel-font labels 1-2px. */
+  letterSpacing?: number;
+  /** Line box as a multiple of the font size. Defaults to 1.3 (1.5 for the mockup's SYSTEM column). */
+  lineHeight?: number;
   scale?: number;
   /** Type size in *virtual* px, taken literally. Overrides `scale`, for a design spec that names a size (13px) rather than a multiple of `BASE_SIZE`. */
   sizePx?: number;
@@ -25,6 +36,16 @@ export interface DomTextHandle {
   destroy(): void;
 }
 
+interface ShapeSpec {
+  vw: number;
+  vh: number;
+  background?: string;
+  border?: string;
+  borderWidthPx?: number;
+  radius?: number;
+  glow?: string;
+}
+
 interface Item {
   el: HTMLDivElement;
   vx: number;
@@ -32,10 +53,9 @@ interface Item {
   originX: number;
   originY: number;
   opts: DomTextOptions;
+  shape?: ShapeSpec;
 }
 
-/** CLAUDE.md #3's own sanctioned fallback for "длинные текстовые блоки" — the OS font stack, zero files shipped, zero CDN request. */
-const FONT_STACK = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
 const BASE_SIZE = 9;
 
 /**
@@ -137,6 +157,64 @@ export class DomTextOverlay {
   }
 
   /**
+   * A plain positioned box on the same overlay — used for the mockup's round
+   * coins. A 10px circle drawn into the 270px game canvas becomes a visibly
+   * square-edged blob once the canvas is upscaled with nearest-neighbour
+   * filtering; the same circle as a DOM element is painted by the browser at
+   * native screen resolution, exactly like the text beside it.
+   */
+  addShape(
+    vx: number,
+    vy: number,
+    vw: number,
+    vh: number,
+    style: { background?: string; border?: string; borderWidthPx?: number; radius?: number; glow?: string },
+    originX = 0.5,
+    originY = 0.5,
+  ): DomTextHandle {
+    const el = document.createElement('div');
+    const item: Item = {
+      el,
+      vx,
+      vy,
+      originX,
+      originY,
+      opts: { color: 'transparent' },
+      shape: { vw, vh, ...style },
+    };
+    this.applyStyle(item);
+    this.layer.appendChild(el);
+    this.items.push(item);
+    this.positionItem(item);
+
+    const reposition = (): void => this.positionItem(item);
+    return {
+      get width() {
+        return vw;
+      },
+      get height() {
+        return vh;
+      },
+      setText: () => undefined,
+      setColor: (color: string) => {
+        el.style.background = color;
+      },
+      setPosition: (nx: number, ny: number) => {
+        item.vx = nx;
+        item.vy = ny;
+        reposition();
+      },
+      setVisible: (visible: boolean) => {
+        el.style.display = visible ? 'block' : 'none';
+      },
+      destroy: () => {
+        el.remove();
+        this.items = this.items.filter((i) => i !== item);
+      },
+    };
+  }
+
+  /**
    * Hides/shows every label at once, without touching each handle's own
    * `setVisible` state — so a caller can black out the whole layer while
    * another scene is on top and restore it afterwards, and whatever was
@@ -164,14 +242,34 @@ export class DomTextOverlay {
   private applyStyle(item: Item): void {
     const { el, opts, originX } = item;
     const { scaleY } = this.currentScale();
+
+    if (item.shape) {
+      const s = item.shape;
+      el.style.position = 'absolute';
+      el.style.display = 'block';
+      el.style.boxSizing = 'border-box';
+      el.style.width = `${s.vw * scaleY}px`;
+      el.style.height = `${s.vh * scaleY}px`;
+      el.style.background = s.background ?? 'transparent';
+      el.style.borderRadius = s.radius === undefined ? '0' : `${s.radius * scaleY}px`;
+      el.style.border = s.border ? `${Math.max(1, (s.borderWidthPx ?? 1) * scaleY)}px solid ${s.border}` : '';
+      el.style.boxShadow = s.glow ? `0 0 ${6 * scaleY}px ${s.glow}` : '';
+      return;
+    }
     const virtualPx = Math.max(6, Math.round(opts.sizePx ?? BASE_SIZE * (opts.scale ?? 1)));
 
     el.style.position = 'absolute';
     el.style.display = 'inline-block';
-    el.style.fontFamily = FONT_STACK;
-    el.style.fontWeight = opts.bold ? '700' : '600';
+    el.style.fontFamily = opts.font === 'pixel' ? PIXEL_FONT : PROSE_FONT;
+    // Rubik Mono One ships one weight only — requesting 700 on it makes the
+    // browser synthesize a fake bold (skew + double-stroke), which reads
+    // worse than the face's own native weight (already heavy by design).
+    // Rubik's own heavy step in the mockup is 800.
+    el.style.fontWeight = opts.font === 'pixel' ? '400' : opts.bold ? '800' : '400';
     el.style.fontSize = `${virtualPx * scaleY}px`;
-    el.style.lineHeight = '1.3';
+    el.style.lineHeight = String(opts.lineHeight ?? 1.3);
+    const tracking = opts.letterSpacing ?? 0;
+    el.style.letterSpacing = tracking ? `${tracking * scaleY}px` : '';
     el.style.color = opts.color;
     el.style.textTransform = opts.uppercase ? 'uppercase' : 'none';
     el.style.textAlign = originX === 0.5 ? 'center' : 'left';

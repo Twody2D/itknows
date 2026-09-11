@@ -2,8 +2,8 @@ import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { hexToCss } from '@/utils/color';
 import { t } from '@/i18n/ui';
-import { PixelLabel } from '@/ui/PixelLabel';
 import { DomTextOverlay } from '@/ui/DomTextOverlay';
+import type { DomTextHandle, DomTextOptions } from '@/ui/DomTextOverlay';
 import { buildScreenTopbar, attachEscape } from '@/ui/ScreenChrome';
 import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
 import { fadeIn } from '@/ui/SceneFade';
@@ -43,12 +43,24 @@ const SMALL_W = 76;
 const BIG = { x: 298, y: 48, w: 140, h: 98 };
 const SHOWCASE = { x: 44, y: 150, w: 76, h: 88 };
 const DAILY = { x: 298, y: 158, w: 118, h: 62 };
-const SYS_X = 492;
+/** The mockup's own content zone: 12..468, with SYSTEM's column at 492. */
+const MAP_X = 12;
+const MAP_W = 456;
+const SYS_MIN_W = 96;
 
 export class LevelSelectScene extends Phaser.Scene {
   private domText!: DomTextOverlay;
   private sector = 1;
   private items: Array<{ destroy(): void }> = [];
+  /**
+   * Horizontal squeeze of the mockup's 456px map. Below its 620px canvas the
+   * map narrows so SYSTEM's column still fits beside it — the owner's rule
+   * for the shop, applied here too. Vertical positions never move: the canvas
+   * is 270px tall at every width.
+   */
+  private k = 1;
+  private sysX = 492;
+  private sysW = 116;
 
   constructor() {
     super('LevelSelectScene');
@@ -70,6 +82,11 @@ export class LevelSelectScene extends Phaser.Scene {
     // Open on the sector the player is actually in, not always the first.
     this.sector = Math.min(SECTOR_COUNT, Math.floor(SaveService.getCompletedLevels().length / LEVELS_PER_SECTOR) + 1);
 
+    const mapW = Math.min(MAP_W, width - 8 - SYS_MIN_W - 8 - MAP_X);
+    this.k = mapW / MAP_W;
+    this.sysX = MAP_X + mapW + 8;
+    this.sysW = width - 8 - this.sysX;
+
     buildScreenTopbar(this, this.domText, {
       title: t('levels'),
       accent: PALETTE.cyan,
@@ -82,24 +99,61 @@ export class LevelSelectScene extends Phaser.Scene {
 
   // ---- helpers -----------------------------------------------------------
 
+  /** Mockup 4e's technical type: Pixelify Sans on the DOM layer, same ladder the shop uses. */
   private pixel(
     x: number,
     y: number,
     text: string,
     color: number,
-    scale: number,
+    step: number,
     originX = 0,
     originY = 0.5,
     wrapWidth?: number,
-  ): PixelLabel {
-    const label = new PixelLabel(this, Math.round(x), Math.round(y), text, {
-      color: hexToCss(color),
-      scale,
-      ...(wrapWidth === undefined ? {} : { wordWrapWidth: wrapWidth }),
-    });
-    label.setOrigin(originX, originY);
+    extra?: Partial<DomTextOptions>,
+  ): DomTextHandle {
+    const sizePx = step >= 4 ? 30 : step === 3 ? 22 : step === 2 ? 16 : 11;
+    const label = this.domText.add(
+      x,
+      y,
+      text,
+      {
+        color: hexToCss(color),
+        font: 'pixel',
+        sizePx,
+        letterSpacing: 1,
+        uppercase: true,
+        ...(wrapWidth === undefined ? {} : { wordWrapWidth: wrapWidth }),
+        ...extra,
+      },
+      originX,
+      originY,
+    );
     this.items.push(label);
     return label;
+  }
+
+  /** Mockup X -> real X. */
+  private sx(x: number): number {
+    return Math.round(MAP_X + (x - MAP_X) * this.k);
+  }
+
+  /** Mockup width -> real width. */
+  private sw(w: number): number {
+    return Math.round(w * this.k);
+  }
+
+  /** Mockup type size -> real size, so a squeezed card's label squeezes with it. */
+  private st(sizePx: number): number {
+    return Math.max(8, Math.round(sizePx * (0.55 + 0.45 * this.k)));
+  }
+
+  /**
+   * The biggest size at which `text` still fits `available` px of Rubik 800.
+   * Its heavy weight runs about 0.62em per glyph, so a fixed size that suits
+   * the mockup's 140px card runs straight off a squeezed one.
+   */
+  private fit(text: string, available: number, max: number): number {
+    return Math.max(9, Math.min(max, Math.floor(available / (text.length * 0.62))));
   }
 
   private clear(): void {
@@ -194,39 +248,46 @@ export class LevelSelectScene extends Phaser.Scene {
       `${t('levelSelectSector')} ${String(this.sector).padStart(2, '0')} · ${sectorName(this.sector)}`,
       PALETTE.system,
       1,
+      0,
+      0.5,
+      undefined,
+      { sizePx: 10 },
     );
 
-    const barX = Math.min(this.scale.width - 108, 352);
+    const barX = Math.min(this.sysX - 100, 352);
     const bar = this.add.graphics();
     bar.fillStyle(PALETTE.metalMid, 1);
     bar.fillRect(barX, 11, 60, 8);
     bar.fillStyle(PALETTE.cyan, 1);
     bar.fillRect(barX, 11, Math.round((60 * cleared) / total), 8);
     this.items.push(bar);
-    this.pixel(barX + 66, 15, `${cleared} / ${total}`, PALETTE.cyan, 1);
+    this.pixel(barX + 66, 15, `${cleared} / ${total}`, PALETTE.cyan, 1, 0, 0.5, undefined, { sizePx: 11 });
   }
 
   private buildArrows(): void {
-    const draw = (x: number, forward: boolean): void => {
+    const draw = (mx: number, forward: boolean): void => {
+      const x = this.sx(mx);
+      const w = Math.max(16, this.sw(22));
       const g = this.add.graphics();
       g.fillStyle(PALETTE.metalDark, 1);
-      g.fillRect(x, 38, 22, 200);
+      g.fillRect(x, 38, w, 200);
       g.lineStyle(1, PALETTE.metalEdge, 1);
-      g.strokeRect(x + 0.5, 38.5, 21, 199);
+      g.strokeRect(x + 0.5, 38.5, w - 1, 199);
       g.lineStyle(2, PALETTE.cyan, 1);
       g.beginPath();
+      const cx = x + w / 2;
       if (forward) {
-        g.moveTo(x + 8, 132);
-        g.lineTo(x + 14, 138);
-        g.lineTo(x + 8, 144);
+        g.moveTo(cx - 3, 132);
+        g.lineTo(cx + 3, 138);
+        g.lineTo(cx - 3, 144);
       } else {
-        g.moveTo(x + 14, 132);
-        g.lineTo(x + 8, 138);
-        g.lineTo(x + 14, 144);
+        g.moveTo(cx + 3, 132);
+        g.lineTo(cx - 3, 138);
+        g.lineTo(cx + 3, 144);
       }
       g.strokePath();
       this.items.push(g);
-      this.hit(x, 38, 22, 200, () => {
+      this.hit(x, 38, w, 200, () => {
         this.sector = Phaser.Math.Wrap(this.sector - 1 + (forward ? 1 : -1), 0, SECTOR_COUNT) + 1;
         this.renderSector();
       });
@@ -237,48 +298,69 @@ export class LevelSelectScene extends Phaser.Scene {
   }
 
   private buildRoute(cleared: number, total: number): void {
+    const x = this.sx(64);
+    const w = this.sw(352);
     const g = this.add.graphics();
     g.fillStyle(PALETTE.metalMid, 1);
-    g.fillRect(64, 96, 352, 3);
-    g.fillRect(64, 184, 352, 3);
+    g.fillRect(x, 96, w, 3);
+    g.fillRect(x, 184, w, 3);
     g.fillStyle(PALETTE.cyan, 1);
-    g.fillRect(64, 96, Math.round((352 * cleared) / total), 3);
+    g.fillRect(x, 96, Math.round((w * cleared) / total), 3);
     this.items.push(g);
   }
 
-  private buildSmallCard(levelId: string, number: number, x: number, y: number, h: number): void {
+  private buildSmallCard(levelId: string, number: number, mx: number, y: number, h: number): void {
     const done = SaveService.isCompleted(levelId);
     const best = done ? this.bestTimeText(levelId) : null;
+    const x = this.sx(mx);
+    const w = this.sw(SMALL_W);
 
     const g = this.add.graphics();
     g.fillStyle(done ? PALETTE.metalDark : PALETTE.bgGraphite, 1);
-    g.fillRect(x, y, SMALL_W, h);
+    g.fillRect(x, y, w, h);
     g.lineStyle(1, done ? PALETTE.cyanDim : PALETTE.metalMid, 1);
-    g.strokeRect(x + 0.5, y + 0.5, SMALL_W - 1, h - 1);
+    g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     this.items.push(g);
 
     if (done) {
       const badge = this.add.graphics();
       badge.fillStyle(PALETTE.cyan, 1);
-      badge.fillRect(x + SMALL_W - 20, y + 6, 12, 12);
-      this.drawCheck(badge, x + SMALL_W - 14, y + 12, PALETTE.bgVoid);
+      badge.fillRect(x + w - 20, y + 6, 12, 12);
+      this.drawCheck(badge, x + w - 14, y + 12, PALETTE.bgVoid);
       this.items.push(badge);
     }
 
-    this.pixel(x + 7, y + 20, String(number).padStart(2, '0'), done ? PALETTE.textMuted : PALETTE.textDisabled, 3);
+    this.pixel(
+      x + 7,
+      y + 22,
+      String(number).padStart(2, '0'),
+      done ? PALETTE.textMuted : PALETTE.textDisabled,
+      3,
+      0,
+      0.5,
+      undefined,
+      { sizePx: this.st(22) },
+    );
     this.pixel(
       x + 7,
       y + h - 12,
       best ?? (done ? t('levelsDone') : t('levelsNew')),
       done ? PALETTE.cyan : PALETTE.labelMuted,
       1,
+      0,
+      0.5,
+      undefined,
+      { sizePx: this.st(12) },
     );
 
-    this.hit(x, y, SMALL_W, h, () => this.startLevel(levelId));
+    this.hit(x, y, w, h, () => this.startLevel(levelId));
   }
 
   private buildCurrentCard(levelId: string, number: number, sectorDone: boolean): void {
-    const { x, y, w, h } = BIG;
+    const y = BIG.y;
+    const h = BIG.h;
+    const x = this.sx(BIG.x);
+    const w = this.sw(BIG.w);
 
     const g = this.add.graphics();
     g.fillStyle(PALETTE.cyanDim, 1);
@@ -289,8 +371,12 @@ export class LevelSelectScene extends Phaser.Scene {
     g.strokeRect(x + 1, y + 1, w - 2, h - 2);
     this.items.push(g);
 
-    this.pixel(x + 8, y + 15, sectorDone ? t('levelsAgain') : t('levelsNext'), PALETTE.cyanDim, 1);
-    this.pixel(x + w - 8, y + 18, String(number).padStart(2, '0'), PALETTE.bgVoid, 3, 1);
+    this.pixel(x + 8, y + 15, sectorDone ? t('levelsAgain') : t('levelsNext'), PALETTE.cyanDim, 1, 0, 0.5, undefined, {
+      sizePx: this.st(11),
+    });
+    this.pixel(x + w - 8, y + 20, String(number).padStart(2, '0'), PALETTE.bgVoid, 3, 1, 0.5, undefined, {
+      sizePx: this.st(26),
+    });
 
     const play = this.add.graphics();
     play.fillStyle(PALETTE.bgVoid, 1);
@@ -301,20 +387,25 @@ export class LevelSelectScene extends Phaser.Scene {
       x + 36,
       y + 53,
       t('levelsPlay'),
-      { color: hexToCss(PALETTE.bgVoid), sizePx: 22, bold: true, uppercase: true },
+      { color: hexToCss(PALETTE.bgVoid), sizePx: this.fit(t('levelsPlay'), w - 44, 22), bold: true, uppercase: true },
       0,
       0.5,
     );
     this.items.push(label);
 
     const best = this.bestTimeText(levelId);
-    this.pixel(x + 8, y + h - 14, best ?? t('levelsNew'), PALETTE.cyanDim, 1);
+    this.pixel(x + 8, y + h - 14, best ?? t('levelsNew'), PALETTE.cyanDim, 1, 0, 0.5, undefined, {
+      sizePx: this.st(10),
+    });
 
     this.hit(x, y, w, h + 4, () => this.startLevel(levelId));
   }
 
   private buildShowcase(): void {
-    const { x, y, w, h } = SHOWCASE;
+    const y = SHOWCASE.y;
+    const h = SHOWCASE.h;
+    const x = this.sx(SHOWCASE.x);
+    const w = this.sw(SHOWCASE.w);
     const g = this.add.graphics();
     g.fillStyle(PALETTE.metalDark, 1);
     g.fillRect(x, y, w, h);
@@ -328,11 +419,14 @@ export class LevelSelectScene extends Phaser.Scene {
       if (sprite.displayHeight > h - 26) sprite.setScale((h - 26) / sprite.height);
       this.items.push(sprite);
     }
-    this.pixel(x + w / 2, y + h - 8, t('levelsUnit'), PALETTE.labelMuted, 1, 0.5);
+    this.pixel(x + w / 2, y + h - 8, t('levelsUnit'), PALETTE.labelMuted, 1, 0.5, 0.5, undefined, { sizePx: this.st(9) });
   }
 
   private buildDailyCard(): void {
-    const { x, y, w, h } = DAILY;
+    const y = DAILY.y;
+    const h = DAILY.h;
+    const x = this.sx(DAILY.x);
+    const w = this.sw(DAILY.w);
     const daily = getDailyChallenge();
 
     const g = this.add.graphics();
@@ -352,14 +446,26 @@ export class LevelSelectScene extends Phaser.Scene {
       x + 26,
       y + 14,
       t('dailyChallenge'),
-      { color: hexToCss(PALETTE.white), sizePx: 11, bold: true, uppercase: true },
+      { color: hexToCss(PALETTE.white), sizePx: this.fit(t('dailyChallenge'), w - 34, 12), bold: true, uppercase: true },
       0,
       0.5,
     );
     this.items.push(title);
 
-    this.pixel(x + 8, y + 34, daily.levelId.replace('sector-', '').replace('-level-', ' · '), PALETTE.systemLight, 1);
-    this.pixel(x + 8, y + 50, `${t('levelsChallengeReset')} ${this.timeToReset()}`, PALETTE.systemMuted, 1);
+    this.pixel(
+      x + 8,
+      y + 34,
+      daily.levelId.replace('sector-', '').replace('-level-', ' · '),
+      PALETTE.systemLight,
+      1,
+      0,
+      0.5,
+      undefined,
+      { sizePx: this.st(10) },
+    );
+    this.pixel(x + 8, y + 50, `${t('levelsChallengeReset')} ${this.timeToReset()}`, PALETTE.systemMuted, 1, 0, 0.5, undefined, {
+      sizePx: this.st(9),
+    });
 
     this.hit(x, y, w, h, () => {
       this.scene.stop('MainMenuScene');
@@ -384,58 +490,43 @@ export class LevelSelectScene extends Phaser.Scene {
   }
 
   private buildSystemColumn(cleared: number, total: number): void {
-    const colW = this.scale.width - 8 - SYS_X;
-    if (colW < 80) {
-      this.buildSystemStrip(cleared, total);
-      return;
-    }
+    const colW = this.sysW;
 
     const g = this.add.graphics();
     g.fillStyle(PALETTE.system, 0.12);
-    g.fillRect(SYS_X, 38, colW, 110);
+    g.fillRect(this.sysX, 38, colW, 110);
     g.fillStyle(PALETTE.system, 1);
-    g.fillRect(SYS_X, 38, 2, 110);
+    g.fillRect(this.sysX, 38, 2, 110);
     this.items.push(g);
 
-    this.pixel(SYS_X + 8, 48, 'SYSTEM', PALETTE.system, 1);
-    this.pixel(SYS_X + 8, 58, levelSelectComment(cleared, total), PALETTE.systemLight, 1, 0, 0, colW - 14);
+    this.pixel(this.sysX + 8, 48, 'SYSTEM', PALETTE.system, 1, 0, 0.5, undefined, { sizePx: 10 });
+    this.pixel(this.sysX + 8, 56, levelSelectComment(cleared, total), PALETTE.systemLight, 1, 0, 0, colW - 16, {
+      sizePx: colW >= 110 ? 11 : 10,
+      lineHeight: 1.4,
+      clampLines: 6,
+    });
 
     const box = this.add.graphics();
     box.fillStyle(PALETTE.metalDark, 1);
-    box.fillRect(SYS_X, 158, colW, 80);
+    box.fillRect(this.sysX, 158, colW, 80);
     box.lineStyle(1, PALETTE.metalMid, 1);
-    box.strokeRect(SYS_X + 0.5, 158.5, colW - 1, 79);
+    box.strokeRect(this.sysX + 0.5, 158.5, colW - 1, 79);
     this.items.push(box);
 
-    this.pixel(SYS_X + 8, 168, t('levelsSectorBest'), PALETTE.labelMuted, 1, 0, 0, colW - 14);
+    this.pixel(this.sysX + 8, 166, t('levelsSectorBest'), PALETTE.labelMuted, 1, 0, 0, colW - 16, {
+      sizePx: 9,
+      clampLines: 2,
+    });
 
     const bestMs = SaveService.getSectorBestMs(sectorIdOf(levelIdFor(this.sector, 1)));
     if (bestMs === null) {
-      this.pixel(SYS_X + 8, 196, t('levelsNoBest'), PALETTE.textDisabled, 1, 0, 0, colW - 14);
+      this.pixel(this.sysX + 8, 198, t('levelsNoBest'), PALETTE.textDisabled, 1, 0, 0, colW - 16, {
+        sizePx: 9,
+        clampLines: 3,
+      });
       return;
     }
-    this.pixel(SYS_X + 8, 206, this.clock(bestMs), PALETTE.cyan, 3, 0, 0.5);
+    this.pixel(this.sysX + 8, 206, this.clock(bestMs), PALETTE.cyan, 3, 0, 0.5, undefined, { sizePx: 22 });
   }
 
-  /**
-   * The mockup's own content zone ends at 468, so on a 480px canvas there is
-   * no room beside it for SYSTEM's column. The line moves under the route
-   * instead of being dropped — the same rule the shop follows.
-   */
-  private buildSystemStrip(cleared: number, total: number): void {
-    // Starts past the unit showcase (which runs to 238) rather than over it.
-    const x = SMALL_SLOTS[1]![0];
-    const w = DAILY.x + DAILY.w - x;
-    const y = 226;
-
-    const g = this.add.graphics();
-    g.fillStyle(PALETTE.system, 0.12);
-    g.fillRect(x, y, w, 34);
-    g.fillStyle(PALETTE.system, 1);
-    g.fillRect(x, y, 2, 34);
-    this.items.push(g);
-
-    this.pixel(x + 8, y + 10, 'SYSTEM', PALETTE.system, 1);
-    this.pixel(x + 8, y + 20, levelSelectComment(cleared, total), PALETTE.systemLight, 1, 0, 0, w - 16);
-  }
 }
