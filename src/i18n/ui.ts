@@ -40,6 +40,16 @@ const UI_STRINGS = {
   resume: { ru: 'Продолжить', en: 'Resume' },
   restart: { ru: 'Заново', en: 'Restart' },
   mainMenu: { ru: 'Главное меню', en: 'Main menu' },
+  pauseAttemptTime: { ru: 'Время попытки', en: 'Attempt time' },
+  pauseAttempts: { ru: 'Попытки', en: 'Attempts' },
+  /** Short form of `levelsSectorBest`, for the pause card's half-width stat box. */
+  pauseBestShort: { ru: 'Лучшее', en: 'Best' },
+  /** Short form of `screenShake` — the pause toggle sits in a ~93px box at 480. */
+  pauseShakeShort: { ru: 'Тряска', en: 'Shake' },
+  /** Short form of `htpDeathNote`, which is 70 characters and cannot fit the restart button at any width. */
+  pauseRestartNote: { ru: 'Кредиты не теряются', en: 'Credits are kept' },
+  pauseSystemLine: { ru: 'Пауза. Я всё равно считаю.', en: 'Paused. I am still counting.' },
+  pauseSystemLineShort: { ru: 'Пауза. Я считаю.', en: 'Paused. Still counting.' },
 
   settingsTitle: { ru: 'Настройки', en: 'Settings' },
   sound: { ru: 'Звук', en: 'Sound' },

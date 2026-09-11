@@ -1909,7 +1909,7 @@ export class ShopScene extends Phaser.Scene {
     const collBg = this.add.rectangle(this.sysX, collY, colW, collH, PALETTE.metalDark, 1).setOrigin(0, 0);
     this.content.push(collBg);
 
-    this.pixel(this.sysX + 8, collY + 6, t('shopCollection'), PALETTE.labelMuted, 1, 0, 0, true, {
+    const collLabel = this.pixel(this.sysX + 8, collY + 6, t('shopCollection'), PALETTE.labelMuted, 1, 0, 0, true, {
       sizePx: 9,
       wordWrapWidth: colW - 16,
     });
@@ -1922,7 +1922,9 @@ export class ShopScene extends Phaser.Scene {
     const chipSpan = colW - 16;
     const chip = Math.max(5, Math.min(9, Math.floor((chipSpan - (items.length - 1) * chipGap) / items.length)));
     const perRow = Math.max(1, Math.floor((chipSpan + chipGap) / (chip + chipGap)));
-    const chipsTop = collY + 26;
+    // Under however many lines the label actually took — a fixed offset held
+    // only while it fit one line, and a wider technical face wraps it to two.
+    const chipsTop = collY + 6 + Math.ceil(collLabel.height) + 5;
     const chips = this.add.graphics();
     items.forEach((item, i) => {
       const owned = this.isUnlocked(item) && this.isOwned(item);
@@ -2035,12 +2037,24 @@ export class ShopScene extends Phaser.Scene {
     diamond.restore();
     this.content.push(diamond);
 
-    // Mockup: 15px. A narrow canvas shrinks the card, so the headline drops a
-    // step rather than running off its own gold bar.
+    // Mockup: 15px. A narrow canvas shrinks the card, so the headline drops to
+    // whatever size actually clears its own gold bar — measured, not chosen
+    // from a width threshold, which left "БЕЗ РЕКЛАМЫ НАВСЕГДА" touching the
+    // panel border on the narrowest canvas.
     const headline = selected.id === 'remove_ads' ? t('shopNoAdsForever') : t('shopSystemAccess');
-    this.pixel(offerX + 34, bannerY, headline, PALETTE.reward, 2, 0, 0.5, true, {
-      sizePx: offerW >= 240 ? 15 : 11,
-    });
+    const headlineRoom = offerW - 34 - 10;
+    const probe = this.domText.add(
+      -1000,
+      -1000,
+      headline,
+      { color: 'transparent', font: 'pixel', sizePx: 15, letterSpacing: 1, uppercase: true },
+      0,
+      0,
+    );
+    const headlineW = probe.width;
+    probe.destroy();
+    const headlineSize = headlineW <= headlineRoom ? 15 : Math.max(9, Math.floor((15 * headlineRoom) / headlineW));
+    this.pixel(offerX + 34, bannerY, headline, PALETTE.reward, 2, 0, 0.5, true, { sizePx: headlineSize });
 
     const features =
       selected.id === 'remove_ads'

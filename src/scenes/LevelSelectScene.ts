@@ -541,24 +541,26 @@ export class LevelSelectScene extends Phaser.Scene {
     box.strokeRect(this.sysX + 0.5, 158.5, colW - 1, 79);
     this.items.push(box);
 
-    this.pixel(this.sysX + 8, 166, t('levelsSectorBest'), PALETTE.labelMuted, 1, 0, 0, colW - 16, {
+    const bestLabel = this.pixel(this.sysX + 8, 166, t('levelsSectorBest'), PALETTE.labelMuted, 1, 0, 0, colW - 16, {
       sizePx: 9,
       clampLines: 2,
     });
 
     const bestMs = SaveService.getSectorBestMs(sectorIdOf(levelIdFor(this.sector, 1)));
     // Straight under the label, the way the mockup stacks this box (label,
-    // then its value 6px below). It used to start 20px lower, which left a
-    // band of dead space inside the box and made the column read as half
-    // empty next to a tightly packed map.
+    // then its value 6px below) — but under however many lines the label
+    // actually took, measured, not assumed. A fixed offset here worked only
+    // while the label fit one line; a wider technical face wraps it to two
+    // and the value prints straight through it.
+    const valueY = 166 + Math.ceil(bestLabel.height) + 6;
     if (bestMs === null) {
-      this.pixel(this.sysX + 8, 182, t('levelsNoBest'), PALETTE.textDisabled, 1, 0, 0, colW - 16, {
+      this.pixel(this.sysX + 8, valueY, t('levelsNoBest'), PALETTE.textDisabled, 1, 0, 0, colW - 16, {
         sizePx: 9,
         clampLines: 3,
       });
       return;
     }
-    this.pixel(this.sysX + 8, 182, this.clock(bestMs), PALETTE.cyan, 3, 0, 0, undefined, { sizePx: 22 });
+    this.pixel(this.sysX + 8, valueY, this.clock(bestMs), PALETTE.cyan, 3, 0, 0, undefined, { sizePx: 22 });
   }
 
 }
