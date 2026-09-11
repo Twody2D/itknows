@@ -30,6 +30,8 @@ import { TrailFx } from '@/gameplay/TrailFx';
 import type { TrailKind } from '@/gameplay/TrailFx';
 import { FxManager } from '@/fx/FxManager';
 import { PACKS } from '@/data/dialogues';
+import { rebuildOnResize } from '@/ui/relayout';
+import { drawCheck } from '@/ui/glyphs';
 
 // Rail order top-to-bottom, per the Claude Design showroom mockup — БЕЗ РЕК.
 // sits at the bottom as the one solid gold shape in the rail, which is what
@@ -220,6 +222,7 @@ export class ShopScene extends Phaser.Scene {
   }
 
   create(data?: { category?: ShopCategory }): void {
+    rebuildOnResize(this);
     const { width, height } = this.scale;
 
     // The scene instance is reused every time the player reopens the shop
@@ -429,32 +432,6 @@ export class ShopScene extends Phaser.Scene {
 
   // ---- small shared painters ------------------------------------------
 
-
-  /**
-   * The mockup's tick is a CSS border pair rotated -45deg, which the browser
-   * renders at device resolution. Reproducing that literally — a rotated
-   * `fillRect` — puts antialiased grey along both edges of a shape that is
-   * then blown up by the canvas's nearest-neighbour upscale, and it read as a
-   * smudge. Drawn instead as pixel art: a 7x6 staircase on whole pixels, the
-   * same way the bitmap font's own glyphs are built.
-   */
-  private drawCheck(g: Phaser.GameObjects.Graphics, cx: number, cy: number, size: number, color: number): void {
-    const u = Math.max(1, Math.round(size / 3));
-    const left = Math.round(cx - u * 3.5);
-    const top = Math.round(cy - u * 3);
-    g.fillStyle(color, 1);
-    // column x-offset -> (y-offset, height), in units of `u`
-    const steps: [number, number, number][] = [
-      [0, 3, 2],
-      [1, 4, 2],
-      [2, 5, 1],
-      [3, 4, 1],
-      [4, 2, 2],
-      [5, 1, 2],
-      [6, 0, 2],
-    ];
-    for (const [dx, dy, h] of steps) g.fillRect(left + dx * u, top + dy * u, u, h * u);
-  }
 
   private drawLockGlyph(g: Phaser.GameObjects.Graphics, cx: number, cy: number): void {
     g.fillStyle(PALETTE.metalEdge, 1);
@@ -864,7 +841,7 @@ export class ShopScene extends Phaser.Scene {
       const badge = this.add.graphics();
       badge.fillStyle(accent, 1);
       badge.fillRect(x + w - 16, y - 4, 16, 16);
-      this.drawCheck(badge, x + w - 8, y + 4, 4, PALETTE.bgVoid);
+      drawCheck(badge, x + w - 8, y + 4, 4, PALETTE.bgVoid);
       this.content.push(badge);
     }
 
@@ -1513,7 +1490,7 @@ export class ShopScene extends Phaser.Scene {
       } else if (opts.icon === 'check') {
         g.fillStyle(opts.accent, 1);
         g.fillRect(iconCx - 7, iconCy - 7, 14, 14);
-        this.drawCheck(g, iconCx, iconCy, 4, PALETTE.bgVoid);
+        drawCheck(g, iconCx, iconCy, 4, PALETTE.bgVoid);
       }
 
       label.setPosition(x + w / 2 + (opts.icon === 'none' ? 0 : 9), y + dy + h / 2);
@@ -2072,7 +2049,7 @@ export class ShopScene extends Phaser.Scene {
       const check = this.add.graphics();
       check.fillStyle(PALETTE.patrolVisor, 1);
       check.fillRect(offerX + 12, y - 6, 12, 12);
-      this.drawCheck(check, offerX + 18, y, 3.5, PALETTE.bgVoid);
+      drawCheck(check, offerX + 18, y, 3.5, PALETTE.bgVoid);
       this.content.push(check);
 
       const text = this.domText.add(
@@ -2422,7 +2399,7 @@ export class ShopScene extends Phaser.Scene {
     const glyph = this.add.graphics();
     glyph.lineStyle(2, PALETTE.patrolVisor, 1);
     glyph.strokeRect(x + 9, y + 7, 14, 14);
-    this.drawCheck(glyph, x + 16, y + 14, 3.5, PALETTE.patrolVisor);
+    drawCheck(glyph, x + 16, y + 14, 3.5, PALETTE.patrolVisor);
     this.content.push(glyph);
 
     this.buildEarnAmount(x + 8, y + 60, EARN_AMOUNTS.levelComplete);

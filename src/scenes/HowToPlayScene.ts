@@ -10,6 +10,7 @@ import { buildKeyRow } from '@/ui/KeyCap';
 import { jumpHintKeys, moveHintKeys } from '@/ui/TutorialHints';
 import { InventoryService } from '@/services/InventoryService';
 import { playerTexturePrefix } from '@/data/shop/skinVisuals';
+import { rebuildOnResize } from '@/ui/relayout';
 
 /**
  * «Как играть», rebuilt against Claude Design mockup 4f: five numbered cards
@@ -29,6 +30,7 @@ export class HowToPlayScene extends Phaser.Scene {
   }
 
   create(): void {
+    rebuildOnResize(this);
     const { width, height } = this.scale;
 
     buildRadialGridBackdrop(this, width, height, 'howto-backdrop', 0.55, 0.3);

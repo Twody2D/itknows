@@ -10,6 +10,7 @@ import { AudioSettings } from '@/audio/AudioSettings';
 import { FxSettings } from '@/fx/FxSettings';
 import { playSfx } from '@/audio/SfxManager';
 import { formatMmSsTenths } from '@/utils/formatTime';
+import { rebuildOnResize } from '@/ui/relayout';
 
 interface PauseSceneData {
   gameplaySceneKey: string;
@@ -53,6 +54,7 @@ export class PauseScene extends Phaser.Scene {
   }
 
   create(): void {
+    rebuildOnResize(this, this.pauseData);
     const { width, height } = this.scale;
 
     // cardW = max(456, W - 80), centred. The spec's prose states this as

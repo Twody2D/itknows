@@ -15,6 +15,8 @@ import { InventoryService } from '@/services/InventoryService';
 import { playerTexturePrefix } from '@/data/shop/skinVisuals';
 import { levelSelectComment } from '@/data/dialogues/levelSelect';
 import { DAILY_CHALLENGE_VARIANT_ID, currentChallengeTimeMs, getDailyChallenge } from '@/gameplay/DailyChallenge';
+import { rebuildOnResize } from '@/ui/relayout';
+import { drawCheck } from '@/ui/glyphs';
 
 /**
  * The level map, rebuilt against Claude Design mockup 4e: one sector at a
@@ -67,6 +69,7 @@ export class LevelSelectScene extends Phaser.Scene {
   }
 
   create(): void {
+    rebuildOnResize(this);
     const { width, height } = this.scale;
 
     // The scene instance is reused across `scene.launch`, so anything held
@@ -211,25 +214,6 @@ export class LevelSelectScene extends Phaser.Scene {
     this.items.push(zone);
   }
 
-  /** Same pixel-art tick the shop draws — a rotated rect turns to mush under the canvas upscale. */
-  private drawCheck(g: Phaser.GameObjects.Graphics, cx: number, cy: number, color: number): void {
-    const left = Math.round(cx - 3.5);
-    const top = Math.round(cy - 3);
-    g.fillStyle(color, 1);
-    const steps: [number, number, number][] = [
-      [0, 3, 2],
-      [1, 4, 2],
-      [2, 5, 1],
-      [3, 4, 1],
-      [4, 2, 2],
-      [5, 1, 2],
-      [6, 0, 2],
-    ];
-    for (const [dx, dy, h] of steps) g.fillRect(left + dx, top + dy, 1, h);
-  }
-
-  // ---- screen ------------------------------------------------------------
-
   private renderSector(): void {
     this.clear();
 
@@ -341,7 +325,7 @@ export class LevelSelectScene extends Phaser.Scene {
       const badge = this.add.graphics();
       badge.fillStyle(PALETTE.cyan, 1);
       badge.fillRect(x + w - 20, y + 6, 12, 12);
-      this.drawCheck(badge, x + w - 14, y + 12, PALETTE.bgVoid);
+      drawCheck(badge, x + w - 14, y + 12, 3, PALETTE.bgVoid);
       this.items.push(badge);
     }
 

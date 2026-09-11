@@ -15,6 +15,7 @@ import { DomTextOverlay, type DomTextHandle } from '@/ui/DomTextOverlay';
 import { fadeIn } from '@/ui/SceneFade';
 import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
 import { t } from '@/i18n/ui';
+import { rebuildOnResize, type RelayoutHandle } from '@/ui/relayout';
 
 /**
  * "Showcase + command column" (design spec 1a).
@@ -40,7 +41,10 @@ import { t } from '@/i18n/ui';
  */
 export class MainMenuScene extends Phaser.Scene {
   private domText!: DomTextOverlay;
-  private systemLineLabel?: PixelLabel;
+  private systemLineLabel: PixelLabel | undefined;
+  private relayout!: RelayoutHandle;
+  /** True while this scene has launched an overlay over itself — see `openOverlay`. */
+  private overlayOpen = false;
   /** Which controls SYSTEM has already remarked on — one line per control per visit, so it never nags. */
   private commentedOn = new Set<MenuCommentKind>();
   private commentHandler = (payload: { text: string; category: string }): void => {
@@ -53,6 +57,16 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Rebuilding while the shop or the level map sits on top would strand
+    // `openOverlay`'s restore closure on destroyed objects; deferred until
+    // that overlay closes instead.
+    this.relayout = rebuildOnResize(this, undefined, () => this.overlayOpen);
+    this.overlayOpen = false;
+    // `buildSystemLine` returns early when the slot has no room, so this
+    // field would otherwise keep pointing at the previous run's label — which
+    // the scene destroyed on shutdown, and which SYSTEM's comment handler
+    // would then try to write into.
+    this.systemLineLabel = undefined;
     this.cameras.main.setBackgroundColor(PALETTE.bgVoid);
     fadeIn(this);
 
@@ -98,13 +112,33 @@ export class MainMenuScene extends Phaser.Scene {
    * when the overlay shuts itself down.
    */
   private openOverlay(key: string, data?: object): void {
+    this.overlayOpen = true;
     this.domText.setLayerVisible(false);
     this.input.enabled = false;
     this.scene.launch(key, data);
-    this.scene.get(key).events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.domText.setLayerVisible(true);
-      this.input.enabled = true;
-    });
+
+    const overlay = this.scene.get(key);
+    // An overlay also emits SHUTDOWN when it merely *restarts* itself — which
+    // it does on a window resize, to rebuild for the new canvas width. Taking
+    // that for a close would uncover this screen underneath the overlay that
+    // is still on top of it. Checking a tick later tells the two apart: after
+    // a restart the scene is running again, after a real close it is not.
+    const onOverlayShutdown = (): void => {
+      this.time.delayedCall(0, () => {
+        if (this.scene.isActive(key)) return;
+        overlay.events.off(Phaser.Scenes.Events.SHUTDOWN, onOverlayShutdown);
+        this.overlayOpen = false;
+        this.domText.setLayerVisible(true);
+        this.input.enabled = true;
+        // If the window was resized while the overlay covered this screen, it
+        // is still laid out for the old width — rebuild now that it shows.
+        this.relayout.flush();
+      });
+    };
+    overlay.events.on(Phaser.Scenes.Events.SHUTDOWN, onOverlayShutdown);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () =>
+      overlay.events.off(Phaser.Scenes.Events.SHUTDOWN, onOverlayShutdown),
+    );
   }
 
   private buildBackground(width: number, height: number): void {

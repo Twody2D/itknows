@@ -12,6 +12,7 @@ import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
 import { fadeIn } from '@/ui/SceneFade';
 import { playSfx } from '@/audio/SfxManager';
 import { YandexGamesService } from '@/services/YandexGamesService';
+import { rebuildOnResize } from '@/ui/relayout';
 
 /**
  * Full-screen settings, rebuilt against Claude Design mockup 4g: two columns
@@ -36,6 +37,7 @@ export class SettingsScene extends Phaser.Scene {
   }
 
   create(): void {
+    rebuildOnResize(this);
     const { width, height } = this.scale;
 
     buildRadialGridBackdrop(this, width, height, 'settings-backdrop', 0.55, 0.3);

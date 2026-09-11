@@ -18,6 +18,7 @@ import { LeaderboardService } from '@/services/LeaderboardService';
 import { YandexGamesService } from '@/services/YandexGamesService';
 import type { YsdkLeaderboardEntry } from '@/services/YandexGamesService';
 import { EARN_AMOUNTS } from '@/data/shop/economy';
+import { rebuildOnResize } from '@/ui/relayout';
 
 export interface SectorCompleteData {
   completedLevelId: string;
@@ -63,6 +64,7 @@ export class SectorCompleteScene extends Phaser.Scene {
   }
 
   create(): void {
+    rebuildOnResize(this, this.sectorData);
     // The one natural ad breakpoint in the campaign (master-prompt "fair ad
     // system" §10) — a no-op today (no live SDK, no purchase to gate on
     // yet), but every future caller of AdsService only ever has to change

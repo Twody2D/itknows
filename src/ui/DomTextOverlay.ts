@@ -295,24 +295,28 @@ export class DomTextOverlay {
     }
 
     if (opts.strokeColor) {
-      // A thin hairline relative to the *rendered* font size, not the small
-      // virtual-px value scaled up blindly — a real sans-serif glyph's own
-      // stroke is much thinner than the bitmap font's blocky one, so the
-      // same "1 virtual px, scaled" outline the bitmap font uses came out
-      // thick enough here to swallow the fill color entirely (read as solid
-      // black). ~4% of font size reads as a crisp edge instead.
+      // Only a hard drop shadow, and only once the text is big enough to
+      // carry one. A centred `-webkit-text-stroke` used to be set here too:
+      // half of a centred stroke lies *inside* the glyph, and at UI sizes the
+      // counters of а/о/е/в/я are a couple of pixels across, so the outline
+      // closed them up and the letters read as broken. Chrome painted both
+      // it and this shadow — the stroke was written as the Blink path and
+      // the shadow as a Firefox-only fallback, but Blink honours both —
+      // which doubled the damage. The mockups themselves never outline body
+      // text; every label there sits on a solid panel, so the separation an
+      // outline buys is not needed below display sizes.
       const fontSizeCss = virtualPx * scaleY;
-      const strokeW = Math.max(1, fontSizeCss * 0.045);
-      el.style.setProperty('-webkit-text-stroke-width', `${strokeW}px`);
-      el.style.setProperty('-webkit-text-stroke-color', opts.strokeColor);
-      // Firefox (no `-webkit-text-stroke` support) falls back to a lighter
-      // single-offset drop shadow — same treatment `PixelLabel` uses, not a
-      // full ring, so it doesn't stack with the webkit outline in Blink.
-      el.style.textShadow = `${strokeW}px ${strokeW}px 0 ${opts.strokeColor}`;
+      if (fontSizeCss >= 20) {
+        const offset = Math.max(1, Math.round(fontSizeCss * 0.05));
+        el.style.textShadow = `${offset}px ${offset}px 0 ${opts.strokeColor}`;
+      } else {
+        el.style.textShadow = '';
+      }
     } else {
-      el.style.removeProperty('-webkit-text-stroke-width');
       el.style.textShadow = '';
     }
+    el.style.removeProperty('-webkit-text-stroke-width');
+    el.style.removeProperty('-webkit-text-stroke-color');
   }
 
   private positionItem(item: Item): void {
