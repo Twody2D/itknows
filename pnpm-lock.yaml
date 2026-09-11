@@ -15,10 +15,10 @@ importers:
       '@eslint/js':
         specifier: ^9.17.0
         version: 9.39.5
-      '@fontsource/rubik':
+      '@fontsource/handjet':
         specifier: ^5.3.0
         version: 5.3.0
-      '@fontsource/rubik-mono-one':
+      '@fontsource/rubik':
         specifier: ^5.3.0
         version: 5.3.0
       '@types/node':
@@ -374,8 +374,8 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@fontsource/rubik-mono-one@5.3.0':
-    resolution: {integrity: sha512-ReaCXaIKJAFdJAUaw8Gq3qXC9od7JotgqZFsVnwp06KqnBFtrX9qdeUvBdL+7avyUTic20gmzSH0NtEC6xAbDQ==}
+  '@fontsource/handjet@5.3.0':
+    resolution: {integrity: sha512-rrUqofsRezu+8anI3xQunGyPxI2QlebqlHbqCFWEyuQbbVsbFTJA0xazFyKqitkT4e7EqpAMWh7sIWPmw4svAw==}
 
   '@fontsource/rubik@5.3.0':
     resolution: {integrity: sha512-Nks2mn7vlE1jZVHuVgoKU2Ejqjvd+GJzLRdraCjo1xc79oo7O6vJ8pcvSfmKPGX3/Ln7nt09XWFzPeu2jWf0xQ==}
@@ -1395,7 +1395,7 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@fontsource/rubik-mono-one@5.3.0': {}
+  '@fontsource/handjet@5.3.0': {}
 
   '@fontsource/rubik@5.3.0': {}
 

@@ -150,8 +150,8 @@ const UI_STRINGS = {
   shopCollection: { ru: 'СОБРАНО ОБЛИКОВ', en: 'SKINS COLLECTED' },
   shopWillRemain: { ru: 'ОСТАНЕТСЯ', en: 'LEFT' },
   // Same abbreviation convention the rail already uses ("БЕЗ РЕК.") — the
-  // fallback for a 3-digit price beside a 3-digit balance, where Rubik Mono
-  // One's own width no longer leaves room for the whole word.
+  // fallback for a 3-digit price beside a 3-digit balance, where the panel's
+  // fixed width no longer leaves room for the whole word.
   shopWillRemainShort: { ru: 'ОСТ.', en: 'LEFT' },
   shopLockedName: { ru: '???', en: '???' },
   shopLockedCondition: { ru: '5 СЕКТОРОВ', en: '5 SECTORS' },

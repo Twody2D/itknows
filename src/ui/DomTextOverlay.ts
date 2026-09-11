@@ -1,12 +1,12 @@
 import Phaser from 'phaser';
-import { PIXEL_FONT, PROSE_FONT } from './fonts';
+import { PIXEL_FONT, PIXEL_WEIGHT, PROSE_FONT, PROSE_WEIGHT } from './fonts';
 
 export interface DomTextOptions {
   color: string;
   /**
-   * Which of the mockup's two typefaces to set the label in: `pixel` is
-   * Pixelify Sans (titles, counters, prices, SYSTEM's voice), `prose` is
-   * Rubik (descriptions, item names, button labels). Defaults to `prose`.
+   * Which of the two UI typefaces to set the label in: `pixel` (titles,
+   * counters, prices, SYSTEM's voice) or `prose` (descriptions, item names,
+   * button labels). Defaults to `prose`.
    */
   font?: 'pixel' | 'prose';
   /** Letter spacing in *virtual* px — the mockup gives its pixel-font labels 1-2px. */
@@ -261,11 +261,11 @@ export class DomTextOverlay {
     el.style.position = 'absolute';
     el.style.display = 'inline-block';
     el.style.fontFamily = opts.font === 'pixel' ? PIXEL_FONT : PROSE_FONT;
-    // Rubik Mono One ships one weight only — requesting 700 on it makes the
-    // browser synthesize a fake bold (skew + double-stroke), which reads
-    // worse than the face's own native weight (already heavy by design).
-    // Rubik's own heavy step in the mockup is 800.
-    el.style.fontWeight = opts.font === 'pixel' ? '400' : opts.bold ? '800' : '400';
+    // Only weights `fonts.ts` actually imports may be named here: an
+    // unimported weight is synthesised by smearing the glyph without
+    // widening its advance, which makes neighbouring letters overlap.
+    const weight = opts.font === 'pixel' ? PIXEL_WEIGHT : PROSE_WEIGHT;
+    el.style.fontWeight = opts.bold ? weight.bold : weight.regular;
     el.style.fontSize = `${virtualPx * scaleY}px`;
     el.style.lineHeight = String(opts.lineHeight ?? 1.3);
     const tracking = opts.letterSpacing ?? 0;
@@ -274,7 +274,13 @@ export class DomTextOverlay {
     el.style.textTransform = opts.uppercase ? 'uppercase' : 'none';
     el.style.textAlign = originX === 0.5 ? 'center' : 'left';
     el.style.whiteSpace = opts.wordWrapWidth ? 'normal' : 'pre';
-    el.style.wordBreak = 'break-word';
+    // `normal` + `overflow-wrap` breaks *between* words and only splits a
+    // word that cannot fit its line at any position. The legacy
+    // `word-break: break-word` used to sit here instead, which breaks
+    // *inside* words at the first character that overflows — that is what
+    // turned SYSTEM's lines into "ИНТЕРЕСН / О," and "ПРИДУМ / АЛИ".
+    el.style.wordBreak = 'normal';
+    el.style.overflowWrap = 'break-word';
     el.style.maxWidth = opts.wordWrapWidth !== undefined ? `${opts.wordWrapWidth * scaleY}px` : '';
 
     if (opts.clampLines !== undefined) {

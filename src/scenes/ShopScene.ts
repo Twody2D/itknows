@@ -354,8 +354,8 @@ export class ShopScene extends Phaser.Scene {
   }
 
   /**
-   * A label in the mockup's pixel typeface (Pixelify Sans — see `ui/fonts`),
-   * which is every technical string on the screen: titles, counters, prices,
+   * A label in the UI's pixel typeface (see `ui/fonts`), which is every
+   * technical string on the screen: titles, counters, prices,
    * statuses, SYSTEM's own voice. Drawn as DOM text over the canvas, so the
    * browser paints it at native screen resolution instead of it being
    * rasterised into the 270px game canvas and then blown up.
@@ -1300,10 +1300,10 @@ export class ShopScene extends Phaser.Scene {
       return w + 8 + priceW + 14 <= rowW;
     };
 
-    // Rubik Mono One runs noticeably wider per glyph than the mockup's own
-    // pixel face, so a 3-digit price ("ОСТАНЕТСЯ 680" beside "680") no longer
-    // fits this row at the mockup's fixed 15px/9px pair on this panel's fixed
-    // width. The price shrinks first (it has more headroom before turning
+    // A 3-digit price ("ОСТАНЕТСЯ 680" beside "680") does not fit this row
+    // at the mockup's fixed 15px/9px pair on this panel's fixed width once
+    // the balance is 3 digits too. The price shrinks first (it has more
+    // headroom before turning
     // illegible); if the full caption still doesn't fit even at a small
     // floor size, it swaps for the rail's own abbreviation convention
     // ("БЕЗ РЕК.") rather than clipping mid-word into an ellipsis.
@@ -1885,10 +1885,9 @@ export class ShopScene extends Phaser.Scene {
 
     this.pixel(this.sysX + 8, DETAIL_TOP + 10, 'SYSTEM', PALETTE.system, 1, 0, 0.5, true, { sizePx: 10 });
 
-    // Rubik Mono One wraps noticeably sooner per line than the mockup's own
-    // pixel face at this column width, so an uncapped label could grow past
-    // `systemH` into whatever sits below it (the skin-collection box, for
-    // character). Capped to exactly the lines the box actually has room for.
+    // An uncapped label can grow past `systemH` into whatever sits below it
+    // (the skin-collection box, for character), because SYSTEM's lines vary
+    // in length. Capped to exactly the lines the box actually has room for.
     const sysLineSize = 11;
     const sysLineHeight = 1.5;
     const sysTextTop = DETAIL_TOP + 22;
@@ -1896,6 +1895,9 @@ export class ShopScene extends Phaser.Scene {
     this.systemLineLabel = this.pixel(this.sysX + 8, sysTextTop, this.systemLineText, PALETTE.systemLight, 1, 0, 0, true, {
       sizePx: sysLineSize,
       lineHeight: sysLineHeight,
+      // SYSTEM's voice is prose, not a label: the mockup tracks its pixel-font
+      // *labels* by 1-2px and gives these running lines none.
+      letterSpacing: 0,
       wordWrapWidth: colW - 16,
       clampLines: sysMaxLines,
     });
@@ -1912,24 +1914,34 @@ export class ShopScene extends Phaser.Scene {
       wordWrapWidth: colW - 16,
     });
 
-    const chip = 9;
+    // One chip per skin, sized to put the whole set on a single row when the
+    // column allows it — a fixed 9px chip left the last one stranded alone on
+    // a second row. The chip still has a floor, so a future longer catalogue
+    // wraps onto tidy full rows instead of shrinking into invisibility.
     const chipGap = 3;
-    const perRow = Math.max(1, Math.floor((colW - 16) / (chip + chipGap)));
+    const chipSpan = colW - 16;
+    const chip = Math.max(5, Math.min(9, Math.floor((chipSpan - (items.length - 1) * chipGap) / items.length)));
+    const perRow = Math.max(1, Math.floor((chipSpan + chipGap) / (chip + chipGap)));
+    const chipsTop = collY + 26;
     const chips = this.add.graphics();
     items.forEach((item, i) => {
       const owned = this.isUnlocked(item) && this.isOwned(item);
       chips.fillStyle(owned ? skinColorsFor(item.id)?.visor ?? PALETTE.cyan : PALETTE.metalEdge, 1);
       chips.fillRect(
         this.sysX + 8 + (i % perRow) * (chip + chipGap),
-        collY + 26 + Math.floor(i / perRow) * (chip + chipGap),
+        chipsTop + Math.floor(i / perRow) * (chip + chipGap),
         chip,
         chip,
       );
     });
     this.content.push(chips);
 
+    // Directly under the chips it counts, not pinned to the bottom of the box
+    // with a band of dead space between the two.
+    const rows = Math.ceil(items.length / perRow);
+    const countY = Math.min(chipsTop + rows * (chip + chipGap) + 8, collY + collH - 10);
     const ownedCount = items.filter((item) => this.isUnlocked(item) && this.isOwned(item)).length;
-    this.pixel(this.sysX + 8, collY + collH - 12, `${ownedCount} / ${items.length}`, PALETTE.textMuted, 1, 0, 0.5, true);
+    this.pixel(this.sysX + 8, countY, `${ownedCount} / ${items.length}`, PALETTE.textMuted, 1, 0, 0.5, true);
   }
 
   private handleSystemComment(payload: { text: string; category: string }): void {
@@ -2176,6 +2188,9 @@ export class ShopScene extends Phaser.Scene {
     this.systemLineLabel = this.pixel(this.sysX + 8, sysTextTop, this.systemLineText, PALETTE.systemLight, 1, 0, 0, true, {
       sizePx: sysLineSize,
       lineHeight: sysLineHeight,
+      // SYSTEM's voice is prose, not a label: the mockup tracks its pixel-font
+      // *labels* by 1-2px and gives these running lines none.
+      letterSpacing: 0,
       wordWrapWidth: colW - 16,
       clampLines: sysMaxLines,
     });

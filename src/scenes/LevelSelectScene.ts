@@ -99,7 +99,7 @@ export class LevelSelectScene extends Phaser.Scene {
 
   // ---- helpers -----------------------------------------------------------
 
-  /** Mockup 4e's technical type: Pixelify Sans on the DOM layer, same ladder the shop uses. */
+  /** Mockup 4e's technical type: the pixel face on the DOM layer, same ladder the shop uses. */
   private pixel(
     x: number,
     y: number,
@@ -148,12 +148,27 @@ export class LevelSelectScene extends Phaser.Scene {
   }
 
   /**
-   * The biggest size at which `text` still fits `available` px of Rubik 800.
-   * Its heavy weight runs about 0.62em per glyph, so a fixed size that suits
-   * the mockup's 140px card runs straight off a squeezed one.
+   * The biggest size (at most `max`) at which `text` really fits `available`
+   * virtual px, measured off a throwaway label in the same style rather than
+   * estimated from character count. The estimate this replaces assumed a
+   * flat ~0.62em per glyph, which understates uppercase Cyrillic in Rubik's
+   * heavy weight — that is what let "ИСПЫТАНИЕ ДНЯ" run past the daily
+   * card's own border. Text width is linear in font size, so one measurement
+   * gives the answer outright; no search loop.
    */
-  private fit(text: string, available: number, max: number): number {
-    return Math.max(9, Math.min(max, Math.floor(available / (text.length * 0.62))));
+  private fit(text: string, available: number, max: number, style: Partial<DomTextOptions> = {}): number {
+    const probe = this.domText.add(
+      -1000,
+      -1000,
+      text,
+      { color: 'transparent', sizePx: max, uppercase: true, ...style },
+      0,
+      0,
+    );
+    const measured = probe.width;
+    probe.destroy();
+    if (measured <= 0 || measured <= available) return max;
+    return Math.max(8, Math.floor((max * available) / measured));
   }
 
   private clear(): void {
@@ -330,9 +345,14 @@ export class LevelSelectScene extends Phaser.Scene {
       this.items.push(badge);
     }
 
+    // Number and status read as one block, centred in the tile. The mockup
+    // top-aligns its own tiles because theirs carry three rows (number, chip
+    // row, time); ours carry two, and pinning the number to the top and the
+    // status to the bottom left a 40px hole down the middle of every tile —
+    // six of those are what made the screen look stretched out.
     this.pixel(
       x + 7,
-      y + 22,
+      y + h / 2 - 8,
       String(number).padStart(2, '0'),
       done ? PALETTE.textMuted : PALETTE.textDisabled,
       3,
@@ -343,7 +363,7 @@ export class LevelSelectScene extends Phaser.Scene {
     );
     this.pixel(
       x + 7,
-      y + h - 12,
+      y + h / 2 + 16,
       best ?? (done ? t('levelsDone') : t('levelsNew')),
       done ? PALETTE.cyan : PALETTE.labelMuted,
       1,
@@ -446,7 +466,12 @@ export class LevelSelectScene extends Phaser.Scene {
       x + 26,
       y + 14,
       t('dailyChallenge'),
-      { color: hexToCss(PALETTE.white), sizePx: this.fit(t('dailyChallenge'), w - 34, 12), bold: true, uppercase: true },
+      {
+        color: hexToCss(PALETTE.white),
+        sizePx: this.fit(t('dailyChallenge'), w - 34, 12, { bold: true }),
+        bold: true,
+        uppercase: true,
+      },
       0,
       0.5,
     );
@@ -502,7 +527,10 @@ export class LevelSelectScene extends Phaser.Scene {
     this.pixel(this.sysX + 8, 48, 'SYSTEM', PALETTE.system, 1, 0, 0.5, undefined, { sizePx: 10 });
     this.pixel(this.sysX + 8, 56, levelSelectComment(cleared, total), PALETTE.systemLight, 1, 0, 0, colW - 16, {
       sizePx: colW >= 110 ? 11 : 10,
-      lineHeight: 1.4,
+      // Prose, not a label — the mockup gives SYSTEM's running lines
+      // line-height 1.5 and no tracking (tracking is for labels only).
+      lineHeight: 1.5,
+      letterSpacing: 0,
       clampLines: 6,
     });
 
@@ -519,14 +547,18 @@ export class LevelSelectScene extends Phaser.Scene {
     });
 
     const bestMs = SaveService.getSectorBestMs(sectorIdOf(levelIdFor(this.sector, 1)));
+    // Straight under the label, the way the mockup stacks this box (label,
+    // then its value 6px below). It used to start 20px lower, which left a
+    // band of dead space inside the box and made the column read as half
+    // empty next to a tightly packed map.
     if (bestMs === null) {
-      this.pixel(this.sysX + 8, 198, t('levelsNoBest'), PALETTE.textDisabled, 1, 0, 0, colW - 16, {
+      this.pixel(this.sysX + 8, 182, t('levelsNoBest'), PALETTE.textDisabled, 1, 0, 0, colW - 16, {
         sizePx: 9,
         clampLines: 3,
       });
       return;
     }
-    this.pixel(this.sysX + 8, 206, this.clock(bestMs), PALETTE.cyan, 3, 0, 0.5, undefined, { sizePx: 22 });
+    this.pixel(this.sysX + 8, 182, this.clock(bestMs), PALETTE.cyan, 3, 0, 0, undefined, { sizePx: 22 });
   }
 
 }

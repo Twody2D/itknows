@@ -59,21 +59,13 @@ export function buildScreenTopbar(scene: Phaser.Scene, domText: DomTextOverlay, 
     0.5,
   );
 
-  // The subtitle is the first thing to go on a narrow canvas — it explains,
-  // it never instructs, so losing it costs the player nothing.
-  if (opts.subtitle !== undefined && width >= 520) {
-    domText.add(
-      40 + title.width,
-      15,
-      opts.subtitle,
-      { color: hexToCss(PALETTE.labelMuted), font: 'pixel', sizePx: 10, letterSpacing: 1, uppercase: true },
-      0,
-      0.5,
-    );
-  }
-
+  // Built before the subtitle so the subtitle can be measured against the
+  // space this actually leaves. The mockup pins both to fixed x (subtitle
+  // 150, counter 352) because it is drawn at one fixed 620px width; ours
+  // has to hold from 480 to 620, so the gap is computed instead of assumed.
+  let rightEdge = width - 10;
   if (opts.right !== undefined) {
-    domText.add(
+    const right = domText.add(
       width - 10,
       15,
       opts.right,
@@ -81,7 +73,33 @@ export function buildScreenTopbar(scene: Phaser.Scene, domText: DomTextOverlay, 
       1,
       0.5,
     );
+    rightEdge = width - 10 - right.width;
   }
+
+  // The subtitle is the first thing to go on a narrow canvas — it explains,
+  // it never instructs, so losing it costs the player nothing. It is never
+  // allowed to reach the counter: that is a fact about the player's own
+  // progress, and a decorative caption must not sit on top of it.
+  if (opts.subtitle === undefined) return;
+  const subtitleX = 40 + title.width;
+  const available = rightEdge - 10 - subtitleX;
+  if (available < 48) return;
+  domText.add(
+    subtitleX,
+    15,
+    opts.subtitle,
+    {
+      color: hexToCss(PALETTE.labelMuted),
+      font: 'pixel',
+      sizePx: 10,
+      letterSpacing: 1,
+      uppercase: true,
+      wordWrapWidth: available,
+      clampLines: 1,
+    },
+    0,
+    0.5,
+  );
 }
 
 /** A section header band: 20px tall, a 3px bar in `accent`, an optional right-aligned note. */
