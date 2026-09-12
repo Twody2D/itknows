@@ -184,7 +184,6 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
         width: 2,
         height: 3,
         targetId: 'mspike-01',
-        visible: false,
       },
       {
         type: 'moving-spike',
@@ -205,7 +204,6 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
         width: 2,
         height: 3,
         targetId: 'mspike-02',
-        visible: false,
       },
       // The last one lands immediately after a pit, so stopping dead is not
       // available — the player has to brake *before* the jump they have
@@ -231,7 +229,6 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
         width: 2,
         height: 3,
         targetId: 'mspike-03',
-        visible: false,
       },
     ],
   },
@@ -281,9 +278,13 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     name: 'DISTRICT',
     width: 48,
     groundRow: 22,
-    gaps: [[18, 30]],
+    gaps: [[19, 29]],
     spikeColumns: [10, 11],
     platforms: [
+      // The one slab in the pit that holds, with a falling stone either
+      // side of it — same alternating crossing FREEFALL teaches, asked
+      // again here with everything else going on at once.
+      { col: 22, row: 19, width: 3 },
       { col: 34, row: 19, width: 5 },
       { col: 34, row: 13, width: 6 },
     ],
@@ -294,8 +295,8 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
       // Cross a pit on stones that fall, climb past a ledge that is not
       // there, and do both under a spike that never stops. Nothing new is
       // introduced — the sector's four ideas are simply asked together.
-      { type: 'falling-platform', id: 'flp-01', col: 18, row: 19, width: 3 },
-      { type: 'falling-platform', id: 'flp-02', col: 24, row: 19, width: 3 },
+      { type: 'falling-platform', id: 'flp-01', col: 19, row: 19, width: 3 },
+      { type: 'falling-platform', id: 'flp-02', col: 26, row: 19, width: 3 },
       { type: 'disappearing-platform', id: 'dp-01', col: 29, row: 16, width: 3 },
       { type: 'fake-platform', id: 'fakep-01', col: 26, row: 13, width: 4 },
       { type: 'orbit-spike', id: 'orbit-01', pivotCol: 33, pivotRow: 16, radiusTiles: 1.75, periodMs: 2000 },

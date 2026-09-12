@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
+import { TILE_SIZE } from '@/config/display';
 import { MIN_WARNING_MS } from '@/config/physics';
 
 export interface FallingPlatformConfig {
@@ -14,8 +15,23 @@ export interface FallingPlatformConfig {
    */
   holdMs?: number | undefined;
   fallSpeed?: number | undefined;
-  /** How long after falling before it respawns at its original spot. */
-  respawnMs?: number | undefined;
+  /**
+   * Texture for the slab. Passed in by `Level.ts` so a trapdoor can be
+   * drawn with the very tile the ground around it uses — a floor that
+   * announces itself is a floor nobody walks on.
+   */
+  texture?: string | undefined;
+  /**
+   * True when this sits in the ground row and has to pass for ground:
+   * it then carries the bright cyan lip every run of floor has, so the
+   * level's edge reads as one unbroken line across it.
+   *
+   * False for a stone hanging in mid-air over a pit (sector 02's
+   * FREEFALL), where the opposite is wanted — it keeps the plain ground
+   * tile and no lip, so it is visibly not one of the level's solid slabs
+   * and the player can choose their route across.
+   */
+  asFloor?: boolean | undefined;
   /**
    * Default (unset/false): the ordinary floor that sinks once it is stood
    * on — the player is already on top of it when it starts to go.
@@ -40,6 +56,9 @@ export interface FallingPlatformConfig {
 
 type State = 'armed' | 'warning' | 'solid' | 'falling' | 'gone';
 
+/** Width of the bright cyan lip `Level.ts` paints along every run of ground. */
+const RIM_HEIGHT = 2;
+
 /**
  * Two floors in one trap, selected by `armed`.
  *
@@ -50,12 +69,27 @@ type State = 'armed' | 'warning' | 'solid' | 'falling' | 'gone';
  * Armed: a trapdoor that ignores being stood on and springs when its
  * `trigger` zone fires — placed a column or two earlier, so the floor
  * ahead of a running player flashes red, shakes for `warnMs`, and then is
- * not there. Both respawn at their original position after a delay.
+ * not there.
+ *
+ * NEITHER COMES BACK. They used to respawn after a couple of seconds, which
+ * the owner called out as soon as he played it ("после того как земля упала
+ * она появляется на том месте через пару секунд, так не должно быть") — and
+ * he is right twice over: a floor that reassembles itself reads as a bug,
+ * and it quietly turns a trap into a waiting game. `LevelValidator` counts
+ * no falling floor as a surface at all, so every level is proved passable
+ * with all of them already gone and nothing can strand the player
+ * (CLAUDE.md #4.4).
+ *
+ * It also carries its own cyan lip, because `Level.ts` paints that rim per
+ * run of ground and a trapdoor is not part of one — without it the floor
+ * would have a bright edge with a dull two-metre notch in it, which is
+ * exactly the tell the trap must not have.
  */
 export class FallingPlatformTrap {
   readonly type = 'falling-platform';
   readonly id: string;
   readonly gameObject: Phaser.Physics.Arcade.Sprite;
+  private readonly rim: Phaser.GameObjects.Rectangle | null;
   private readonly body: Phaser.Physics.Arcade.Body;
 
   private state: State;
@@ -64,7 +98,6 @@ export class FallingPlatformTrap {
   private readonly originY: number;
   private readonly holdMs: number;
   private readonly fallSpeed: number;
-  private readonly respawnMs: number;
   private readonly armed: boolean;
   private readonly warnMs: number;
 
@@ -90,14 +123,19 @@ export class FallingPlatformTrap {
     // rewards on the attempts after the first one.
     this.holdMs = config.holdMs ?? (this.armed ? 520 : 320);
     this.fallSpeed = config.fallSpeed ?? (this.armed ? 100 : 180);
-    this.respawnMs = config.respawnMs ?? 2000;
     this.warnMs = Math.max(config.warnMs ?? 350, MIN_WARNING_MS);
     this.state = this.armed ? 'armed' : 'solid';
 
-    this.gameObject = scene.physics.add.sprite(config.x, config.y, 'tile-ground');
+    this.gameObject = scene.physics.add.sprite(config.x, config.y, config.texture ?? 'tile-ground');
     this.body = this.gameObject.body as Phaser.Physics.Arcade.Body;
     this.body.setAllowGravity(false);
     this.body.setImmovable(true);
+
+    this.rim = config.asFloor
+      ? scene.add
+          .rectangle(config.x, config.y - TILE_SIZE / 2, TILE_SIZE, RIM_HEIGHT, PALETTE.cyan, 0.85)
+          .setOrigin(0.5, 0)
+      : null;
   }
 
   notifyStandingOn(): void {
@@ -132,7 +170,10 @@ export class FallingPlatformTrap {
       // Everything the player needs in order to jump is on screen for the
       // whole of `warnMs` before the floor stops holding.
       this.gameObject.x = this.originX + Math.sin(this.timerMs * 0.05) * 1.5;
-      this.gameObject.setTint(Math.floor(this.timerMs / 80) % 2 === 0 ? PALETTE.danger : PALETTE.dangerAlt);
+      const flash = Math.floor(this.timerMs / 80) % 2 === 0 ? PALETTE.danger : PALETTE.dangerAlt;
+      this.gameObject.setTint(flash);
+      this.rim?.setFillStyle(flash, 1);
+      this.syncRim();
       if (this.timerMs >= this.warnMs) {
         this.state = 'falling';
         this.timerMs = 0;
@@ -145,28 +186,23 @@ export class FallingPlatformTrap {
     if (this.state === 'falling') {
       const wobble = Math.sin(this.timerMs * 0.08) * 1.2;
       this.gameObject.x = this.originX + wobble;
+      this.syncRim();
       if (this.gameObject.y - this.originY > 200) {
         this.state = 'gone';
         this.timerMs = 0;
         this.gameObject.setVisible(false);
+        this.rim?.setVisible(false);
         this.body.setVelocityY(0);
       }
-      return;
-    }
-
-    if (this.state === 'gone' && this.timerMs >= this.respawnMs) {
-      // Back to whichever resting state this platform has. An armed one
-      // returns to `armed`, though its `TriggerTrap` only ever fires once
-      // per attempt (`TriggerTrap.fire`) — so respawning is what keeps the
-      // level walkable after the trap has sprung, not a second ambush.
-      this.state = this.armed ? 'armed' : 'solid';
-      this.timerMs = 0;
-      this.gameObject.setPosition(this.originX, this.originY);
-      this.gameObject.setVisible(true);
     }
   }
 
+  private syncRim(): void {
+    this.rim?.setPosition(this.gameObject.x, this.gameObject.y - TILE_SIZE / 2);
+  }
+
   destroy(): void {
+    this.rim?.destroy();
     this.gameObject.destroy();
   }
 }

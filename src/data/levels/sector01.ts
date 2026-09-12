@@ -16,7 +16,7 @@ import type { LevelDef } from '@/gameplay/LevelDef';
  *   02 DROP    — four trapdoors, nothing else on the screen
  *   03 PATROL  — one spike that never hides, one that waits for you
  *   04 SHIFT   — the hole in the floor moves
- *   05 ASCENT  — up, and the exit is up there too
+ *   05 ASCENT  — up, and something comes down while you climb
  *   06 BOOT COMPLETE — all of it at once
  *
  * ONE SCREEN. Every level here is `LEVEL_WIDTH_TILES` wide and the camera
@@ -100,12 +100,6 @@ function trapdoor(id: string, col: number, width: number, row = 22): [
       width: TRAPDOOR_LEAD,
       height: 3,
       targetId: id,
-      // Visible: the faint line on the ground is the one tell that this
-      // stretch of floor is wired, and after the first level the player
-      // reads it. Hiding it would make the trap unlearnable rather than
-      // hard — the ambush spike in level 01 is the single exception the
-      // campaign allows itself.
-      visible: true,
     },
   ];
 }
@@ -139,11 +133,6 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         timing: AMBUSH_TIMING,
         loop: false,
       },
-      // `visible: false` — every other trigger in the campaign shows a
-      // faint ground marker; this one hides even that. It does not touch
-      // honesty (CLAUDE.md #4.2 requires telegraphing the lethal state, not
-      // the existence of a trigger) — the spike's own warning phase still
-      // fires before it can kill.
       {
         type: 'trigger',
         id: 'mspike-01-trigger',
@@ -152,7 +141,6 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         width: 2,
         height: 3,
         targetId: 'mspike-01',
-        visible: false,
       },
       // The sector's main idea, met once, at its plainest: a long clear
       // run-up, nothing else on screen, and the whole flash visible before
@@ -336,7 +324,33 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     // First exit off the ground in the campaign: the level's whole question
     // becomes "how do I get up there", asked before the player moves.
     exitRow: 7,
-    traps: [...trapdoor('flp-01', 12, 3)],
+    traps: [
+      ...trapdoor('flp-01', 12, 3),
+      // SOMETHING COMES DOWN WHILE YOU ARE CLIMBING. The level was a clean
+      // staircase and nothing else, which the owner found flat ("ascent
+      // недостаточно игривый, можно сделать, чтобы шип сверху упал, когда я
+      // забирался наверх"). Landing on the third tier arms a spike that
+      // drops onto the *next* one — visible for the whole 500ms fall, and
+      // lethal only once it has landed, so what it costs is the jump the
+      // player was about to make, not the jump they are in.
+      //
+      // `activeMs: 1200` is the actual puzzle: it sits there, on the tier
+      // the route needs, long enough that waiting is a real decision on a
+      // ledge four rows above a spike bed. Then it withdraws and the climb
+      // continues.
+      {
+        type: 'moving-spike',
+        id: 'mspike-01',
+        ambush: true,
+        fromCol: 21,
+        fromRow: 8,
+        toCol: 21,
+        toRow: 12,
+        timing: { idleMs: 900, warningMs: 500, activeMs: 1200, cooldownMs: 400 },
+        loop: false,
+      },
+      { type: 'trigger', id: 'mspike-01-trigger', col: 27, row: 14, width: 4, height: 2, targetId: 'mspike-01' },
+    ],
   },
   {
     id: 'sector-01-level-06',

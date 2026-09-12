@@ -407,7 +407,7 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     for (const trap of this.level.traps.updatable) trap.update(time, delta);
-    for (const pursuer of this.level.traps.pursuers) pursuer.update(this.player.x);
+    for (const pursuer of this.level.traps.pursuers) pursuer.update(this.player.x, delta);
     this.carryOnMovingPlatforms();
     this.tutorialHints?.update();
 

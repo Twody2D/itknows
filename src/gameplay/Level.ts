@@ -115,7 +115,7 @@ function groundTopKey(levelSeed: number, col: number): string {
  * `trigger` defs reference another trap's `id` — everything triggerable
  * must exist before triggers are wired to it.
  */
-function buildTraps(scene: Phaser.Scene, defs: TrapDef[]): BuiltTraps {
+function buildTraps(scene: Phaser.Scene, defs: TrapDef[], levelSeed: number, groundRow: number): BuiltTraps {
   const result: BuiltTraps = {
     updatable: [],
     lethalHazards: [],
@@ -220,9 +220,14 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[]): BuiltTraps {
             y,
             holdMs: def.holdMs,
             fallSpeed: def.fallSpeed,
-            respawnMs: def.respawnMs,
             armed: def.armed,
             warnMs: def.warnMs,
+            // The tile the ground on either side would have used at this
+            // column, so the trapdoor is not a different-looking patch of
+            // floor (owner: "сделай, чтобы яма, которая разрушается, не
+            // отличалась по внешнему виду с обычной землёй").
+            texture: groundTopKey(levelSeed, def.col + i),
+            asFloor: def.row === groundRow,
           });
           span.push(trap);
           result.fallingPlatforms.push(trap);
@@ -237,14 +242,30 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[]): BuiltTraps {
       }
 
       case 'moving-platform': {
-        const from = tileCenter(def.fromCol, def.fromRow);
-        const to = tileCenter(def.toCol, def.toRow);
+        // `fromCol` is the slab's LEFT edge — the same reading
+        // `LevelValidator` uses when it treats the slab as spanning
+        // `fromCol .. fromCol + width - 1`. It used to be centred on that
+        // one tile instead, so a fourteen-column slab reached seven
+        // columns back past its own start and sat on top of the ground
+        // beside the pit: the owner's "блоки друг на друге" on SHIFT was
+        // literally a slab overlapping the floor, and every wide platform
+        // in the campaign was drawn half a slab left of where the solver
+        // believed it was.
+        const widthPx = def.width * TILE_SIZE;
+        const leftEdgeOffset = widthPx / 2 - TILE_SIZE / 2;
+        const fromCentre = tileCenter(def.fromCol, def.fromRow);
+        const toCentre = tileCenter(def.toCol, def.toRow);
         const trap = new MovingPlatformTrap(scene, {
           id: def.id,
-          from,
-          to,
+          from: { x: fromCentre.x + leftEdgeOffset, y: fromCentre.y },
+          to: { x: toCentre.x + leftEdgeOffset, y: toCentre.y },
           travelMs: def.travelMs,
-          widthPx: def.width * TILE_SIZE,
+          widthPx,
+          // A slab riding along the ground row is not a platform the player
+          // boards, it is the floor with a hole walking through it — so it
+          // is drawn as floor, with the same bright lip every run of ground
+          // carries. Anywhere else it stays a mechanical slab.
+          asFloor: def.fromRow === groundRow && def.toRow === groundRow,
         });
         result.movingPlatforms.push(trap);
         result.all.push(trap);
@@ -269,7 +290,13 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[]): BuiltTraps {
 
       case 'pursuer': {
         const { x, y } = tileCenter(def.col, def.row);
-        const trap = new Pursuer(scene, { id: def.id, x, y, speedFactor: def.speedFactor });
+        const trap = new Pursuer(scene, {
+          id: def.id,
+          x,
+          y,
+          speedFactor: def.speedFactor,
+          startDelayMs: def.startDelayMs,
+        });
         result.pursuers.push(trap);
         result.lethalHazards.push(trap);
         result.all.push(trap);
@@ -410,7 +437,6 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[]): BuiltTraps {
       width: def.width * TILE_SIZE,
       height: def.height * TILE_SIZE,
       target,
-      visible: def.visible,
     });
     result.triggers.push(trap);
     result.all.push(trap);
@@ -460,10 +486,26 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
   // 2. Cost. A 260-tile level would otherwise mean ~260 static bodies and
   //    ~1300 images; this is a handful of bodies plus one fill sprite per
   //    run (the surface row stays per-column, for its texture variety).
+  // Columns a trapdoor is currently covering. The pit under one is real
+  // geometry (the solver reads it, and it is what the player falls into),
+  // but until the trap springs there is floor over it — so it must not get
+  // the drop-off treatment that marks a genuine edge.
+  const coveredCols = new Set<number>();
+  for (const trap of def.traps ?? []) {
+    if (trap.type !== 'falling-platform' || !trap.armed) continue;
+    for (let i = 0; i < trap.width; i++) coveredCols.add(trap.col + i);
+  }
+  const isOpenGap = (col: number): boolean => isInAnyGap(col, def.gaps) && !coveredCols.has(col);
+
   const fillRows = LEVEL_HEIGHT_TILES - def.groundRow - 1;
   for (const [fromCol, toCol] of groundRuns(def)) {
     for (let col = fromCol; col <= toCol; col++) {
-      const isGapEdge = isInAnyGap(col - 1, def.gaps) || isInAnyGap(col + 1, def.gaps);
+      // The warm drop-off sliver marks the lip of a hole. Next to a
+      // trapdoor there is no hole yet, and painting one there told the
+      // player exactly where the floor was about to leave (owner: "яма,
+      // которая разрушается, не должна отличаться по внешнему виду с
+      // обычной землёй").
+      const isGapEdge = isOpenGap(col - 1) || isOpenGap(col + 1);
       const { x, y } = tileCenter(col, def.groundRow);
       scene.add.image(x, y, isGapEdge ? 'tile-ground-edge' : groundTopKey(levelSeed, col));
     }
@@ -558,7 +600,7 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
     y: def.groundRow * TILE_SIZE,
   };
 
-  const traps = buildTraps(scene, def.traps ?? []);
+  const traps = buildTraps(scene, def.traps ?? [], levelSeed, def.groundRow);
 
   return {
     groundGroup,

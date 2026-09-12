@@ -35,14 +35,18 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     gaps: [[20, 23]],
     spikeColumns: [13, 14, 30, 31],
     platforms: [],
-    playerStartCol: 4,
+    // Seven columns clear of the drone, not three. Together with its own
+    // two-second hold that is the daylight the level opens with — long
+    // enough to look at the screen before running, which is the whole
+    // difference between a chase and an ambush from off-camera.
+    playerStartCol: 7,
     exitCol: 43,
     traps: [
       // Slower than the player by a wide margin and starting three columns
       // behind them: a clock, not a predator. Every spike pair and the pit
       // are things the player already knows how to solve — what is new is
       // that hesitating in front of them now has a price.
-      { type: 'pursuer', id: 'pursuer-01', col: 1, row: 21, speedFactor: 0.6 },
+      { type: 'pursuer', id: 'pursuer-01', col: 0, row: 21, speedFactor: 0.6 },
       { type: 'moving-spike', id: 'mspike-01', fromCol: 34, fromRow: 19, toCol: 40, toRow: 19, travelMs: 2400 },
     ],
   },
@@ -62,7 +66,7 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     playerStartCol: 4,
     exitCol: 43,
     traps: [
-      { type: 'pursuer', id: 'pursuer-01', col: 1, row: 21, speedFactor: 0.55 },
+      { type: 'pursuer', id: 'pursuer-01', col: 0, row: 21, speedFactor: 0.55 },
       {
         type: 'moving-platform',
         id: 'movp-01',
@@ -138,7 +142,7 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       // plain geometry: every beam here is a wait, and the wait is now
       // being charged for. The ground between them is still wide enough to
       // take that wait — just not twice.
-      { type: 'pursuer', id: 'pursuer-01', col: 1, row: 21, speedFactor: 0.55 },
+      { type: 'pursuer', id: 'pursuer-01', col: 0, row: 21, speedFactor: 0.55 },
       { type: 'laser', id: 'laser-01', col: 17, topRow: 16, bottomRow: 21 },
       { type: 'laser', id: 'laser-02', col: 24, topRow: 16, bottomRow: 21, initialIdleMs: 800 },
       { type: 'electric-floor', id: 'ef-01', col: 36, width: 5, row: 22 },

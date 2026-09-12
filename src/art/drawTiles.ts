@@ -131,19 +131,33 @@ export function drawSpikeTile(ctx: CanvasRenderingContext2D): void {
 }
 
 /**
- * A platform tile that looks structurally like ground but carries a visible
- * tell (a broken/dashed top edge instead of a solid one) — the honest
- * signal a "fake platform" trap must have (master-prompt §14).
+ * A fake platform: unmistakably the same *object* as `drawPlatformSlab`,
+ * unmistakably not solid. It is drawn as that slab, then hollowed out —
+ * the body is see-through, the bright cyan lip that says "stand here" is
+ * broken into dashes, and the underside is missing entirely.
+ *
+ * The earlier version shared no shape with a real platform at all (a dark
+ * box with two orange ticks on top), which made it unreadable rather than
+ * deceptive — the owner's reaction on seeing one was "не понял, что за
+ * платформы". A decoy only works if it is recognisably the thing it is
+ * imitating; the tell is what is wrong with it, not that it is unfamiliar
+ * (master-prompt §14 — "имеет понятный визуальный сигнал").
  */
 export function drawFakePlatformTile(ctx: CanvasRenderingContext2D): void {
   ctx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
-  ctx.fillStyle = hexToCss(PALETTE.metalDark, 0.85);
-  ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
-  ctx.fillStyle = hexToCss(PALETTE.dangerAlt, 0.7);
+  // The slab's own body, at less than half opacity: the background reads
+  // straight through it, which no real platform ever does.
+  ctx.fillStyle = hexToCss(PALETTE.metalMid, 0.4);
+  ctx.fillRect(0, 1, TILE_SIZE, TILE_SIZE - 2);
+  // The "safe to stand" lip, broken. A real slab's is one unbroken line.
+  ctx.fillStyle = hexToCss(PALETTE.cyanDim, 0.55);
   ctx.fillRect(0, 0, 3, 1);
   ctx.fillRect(5, 0, 3, 1);
-  ctx.fillStyle = hexToCss(PALETTE.metalEdge, 0.5);
-  ctx.fillRect(1, 4, TILE_SIZE - 2, 1);
+  // A warm hairline just under the lip — the same colour the level uses at
+  // the lip of a real hole, for the same reason.
+  ctx.fillStyle = hexToCss(PALETTE.dangerAlt, 0.35);
+  ctx.fillRect(0, 1, 3, 1);
+  ctx.fillRect(5, 1, 3, 1);
 }
 
 /** A mechanical platform tile — cyan trim signals "this one moves". */

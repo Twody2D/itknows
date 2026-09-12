@@ -97,20 +97,38 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
     name: 'FREEFALL',
     width: 48,
     groundRow: 22,
-    // Sector 01 taught the dropping floor at ground level, where falling
-    // through it was the lesson. Here the same stones are the only footing
-    // over a twenty-five-column pit, so the crossing is one committed
-    // rhythm rather than four separate jumps.
-    gaps: [[14, 38]],
+    // EVERY OTHER STONE HOLDS. The first cut of this level was four
+    // falling stones over a twenty-five-column pit and nothing else, which
+    // the owner played and rejected in the plainest terms: "все блоки прям
+    // под тобой падают, даже нет возможности увернуться". He is describing
+    // a level with exactly one solution and no room inside it — miss the
+    // rhythm once and the crossing is already lost, with nothing to do
+    // about it.
+    //
+    // Now the chain alternates, and it is continuous. Three solid slabs
+    // make a complete route across on their own — the solver proves it,
+    // because it counts no falling floor as a surface at all — and the two
+    // stones between them close the walkway into one unbroken run. So the
+    // level can be taken at a sprint, or slab to slab in three hops, and
+    // the stones decide which by whether the player keeps moving.
+    gaps: [[14, 34]],
     spikeColumns: [8, 9],
-    platforms: [],
+    platforms: [
+      { col: 17, row: 19, width: 3 },
+      { col: 23, row: 19, width: 3 },
+      { col: 29, row: 19, width: 3 },
+    ],
     playerStartCol: 2,
     exitCol: 43,
     traps: [
-      { type: 'falling-platform', id: 'flp-01', col: 14, row: 19, width: 3 },
-      { type: 'falling-platform', id: 'flp-02', col: 20, row: 19, width: 3 },
-      { type: 'falling-platform', id: 'flp-03', col: 26, row: 19, width: 3 },
-      { type: 'falling-platform', id: 'flp-04', col: 32, row: 19, width: 3 },
+      // Slotted between the slabs with no seam anywhere: 17..31 is one
+      // unbroken walkway, so running it flat out works — three columns take
+      // 270ms and a stone holds for 320ms. Stop or hesitate on one and it
+      // is gone, and the crossing becomes three deliberate hops between the
+      // slabs (30px each, against a 57.9px jump) with holes where the
+      // stones used to be.
+      { type: 'falling-platform', id: 'flp-01', col: 20, row: 19, width: 3 },
+      { type: 'falling-platform', id: 'flp-02', col: 26, row: 19, width: 3 },
     ],
   },
   {

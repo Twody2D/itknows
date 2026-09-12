@@ -36,8 +36,16 @@ export class LoopSpikeTrap {
     const body = this.gameObject.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
     body.setImmovable(true);
-    body.setSize(6, 4);
-    body.setOffset(2, 6);
+    // Centred, not floor-anchored. The 6x4-at-offset(2,6) box every
+    // ground-mounted spike uses sits at the *base* of the tile, which is
+    // the forgiving thing to do when the player runs into spikes standing
+    // point-up on a surface. On an arm swinging through open air it is
+    // wrong: the visible spike passed straight through the player and
+    // nothing happened, because the part of the tile that kills was four
+    // pixels below where the picture was (owner, playing: "когда
+    // крутящийся шип проходит прямо сквозь меня он не убивает").
+    body.setSize(6, 6);
+    body.setOffset(2, 2);
 
     // Every remaining waypoint, then back to the first — one full lap.
     const legs = [...rest, first].map((point) => ({

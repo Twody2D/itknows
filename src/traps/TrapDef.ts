@@ -70,7 +70,6 @@ export type TrapDef =
       width: number;
       holdMs?: number;
       fallSpeed?: number;
-      respawnMs?: number;
       /**
        * `true` turns this stretch of floor into an armed trapdoor: it no
        * longer reacts to being stood on, and instead goes when a `trigger`
@@ -102,10 +101,16 @@ export type TrapDef =
       width: number;
       height: number;
       targetId: string;
-      /** Default true (visible ground marker, same as every other trigger). False hides the marker for a true ambush — see `TriggerTrap`'s doc comment. */
-      visible?: boolean;
     }
-  | { type: 'pursuer'; id: string; col: number; row: number; speedFactor?: number }
+  | {
+      type: 'pursuer';
+      id: string;
+      col: number;
+      row: number;
+      speedFactor?: number;
+      /** Head start before it begins hunting, in ms — see `Pursuer`. Defaults to 2000. */
+      startDelayMs?: number;
+    }
   | { type: 'timing-gate'; id: string; col: number; topRow: number; bottomRow: number; timing?: TrapTiming }
   | { type: 'fake-exit'; id: string; col: number; row: number }
   | {

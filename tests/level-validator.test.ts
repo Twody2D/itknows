@@ -33,6 +33,29 @@ describe('validateLevel — rejects genuinely impossible geometry', () => {
     exitCol: 36,
   };
 
+  it('never counts a falling floor as footing, armed or not', () => {
+    // A falling platform leaves and does not come back, so a level that
+    // needs one to get across is a level that can strand the player
+    // (CLAUDE.md #4.4). The solver has to answer "can this be crossed with
+    // every falling floor already gone", and the only honest answer for a
+    // 100px pit bridged solely by falling stones is no.
+    const pit: [number, number] = [14, 23];
+    const bridged: LevelDef = {
+      ...base,
+      gaps: [pit],
+      traps: [
+        { type: 'falling-platform', id: 'flp-01', col: 14, row: 22, width: 5 },
+        { type: 'falling-platform', id: 'flp-02', col: 19, row: 22, width: 5, armed: true },
+      ],
+    };
+    expect(validateLevel(bridged).valid).toBe(false);
+
+    // The same pit with one real slab in the middle of it is fine: two
+    // 40px hops against a 57.9px jump.
+    const withSlab: LevelDef = { ...bridged, platforms: [{ col: 18, row: 22, width: 2 }] };
+    expect(validateLevel(withSlab).valid, validateLevel(withSlab).reason).toBe(true);
+  });
+
   it('rejects a gap far wider than any jump can cross', () => {
     const level: LevelDef = { ...base, gaps: [[10, 30]] }; // 210px gap
     const result = validateLevel(level);

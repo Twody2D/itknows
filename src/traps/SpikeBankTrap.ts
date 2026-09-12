@@ -22,10 +22,12 @@ export interface SpikeBankConfig {
  * so they stay in lockstep the same way `disappearing-platform`/
  * `falling-platform` already do for their own `width`.
  *
- * Deliberately NOT a copy of `AmbushSpikeTrap`'s true invisibility: this is
- * ordinary, reusable content the player is meant to learn to recognize, so
- * `idle` stays dimly visible (a real tell) rather than hidden, and it loops
- * on its own timer by default instead of waiting for a trigger.
+ * Hidden at `idle` and visible from the first frame of `warning`, when it
+ * starts rising — the whole rise is the telegraph, and `isLethal()` is
+ * false for all of it. It differs from `AmbushSpikeTrap` in what it is for
+ * rather than in what it shows: this loops on its own timer by default and
+ * is ordinary reusable content, where the ambush spike is a one-shot
+ * narrative device fired by a trigger.
  */
 export class SpikeBankTrap extends Trap {
   readonly gameObject: Phaser.Physics.Arcade.Sprite;
@@ -61,14 +63,21 @@ export class SpikeBankTrap extends Trap {
     this.moveTween = null;
     switch (phase) {
       case 'idle':
+        // Fully hidden, not dimly visible. It used to idle at alpha 0.35 as
+        // a standing tell; the owner asked for it gone after playing
+        // ("шипы, которые под землёй, заранее не были видны"). The honest
+        // warning is the `warning` phase below — the bank rises into view
+        // over `warningMs` and only `active` can kill, so what is
+        // telegraphed is the lethal state, which is what CLAUDE.md #4.2
+        // actually requires.
         this.gameObject.setPosition(this.x, this.yHidden);
-        this.gameObject.setAlpha(0.35);
+        this.gameObject.setAlpha(0);
         break;
       case 'warning':
         this.moveTween = this.scene.tweens.add({
           targets: this.gameObject,
           y: this.yLethal,
-          alpha: 1,
+          alpha: { from: 1, to: 1 },
           duration: this.timing.warningMs,
           ease: 'Sine.easeIn',
         });
