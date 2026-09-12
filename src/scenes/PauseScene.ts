@@ -56,6 +56,10 @@ export class PauseScene extends Phaser.Scene {
 
   create(): void {
     rebuildOnResize(this, this.pauseData);
+    // Idempotent, and deliberately repeated here: this scene restarts itself
+    // on a window resize, and its own shutdown handler below restarts the
+    // clocks — without this the card would come back still counting.
+    GameState.pauseClock();
     const { width, height } = this.scale;
 
     // cardW = max(456, W - 80), centred. The spec's prose states this as
@@ -67,7 +71,15 @@ export class PauseScene extends Phaser.Scene {
     this.cardX = Math.round((width - this.cardW) / 2);
 
     this.domText = new DomTextOverlay(this, 30);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.domText.destroy());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.domText.destroy();
+      // Every way out of this card ends the pause — resuming, restarting, or
+      // leaving for the menu — so the clocks restart here rather than in each
+      // of the three handlers. On a restart this lands after `startRun()`
+      // (`scene.stop()` queues the shutdown), which is exactly right: the
+      // fresh run then begins counting from the moment the card closed.
+      GameState.resumeClock();
+    });
 
     const dim = this.add.graphics();
     dim.fillStyle(PALETTE.bgVoid, 0.82);
@@ -117,12 +129,36 @@ export class PauseScene extends Phaser.Scene {
     return this.label(x, y, text, color, { font: 'pixel', sizePx, uppercase: true, ...extra }, originX, 0.5);
   }
 
-  private hit(x: number, y: number, w: number, h: number, onClick: () => void): void {
+  private hit(x: number, y: number, w: number, h: number, onClick: () => void): Phaser.GameObjects.Zone {
     const zone = this.add.zone(x + w / 2, y + h / 2, w, h).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
     zone.on('pointerup', () => {
       playSfx('uiClick');
       onClick();
     });
+    return zone;
+  }
+
+  /**
+   * Wires a button's own `paint(hover, press)` to the pointer, so every
+   * control on this card answers the finger the way the main menu's tiles do.
+   * The card used to draw all three actions once and never repaint them: a
+   * player moving across them got no feedback at all, which on a touch screen
+   * is the difference between "this is a button" and "this is a picture".
+   */
+  private interactive(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    paint: (hover: boolean, press: boolean) => void,
+    onClick: () => void,
+  ): void {
+    paint(false, false);
+    const zone = this.hit(x, y, w, h, onClick);
+    zone.on('pointerover', () => paint(true, false));
+    zone.on('pointerout', () => paint(false, false));
+    zone.on('pointerdown', () => paint(true, true));
+    zone.on('pointerup', () => paint(true, false));
   }
 
   private box(x: number, y: number, w: number, h: number, fill: number, border: number): void {
@@ -180,44 +216,116 @@ export class PauseScene extends Phaser.Scene {
     // Resume is the only light object on the screen — it can be hit without
     // reading anything, which is the point of the three-weight ladder.
     const primary = this.add.graphics();
-    primary.fillStyle(PALETTE.cyanDim, 1);
-    primary.fillRect(x, 122, COL_W, 4);
-    primary.fillGradientStyle(PALETTE.cyanBright, PALETTE.cyanBright, PALETTE.cyan, PALETTE.cyan, 1);
-    primary.fillRect(x, 66, COL_W, 56);
-    primary.lineStyle(2, PALETTE.white, 1);
-    primary.strokeRect(x + 1, 67, COL_W - 2, 54);
-    addPlayTriangle(this.domText, x + 23, 94, 18, 24, hexToCss(PALETTE.bgVoid));
+    const playArrow = addPlayTriangle(this.domText, x + 23, 94, 18, 24, hexToCss(PALETTE.bgVoid));
     // 20px, not the 24px a first pass would reach for: the spec measured the
     // word at 185px there, against a 232px content box already spending 42px
     // on padding, arrow and gap — the last letter clipped.
-    this.label(x + 42, 94, t('resume'), PALETTE.bgVoid, { sizePx: 20, bold: true, uppercase: true });
-    this.hit(x, 66, COL_W, 56, () => this.resume());
+    const resumeLabel = this.label(x + 42, 94, t('resume'), PALETTE.bgVoid, {
+      sizePx: 20,
+      bold: true,
+      uppercase: true,
+    });
+    this.interactive(
+      x,
+      66,
+      COL_W,
+      56,
+      (hover, press) => {
+        const dy = press ? 3 : 0;
+        primary.clear();
+        // Pressing takes the sole away entirely, so the face lands on the
+        // surface it was standing on — the same push the menu gives PLAY.
+        if (!press) {
+          primary.fillStyle(hover ? PALETTE.cyanSoleHover : PALETTE.cyanDim, 1);
+          primary.fillRect(x, 122, COL_W, 4);
+        }
+        const top = press ? PALETTE.cyan : hover ? PALETTE.cyanGlow : PALETTE.cyanBright;
+        const bottom = press ? PALETTE.cyanPress : hover ? PALETTE.cyanBright : PALETTE.cyan;
+        primary.fillGradientStyle(top, top, bottom, bottom, 1);
+        primary.fillRect(x, 66 + dy, COL_W, 56);
+        primary.lineStyle(2, press ? PALETTE.cyanEdge : PALETTE.white, 1);
+        primary.strokeRect(x + 1, 67 + dy, COL_W - 2, 54);
+        playArrow.setPosition(x + 23, 94 + dy);
+        resumeLabel.setPosition(x + 42, 94 + dy);
+      },
+      () => this.resume(),
+    );
 
-    this.box(x, 134, COL_W, 44, PALETTE.metalMid, PALETTE.metalEdge);
-    const sole = this.add.graphics();
-    sole.fillStyle(PALETTE.metalDark, 1);
-    sole.fillRect(x, 176, COL_W, 2);
-    const arrow = this.add.graphics();
-    arrow.fillStyle(PALETTE.cyan, 1);
-    arrow.fillRect(x + 12, 148, 16, 3);
-    arrow.fillRect(x + 12, 148, 3, 10);
-    arrow.fillRect(x + 12, 161, 16, 3);
-    arrow.fillRect(x + 25, 154, 3, 10);
-    this.label(x + 38, 149, t('restart'), PALETTE.white, { sizePx: 15, bold: true, uppercase: true, lineHeight: 1.05 });
-    this.label(x + 38, 164, t('pauseRestartNote'), PALETTE.labelMuted, { sizePx: 10, lineHeight: 1.1 });
-    this.hit(x, 134, COL_W, 44, () => this.restart());
+    const restart = this.add.graphics();
+    const restartArrow = this.add.graphics();
+    const restartLabel = this.label(x + 38, 149, t('restart'), PALETTE.white, {
+      sizePx: 15,
+      bold: true,
+      uppercase: true,
+      lineHeight: 1.05,
+    });
+    const restartNote = this.label(x + 38, 164, t('pauseRestartNote'), PALETTE.labelMuted, {
+      sizePx: 10,
+      lineHeight: 1.1,
+    });
+    this.interactive(
+      x,
+      134,
+      COL_W,
+      44,
+      (hover, press) => {
+        const dy = press ? 2 : 0;
+        restart.clear();
+        if (!press) {
+          restart.fillStyle(hover ? PALETTE.cyanDim : PALETTE.metalDark, 1);
+          restart.fillRect(x, 178, COL_W, 2);
+        }
+        restart.fillStyle(press ? PALETTE.metalDark : hover ? PALETTE.panelHover : PALETTE.metalMid, 1);
+        restart.fillRect(x, 134 + dy, COL_W, 44);
+        restart.lineStyle(1, press ? PALETTE.cyanDim : hover ? PALETTE.cyan : PALETTE.metalEdge, 1);
+        restart.strokeRect(x + 0.5, 134.5 + dy, COL_W - 1, 43);
+
+        restartArrow.clear();
+        restartArrow.fillStyle(hover ? PALETTE.white : PALETTE.cyan, 1);
+        restartArrow.fillRect(x + 12, 148 + dy, 16, 3);
+        restartArrow.fillRect(x + 12, 148 + dy, 3, 10);
+        restartArrow.fillRect(x + 12, 161 + dy, 16, 3);
+        restartArrow.fillRect(x + 25, 154 + dy, 3, 10);
+
+        restartLabel.setPosition(x + 38, 149 + dy);
+        restartNote.setPosition(x + 38, 164 + dy);
+      },
+      () => this.restart(),
+    );
 
     // The darkest step. Leaving costs the run, so it must not look like
-    // something the screen is offering.
-    this.box(x, 186, COL_W, 32, PALETTE.bgGraphite, PALETTE.metalMid);
+    // something the screen is offering — it answers the pointer like the rest
+    // of the card, but only as far as the muted end of the palette.
+    const exit = this.add.graphics();
     const door = this.add.graphics();
-    door.fillStyle(PALETTE.labelMuted, 1);
-    door.fillRect(x + 12, 196, 14, 2);
-    door.fillRect(x + 12, 196, 2, 12);
-    door.fillRect(x + 24, 196, 2, 12);
-    door.fillRect(x + 12, 204, 14, 4);
-    this.label(x + 36, 202, t('mainMenu'), PALETTE.textMuted, { sizePx: 13, bold: true, uppercase: true });
-    this.hit(x, 186, COL_W, 32, () => this.toMainMenu());
+    const exitLabel = this.label(x + 36, 202, t('mainMenu'), PALETTE.textMuted, {
+      sizePx: 13,
+      bold: true,
+      uppercase: true,
+    });
+    this.interactive(
+      x,
+      186,
+      COL_W,
+      32,
+      (hover, press) => {
+        exit.clear();
+        exit.fillStyle(press ? PALETTE.bgVoid : hover ? PALETTE.metalDark : PALETTE.bgGraphite, 1);
+        exit.fillRect(x, 186, COL_W, 32);
+        exit.lineStyle(1, hover ? PALETTE.textMuted : PALETTE.metalMid, 1);
+        exit.strokeRect(x + 0.5, 186.5, COL_W - 1, 31);
+
+        door.clear();
+        door.fillStyle(hover ? PALETTE.white : PALETTE.labelMuted, 1);
+        door.fillRect(x + 12, 196, 14, 2);
+        door.fillRect(x + 12, 196, 2, 12);
+        door.fillRect(x + 24, 196, 2, 12);
+        door.fillRect(x + 12, 204, 14, 4);
+
+        exitLabel.setColor(hexToCss(hover ? PALETTE.white : PALETTE.textMuted));
+      },
+      () => this.toMainMenu(),
+    );
   }
 
   // ---- right column: the numbers a restart decision is made on -------------
@@ -292,15 +400,22 @@ export class PauseScene extends Phaser.Scene {
   }
 
   private buildToggle(x: number, y: number, w: number, title: string, value: () => boolean, toggle: () => void): void {
-    this.box(x, y, w, 24, PALETTE.bgGraphite, PALETTE.metalMid);
     this.label(x + 6, y + 12, title, PALETTE.white, { sizePx: 10, bold: true, uppercase: true });
 
     const trackW = w >= 120 ? 26 : 20;
     const knob = w >= 120 ? 12 : 10;
     const trackX = x + w - 6 - trackW;
     const trackY = y + 12 - Math.round((knob + 2) / 2);
+    const frame = this.add.graphics();
     const g = this.add.graphics();
+    let hovered = false;
     const paint = (): void => {
+      frame.clear();
+      frame.fillStyle(hovered ? PALETTE.metalDark : PALETTE.bgGraphite, 1);
+      frame.fillRect(x, y, w, 24);
+      frame.lineStyle(1, hovered ? PALETTE.cyan : PALETTE.metalMid, 1);
+      frame.strokeRect(x + 0.5, y + 0.5, w - 1, 23);
+
       g.clear();
       const on = value();
       g.fillStyle(on ? PALETTE.cyanDim : PALETTE.metalMid, 1);
@@ -309,8 +424,16 @@ export class PauseScene extends Phaser.Scene {
       g.fillRect(on ? trackX + trackW - knob - 1 : trackX + 1, trackY + 1, knob, knob);
     };
     paint();
-    this.hit(x, y, w, 24, () => {
+    const zone = this.hit(x, y, w, 24, () => {
       toggle();
+      paint();
+    });
+    zone.on('pointerover', () => {
+      hovered = true;
+      paint();
+    });
+    zone.on('pointerout', () => {
+      hovered = false;
       paint();
     });
   }

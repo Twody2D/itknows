@@ -3,6 +3,7 @@ import { PALETTE } from '@/config/palette';
 import { hexToCss } from '@/utils/color';
 import { playSfx } from '@/audio/SfxManager';
 import type { DomTextOverlay } from './DomTextOverlay';
+import { addChevronGlyph } from './glyphs';
 
 /**
  * The chrome every full-screen overlay in the Claude Design mockups shares
@@ -33,18 +34,22 @@ export function buildScreenTopbar(scene: Phaser.Scene, domText: DomTextOverlay, 
   bg.fillRect(0, SCREEN_TOPBAR_H - 1, width, 1);
 
   const chev = scene.add.graphics();
-  chev.fillStyle(PALETTE.metalMid, 1);
-  chev.lineStyle(1, PALETTE.metalEdge, 1);
-  chev.fillRect(8, 4, 20, 20);
-  chev.strokeRect(8, 4, 20, 20);
-  chev.lineStyle(2, PALETTE.cyan, 1);
-  chev.beginPath();
-  chev.moveTo(21, 9);
-  chev.lineTo(15, 14);
-  chev.lineTo(21, 19);
-  chev.strokePath();
+  // The arrow itself is a DOM glyph: the box around it is axis-aligned and
+  // survives the canvas upscale, the diagonal inside it does not.
+  const arrow = addChevronGlyph(domText, 18, 14, 11, hexToCss(PALETTE.cyan));
+  const paintBack = (hover: boolean): void => {
+    chev.clear();
+    chev.fillStyle(hover ? PALETTE.panelHover : PALETTE.metalMid, 1);
+    chev.lineStyle(1, hover ? PALETTE.cyan : PALETTE.metalEdge, 1);
+    chev.fillRect(8, 4, 20, 20);
+    chev.strokeRect(8, 4, 20, 20);
+    arrow.setColor(hexToCss(hover ? PALETTE.white : PALETTE.cyan));
+  };
+  paintBack(false);
 
   const zone = scene.add.zone(18, 14, 32, 28).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+  zone.on('pointerover', () => paintBack(true));
+  zone.on('pointerout', () => paintBack(false));
   zone.on('pointerup', () => {
     playSfx('uiClick');
     opts.onBack();

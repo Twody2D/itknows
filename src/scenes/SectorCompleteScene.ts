@@ -3,9 +3,10 @@ import { PALETTE } from '@/config/palette';
 import { hexToCss } from '@/utils/color';
 import { t } from '@/i18n/ui';
 import { formatMmSs } from '@/utils/formatTime';
-import { PixelLabel } from '@/ui/PixelLabel';
 import { PixelButton } from '@/ui/PixelButton';
 import { MenuTile } from '@/ui/MenuTile';
+import { DomTextOverlay, type DomTextHandle, type DomTextOptions } from '@/ui/DomTextOverlay';
+import { addPlayTriangle } from '@/ui/glyphs';
 import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
 import { fadeIn } from '@/ui/SceneFade';
 import { personalityTag } from '@/ai/SystemPersonality';
@@ -27,8 +28,18 @@ export interface SectorCompleteData {
   nextLevelId: string | undefined;
 }
 
-/** Right column (SYSTEM line + progress/version) only earns its keep once there's room for it — same 560px threshold `MENU_LAYOUT.systemLine` uses on the main menu. */
-const RIGHT_COLUMN_MIN_WIDTH = 560;
+/**
+ * Where the right column (SYSTEM line + progress/version) starts, and the
+ * narrowest it may be. The column used to be hung off the right edge at
+ * `width - 128`, which only clears the screen's own content at 608px or
+ * more: at 598 it landed on top of the leaderboard panel and the ДАЛЬШЕ
+ * button, and the progress readout printed straight through them. It is
+ * pinned past the content instead and takes whatever is left, exactly the
+ * way the shop's own SYSTEM column is placed.
+ */
+const RIGHT_COLUMN_X = 488;
+const RIGHT_COLUMN_MIN_W = 86;
+const RIGHT_COLUMN_MIN_WIDTH = RIGHT_COLUMN_X + RIGHT_COLUMN_MIN_W + 8;
 
 /**
  * The one natural meta-break in the campaign (master-prompt §14/§27): a
@@ -48,11 +59,20 @@ const RIGHT_COLUMN_MIN_WIDTH = 560;
  * coordinated staggered reveal that hits the same beats without an input
  * buffer for the pre-interactive window (the buttons are just interactive
  * from the start).
+ *
+ * Its type moved to the DOM layer (2026-09-12) along with every other
+ * screen's. This was the last one still setting its labels in the canvas
+ * bitmap font, and it showed: at the sizes this layout has room for, "МЕНЮ"
+ * and the "СЕКТОР 2" line under ДАЛЬШЕ were sub-pixel mush by the time the
+ * 270px canvas had been blown up to the viewport.
  */
 export class SectorCompleteScene extends Phaser.Scene {
   private sectorData!: SectorCompleteData;
   private sectorId!: string;
+  private domText!: DomTextOverlay;
   private leaderboardBody!: Phaser.GameObjects.Container;
+  /** DOM labels belonging to the leaderboard rows — cleared whenever the board is re-rendered (signing in re-runs the load). */
+  private leaderboardLabels: DomTextHandle[] = [];
 
   constructor() {
     super('SectorCompleteScene');
@@ -82,6 +102,12 @@ export class SectorCompleteScene extends Phaser.Scene {
     fadeIn(this);
     buildRadialGridBackdrop(this, width, height, 'result-backdrop', 0.5, 0.2);
 
+    // The scene instance is reused across restarts (a window resize rebuilds
+    // it), so anything held from the previous run points at destroyed objects.
+    this.leaderboardLabels = [];
+    this.domText = new DomTextOverlay(this, 20);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.domText.destroy());
+
     const reveal: Phaser.GameObjects.GameObject[] = [];
     reveal.push(this.buildBanner(width));
     reveal.push(this.buildTimeBlock());
@@ -96,7 +122,13 @@ export class SectorCompleteScene extends Phaser.Scene {
     void this.loadLeaderboard();
   }
 
-  /** Fades every block in with a small upward slide, staggered so the eye lands on TIME first — the buttons fade in last but are clickable immediately, no input buffer (see class doc comment). */
+  /**
+   * Fades every block in with a small upward slide, staggered so the eye
+   * lands on TIME first — the buttons fade in last but are clickable
+   * immediately, no input buffer (see class doc comment). The labels sit
+   * outside the display list, so they come up together on their own layer
+   * over the same window rather than sliding block by block.
+   */
   private playRevealAnimation(blocks: Phaser.GameObjects.GameObject[], buttons: Phaser.GameObjects.GameObject[]): void {
     const withAlpha = blocks as unknown as Array<{ alpha: number; y: number }>;
     for (const block of withAlpha) {
@@ -121,23 +153,58 @@ export class SectorCompleteScene extends Phaser.Scene {
       delay: 420,
       ease: 'Sine.easeOut',
     });
+
+    this.domText.fadeInLayer(520);
   }
 
-  private label(
+  // ---- type ------------------------------------------------------------
+
+  /** The technical face: banner, counters, SYSTEM's own readouts — everything the mockups set in the mono type. */
+  private mono(
     x: number,
     y: number,
     text: string,
     color: number,
-    scale: number,
+    sizePx: number,
     origin: [number, number] = [0, 0],
-    wordWrapWidth?: number,
-  ): PixelLabel {
-    return new PixelLabel(this, x, y, text, {
-      color: hexToCss(color),
-      strokeColor: hexToCss(PALETTE.outline),
-      scale,
-      ...(wordWrapWidth !== undefined ? { wordWrapWidth } : {}),
-    }).setOrigin(origin[0], origin[1]);
+    extra: Partial<DomTextOptions> = {},
+  ): DomTextHandle {
+    return this.domText.add(
+      x,
+      y,
+      text,
+      { color: hexToCss(color), font: 'pixel', sizePx, letterSpacing: 1, uppercase: true, ...extra },
+      origin[0],
+      origin[1],
+    );
+  }
+
+  /** The reading face: button labels, and only those — everything else on this screen is a readout. */
+  private prose(
+    x: number,
+    y: number,
+    text: string,
+    color: number,
+    sizePx: number,
+    origin: [number, number] = [0, 0],
+  ): DomTextHandle {
+    return this.domText.add(
+      x,
+      y,
+      text,
+      { color: hexToCss(color), sizePx, bold: true, uppercase: true },
+      origin[0],
+      origin[1],
+    );
+  }
+
+  /** Largest size up to `max` at which `text` really fits `available` virtual px, measured in the style it will be drawn in. */
+  private fit(text: string, available: number, max: number, style: Partial<DomTextOptions>): number {
+    const probe = this.domText.add(-1000, -1000, text, { color: 'transparent', sizePx: max, uppercase: true, ...style }, 0, 0);
+    const measured = probe.width;
+    probe.destroy();
+    if (measured <= 0 || measured <= available) return max;
+    return Math.max(8, Math.floor((max * available) / measured));
   }
 
   private panel(x: number, y: number, w: number, h: number, borderColor: number, fillColor: number = PALETTE.metalDark): Phaser.GameObjects.Graphics {
@@ -149,6 +216,8 @@ export class SectorCompleteScene extends Phaser.Scene {
     return g;
   }
 
+  // ---- blocks ----------------------------------------------------------
+
   private buildBanner(width: number): Phaser.GameObjects.Container {
     const container = this.add.container(0, 0);
     const g = this.add.graphics();
@@ -159,14 +228,23 @@ export class SectorCompleteScene extends Phaser.Scene {
     container.add(g);
 
     const sector = sectorNumberOf(this.sectorData.completedLevelId);
-    container.add(
-      this.label(12, 16, `${t('resultTitle').toUpperCase()} ${sector}`, PALETTE.white, 2, [0, 0.5]),
-    );
-
-    const dot = this.add.circle(width - 100, 16, 2.5, PALETTE.cyan, 1);
+    // Built right to left: the status token takes its own measured width and
+    // the dot is placed against it, instead of both sitting at offsets that
+    // only held for one particular glyph width.
+    const status = this.mono(width - 12, 16, 'SYSTEM ONLINE', PALETTE.cyan, 11, [1, 0.5]);
+    const dotX = width - 12 - status.width - 10;
+    // A square, like the same indicator on the main menu: a 5px circle drawn
+    // into the canvas comes out of the nearest-neighbour upscale as a lumpy
+    // blob, and at this size the shape carries no meaning a square doesn't.
+    const dot = this.add.rectangle(dotX, 16, 5, 5, PALETTE.cyan, 1);
     this.tweens.add({ targets: dot, alpha: { from: 0.5, to: 1 }, duration: 1200, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     container.add(dot);
-    container.add(this.label(width - 92, 16, 'SYSTEM ONLINE', PALETTE.cyan, 1, [0, 0.5]));
+
+    const title = `${t('resultTitle').toUpperCase()} ${sector}`;
+    this.mono(12, 16, title, PALETTE.white, this.fit(title, dotX - 24, 19, { font: 'pixel', letterSpacing: 2, bold: true }), [0, 0.5], {
+      letterSpacing: 2,
+      bold: true,
+    });
 
     return container;
   }
@@ -174,8 +252,8 @@ export class SectorCompleteScene extends Phaser.Scene {
   private buildTimeBlock(): Phaser.GameObjects.Container {
     const container = this.add.container(0, 0);
     container.add(this.panel(16, 44, 216, 60, PALETTE.cyanDim, PALETTE.bgGraphite));
-    container.add(this.label(28, 52, t('resultTime').toUpperCase(), PALETTE.labelMuted, 1));
-    container.add(this.label(28, 68, formatMmSs(this.sectorData.timeMs), PALETTE.cyan, 3));
+    this.mono(28, 54, t('resultTime').toUpperCase(), PALETTE.labelMuted, 10, [0, 0.5]);
+    this.mono(28, 82, formatMmSs(this.sectorData.timeMs), PALETTE.cyan, 30, [0, 0.5], { bold: true, lineHeight: 1 });
     return container;
   }
 
@@ -183,27 +261,28 @@ export class SectorCompleteScene extends Phaser.Scene {
     const container = this.add.container(0, 0);
     const noDeaths = this.sectorData.deaths === 0;
     const accent = noDeaths ? PALETTE.patrolVisor : PALETTE.dangerAlt;
+    const label = noDeaths ? t('resultNoDeaths').toUpperCase() : t('resultDeaths').toUpperCase();
 
     container.add(this.panel(16, 112, 104, 56, noDeaths ? PALETTE.patrolVisor : PALETTE.metalEdge, PALETTE.bgGraphite));
-    container.add(this.label(26, 120, noDeaths ? t('resultNoDeaths').toUpperCase() : t('resultDeaths').toUpperCase(), PALETTE.labelMuted, 1));
-    container.add(this.label(26, 136, String(this.sectorData.deaths), accent, 2));
+    this.mono(26, 124, label, PALETTE.labelMuted, this.fit(label, 84, 10, { font: 'pixel', letterSpacing: 1 }), [0, 0.5]);
+    this.mono(26, 148, String(this.sectorData.deaths), accent, 20, [0, 0.5], { bold: true, lineHeight: 1 });
     return container;
   }
 
   private buildBestBlock(previousBestMs: number | null, isNewRecord: boolean): Phaser.GameObjects.Container {
     const container = this.add.container(0, 0);
     container.add(this.panel(128, 112, 104, 56, PALETTE.goldDim, PALETTE.bgGraphite));
-    container.add(this.label(138, 120, t('resultBest').toUpperCase(), PALETTE.labelMuted, 1));
+    this.mono(138, 124, t('resultBest').toUpperCase(), PALETTE.labelMuted, 10, [0, 0.5]);
 
     const bestToShow = isNewRecord ? this.sectorData.timeMs : (previousBestMs ?? this.sectorData.timeMs);
-    container.add(this.label(138, 136, formatMmSs(bestToShow), PALETTE.reward, 2));
+    this.mono(138, 148, formatMmSs(bestToShow), PALETTE.reward, 20, [0, 0.5], { bold: true, lineHeight: 1 });
 
     if (isNewRecord && previousBestMs !== null) {
       const badge = this.add.graphics();
       badge.fillStyle(PALETTE.reward, 1);
-      badge.fillRect(128, 104, 44, 12);
+      badge.fillRect(128, 102, 52, 14);
       container.add(badge);
-      container.add(this.label(150, 110, t('resultNewBest').toUpperCase(), PALETTE.bgVoid, 1, [0.5, 0.5]));
+      this.mono(154, 109, t('resultNewBest').toUpperCase(), PALETTE.bgVoid, 9, [0.5, 0.5], { bold: true });
 
       this.tweens.add({
         targets: badge,
@@ -219,12 +298,13 @@ export class SectorCompleteScene extends Phaser.Scene {
   private buildCreditsBlock(): Phaser.GameObjects.Container {
     const container = this.add.container(0, 0);
     container.add(this.panel(16, 206, 104, 48, PALETTE.goldDim, PALETTE.bgGraphite));
-    container.add(this.label(60, 214, t('resultCreditsEarned').toUpperCase(), PALETTE.goldEdge, 1, [0.5, 0]));
+    const label = t('resultCreditsEarned').toUpperCase();
+    this.mono(68, 217, label, PALETTE.goldEdge, this.fit(label, 92, 9, { font: 'pixel', letterSpacing: 1 }), [0.5, 0.5]);
 
-    const coin = this.add.circle(38, 232, 6, PALETTE.reward, 1);
+    const coin = this.add.circle(38, 234, 6, PALETTE.reward, 1);
     coin.setStrokeStyle(1, PALETTE.goldEdge, 1);
     container.add(coin);
-    container.add(this.label(50, 232, `+${EARN_AMOUNTS.sectorComplete}`, PALETTE.reward, 2, [0, 0.5]));
+    this.mono(50, 234, `+${EARN_AMOUNTS.sectorComplete}`, PALETTE.reward, 20, [0, 0.5], { bold: true, lineHeight: 1 });
     return container;
   }
 
@@ -238,11 +318,25 @@ export class SectorCompleteScene extends Phaser.Scene {
     header.fillStyle(PALETTE.bgIndigo, 1);
     header.fillRect(248, 44, 232, 20);
     container.add(header);
-    container.add(this.label(256, 54, `${t('resultLeaderboardTitle').toUpperCase()} · ${sectorNumberOf(this.sectorData.completedLevelId)}`, PALETTE.cyan, 1, [0, 0.5]));
+    this.mono(
+      256,
+      54,
+      `${t('resultLeaderboardTitle').toUpperCase()} · ${sectorNumberOf(this.sectorData.completedLevelId)}`,
+      PALETTE.cyan,
+      10,
+      [0, 0.5],
+    );
 
     this.leaderboardBody = this.add.container(0, 0);
     container.add(this.leaderboardBody);
     return container;
+  }
+
+  /** Both halves of the board — the canvas stripes and the DOM labels — so a second load (after signing in) replaces the first instead of printing over it. */
+  private clearLeaderboard(): void {
+    this.leaderboardBody.removeAll(true);
+    for (const label of this.leaderboardLabels) label.destroy();
+    this.leaderboardLabels = [];
   }
 
   private leaderboardRow(y: number, rank: string, name: string, value: string, colors: { rank: number; name: number; value: number }, bg?: number): void {
@@ -250,15 +344,19 @@ export class SectorCompleteScene extends Phaser.Scene {
       const stripe = this.add.rectangle(248, y, 232, 22, bg, 1).setOrigin(0, 0);
       this.leaderboardBody.add(stripe);
     }
-    this.leaderboardBody.add(this.label(258, y + 11, rank, colors.rank, 1, [0, 0.5]));
-    this.leaderboardBody.add(this.label(282, y + 11, name.slice(0, 14), colors.name, 1, [0, 0.5]));
-    this.leaderboardBody.add(this.label(468, y + 11, value, colors.value, 1, [1, 0.5]));
+    this.leaderboardLabels.push(
+      this.mono(258, y + 11, rank, colors.rank, 10, [0, 0.5]),
+      this.mono(282, y + 11, name.slice(0, 14), colors.name, 10, [0, 0.5], { uppercase: false }),
+      this.mono(468, y + 11, value, colors.value, 10, [1, 0.5]),
+    );
   }
 
   private async loadLeaderboard(): Promise<void> {
+    this.clearLeaderboard();
+
     if (!YandexGamesService.isAvailable()) {
-      this.leaderboardBody.add(
-        this.label(364, 90, t('resultLeaderboardOffline').toUpperCase(), PALETTE.labelMuted, 1, [0.5, 0.5]),
+      this.leaderboardLabels.push(
+        this.mono(364, 110, t('resultLeaderboardOffline').toUpperCase(), PALETTE.labelMuted, 10, [0.5, 0.5]),
       );
       return;
     }
@@ -277,7 +375,7 @@ export class SectorCompleteScene extends Phaser.Scene {
     }
 
     if (entries.length === 0) {
-      this.leaderboardBody.add(this.label(364, 90, '—', PALETTE.labelMuted, 1, [0.5, 0.5]));
+      this.leaderboardLabels.push(this.mono(364, 110, '—', PALETTE.labelMuted, 10, [0.5, 0.5]));
     }
 
     const playerShown = playerEntry !== null && entries.some((e) => e.rank === playerEntry.rank);
@@ -291,9 +389,7 @@ export class SectorCompleteScene extends Phaser.Scene {
         PALETTE.systemDim,
       );
     } else if (!playerEntry) {
-      this.leaderboardBody.add(
-        this.buildSignInLink(y + 10),
-      );
+      this.buildSignInLink(y + 12);
     }
   }
 
@@ -309,39 +405,64 @@ export class SectorCompleteScene extends Phaser.Scene {
     );
   }
 
-  /** A guest sees the board (reading one needs no auth) but not their own row — this is the one door into changing that, same `requestAuthorization()` `SettingsScene` uses. */
-  private buildSignInLink(y: number): Phaser.GameObjects.GameObject {
-    const link = this.label(364, y, t('resultSignIn').toUpperCase(), PALETTE.cyan, 1, [0.5, 0.5]);
-    link.setInteractive({ useHandCursor: true });
-    link.on('pointerup', () => {
+  /**
+   * A guest sees the board (reading one needs no auth) but not their own row
+   * — this is the one door into changing that, same `requestAuthorization()`
+   * `SettingsScene` uses. The label is DOM text, which takes no pointer
+   * events of its own, so the hit area is a canvas zone sized to it.
+   */
+  private buildSignInLink(y: number): void {
+    const link = this.mono(364, y, t('resultSignIn').toUpperCase(), PALETTE.cyan, 10, [0.5, 0.5]);
+    this.leaderboardLabels.push(link);
+
+    const zone = this.add
+      .zone(364, y, Math.max(60, link.width + 16), 20)
+      .setOrigin(0.5, 0.5)
+      .setInteractive({ useHandCursor: true });
+    zone.on('pointerover', () => link.setColor(hexToCss(PALETTE.white)));
+    zone.on('pointerout', () => link.setColor(hexToCss(PALETTE.cyan)));
+    zone.on('pointerup', () => {
       void YandexGamesService.requestAuthorization().then((ok) => {
         if (ok) void this.loadLeaderboard();
       });
     });
-    return link;
+    this.leaderboardBody.add(zone);
   }
 
   // ---- right column (wide screens only) --------------------------------
 
   private buildRightColumn(width: number): Phaser.GameObjects.Container {
-    const x = width - 128;
+    const x = RIGHT_COLUMN_X;
+    const colW = width - 8 - x;
     const container = this.add.container(0, 0);
 
-    container.add(this.panel(x, 44, 116, 124, PALETTE.system, PALETTE.systemDim));
-    container.add(this.label(x + 8, 52, 'SYSTEM', PALETTE.system, 1));
+    container.add(this.panel(x, 44, colW, 124, PALETTE.system, PALETTE.systemDim));
+    this.mono(x + 8, 54, 'SYSTEM', PALETTE.system, 10, [0, 0.5]);
 
     const oldTag = personalityTag(this.sectorData.completedLevelId);
     const newTag = this.sectorData.nextLevelId ? personalityTag(this.sectorData.nextLevelId) : oldTag;
-    const systemLine =
-      newTag !== oldTag ? `${t('resultSystemUpdate')} SYSTEM ${newTag}` : `SYSTEM ${oldTag}`;
-    container.add(this.label(x + 8, 68, systemLine.toUpperCase(), PALETTE.systemLight, 1, [0, 0], 100));
+    const systemLine = (newTag !== oldTag ? `${t('resultSystemUpdate')} SYSTEM ${newTag}` : `SYSTEM ${oldTag}`).toUpperCase();
+    // Sized so the longest word still fits the column whole — a word wider
+    // than the column would otherwise be split mid-word by the browser's
+    // last-resort wrap.
+    const lineStyle: Partial<DomTextOptions> = { font: 'pixel', uppercase: true, lineHeight: 1.5, letterSpacing: 0 };
+    const lineW = colW - 16;
+    this.mono(
+      x + 8,
+      66,
+      systemLine,
+      PALETTE.systemLight,
+      this.domText.wordFitSize(systemLine, { color: 'transparent', ...lineStyle }, lineW, 11),
+      [0, 0],
+      { ...lineStyle, wordWrapWidth: lineW, clampLines: 4 },
+    );
 
     const completed = SaveService.getCompletedLevels().length;
     const total = getAllLevels().length;
-    container.add(this.panel(x, 180, 116, 74, PALETTE.metalEdge, PALETTE.bgGraphite));
-    container.add(this.label(x + 8, 188, t('resultProgress').toUpperCase(), PALETTE.labelMuted, 1));
-    container.add(this.label(x + 8, 202, `${completed} / ${total}`, PALETTE.white, 1));
-    container.add(this.label(x + 8, 240, `v${__APP_VERSION__}`, PALETTE.systemMuted, 1));
+    container.add(this.panel(x, 180, colW, 74, PALETTE.metalEdge, PALETTE.bgGraphite));
+    this.mono(x + 8, 192, t('resultProgress').toUpperCase(), PALETTE.labelMuted, 9, [0, 0.5]);
+    this.mono(x + 8, 210, `${completed} / ${total}`, PALETTE.white, 16, [0, 0.5], { bold: true, lineHeight: 1 });
+    this.mono(x + 8, 242, `v${__APP_VERSION__}`, PALETTE.systemMuted, 9, [0, 0.5]);
 
     return container;
   }
@@ -349,39 +470,54 @@ export class SectorCompleteScene extends Phaser.Scene {
   // ---- buttons ----------------------------------------------------------
 
   private buildButtons(): Phaser.GameObjects.GameObject[] {
+    // The label is drawn on the DOM layer, not in the button's own bitmap
+    // font: at the size this 104px button has room for, the canvas glyphs are
+    // 5px tall before the upscale and unreadable after it.
+    const menuLabel = this.prose(180, 230, t('resultMenu'), PALETTE.cyan, 14, [0.5, 0.5]);
     const menuBtn = new PixelButton(this, 180, 230, t('resultMenu'), {
       width: 104,
       height: 48,
-      textScale: 1,
       variant: 'secondary',
+      hideLabel: true,
+      onLabelState: ({ color, offsetY }) => {
+        menuLabel.setColor(hexToCss(color));
+        menuLabel.setPosition(180, 230 + offsetY);
+      },
       onClick: () => this.scene.start('MainMenuScene'),
     });
 
     const nextLevelId = this.sectorData.nextLevelId;
     const hasNext = nextLevelId !== undefined;
-    const primaryLabel = hasNext ? t('next') : t('resultToMenu');
+    const primaryLabel = (hasNext ? t('next') : t('resultToMenu')).toUpperCase();
     const subtitle = nextLevelId
       ? `${t('resultSectorLabel').toUpperCase()} ${sectorNumberOf(nextLevelId)}`
       : t('resultAllDoneShort').toUpperCase();
 
-    // `onLabelState` below closes over `dalshe`/`dalsheLabel`/`dalsheSubtitle`
-    // ahead of their own declarations — safe because it only runs on a later
-    // pointer event, well after all three are initialized (same pattern
-    // `MainMenuScene`'s tiles use for their own label callbacks). The labels
-    // themselves are still built *after* `dalshe` on purpose: a PixelLabel is
-    // a plain canvas object (unlike the menu's DOM-text labels), so it has to
-    // be added to the display list after the tile's own opaque fill or the
-    // fill paints over it and the button reads as blank.
-    const dalshe = new MenuTile(this, {
-      x: 248,
-      y: 196,
-      width: 232,
-      height: 58,
+    const BTN = { x: 248, y: 196, w: 232, h: 58 };
+    // Icon box + gap + the wider of the two stacked lines, centred in the
+    // face the way the menu's own PLAY tile centres its content.
+    const textAvailable = BTN.w - 22 - 16 - 16;
+    const labelSize = this.fit(primaryLabel, textAvailable, 22, { bold: true });
+    const subtitleSize = this.fit(subtitle, textAvailable, 11, { font: 'pixel', letterSpacing: 1 });
+    const label = this.prose(0, 0, primaryLabel, PALETTE.bgVoid, labelSize, [0, 0.5]);
+    const sub = this.mono(0, 0, subtitle, PALETTE.bgVoid, subtitleSize, [0, 0.5]);
+    const contentWidth = 22 + 16 + Math.max(label.width, sub.width);
+
+    // `onLabelState` below closes over `dalshe` ahead of its own declaration
+    // — safe because it only runs on a later pointer event, well after the
+    // tile is initialized (the same pattern `MainMenuScene`'s tiles use).
+    const arrow = addPlayTriangle(this.domText, 0, 0, 18, 24, hexToCss(PALETTE.bgVoid));
+    const dalshe: MenuTile = new MenuTile(this, {
+      x: BTN.x,
+      y: BTN.y,
+      width: BTN.w,
+      height: BTN.h,
       variant: 'primary',
       icon: hasNext ? 'play' : 'levels',
       accent: PALETTE.cyanDim,
       hoverAccent: PALETTE.cyan,
       iconAccent: PALETTE.bgVoid,
+      contentWidth,
       onClick: () => {
         if (this.sectorData.nextLevelId) {
           this.scene.start('GameplayScene', { levelId: this.sectorData.nextLevelId, entryTransition: true });
@@ -389,16 +525,23 @@ export class SectorCompleteScene extends Phaser.Scene {
           this.scene.start('MainMenuScene');
         }
       },
-      onLabelState: ({ color, offsetY }) => {
-        dalsheLabel.setPixelColor(hexToCss(color));
-        dalsheSubtitle.setPixelColor(hexToCss(color));
-        dalsheLabel.setPosition(dalshe.labelX, dalshe.labelY - 8 + offsetY);
-        dalsheSubtitle.setPosition(dalshe.labelX, dalshe.labelY + 9 + offsetY);
+      onLabelState: ({ color, offsetY, iconColor }) => {
+        label.setColor(hexToCss(color));
+        sub.setColor(hexToCss(color));
+        label.setPosition(dalshe.labelX, dalshe.labelY - 10 + offsetY);
+        sub.setPosition(dalshe.labelX, dalshe.labelY + 12 + offsetY);
+        arrow.setColor(hexToCss(iconColor));
+        arrow.setPosition(dalshe.iconX, dalshe.iconY + offsetY);
       },
     });
-    const dalsheLabel = this.label(dalshe.labelX, dalshe.labelY - 8, primaryLabel.toUpperCase(), PALETTE.bgVoid, 2, [0, 0.5]);
-    const dalsheSubtitle = this.label(dalshe.labelX, dalshe.labelY + 9, subtitle, PALETTE.bgVoid, 1, [0, 0.5]);
+    label.setPosition(dalshe.labelX, dalshe.labelY - 10);
+    sub.setPosition(dalshe.labelX, dalshe.labelY + 12);
+    // The play arrow is a DOM glyph like every other diagonal in the UI
+    // (`DIAGONAL_ICONS`), so the tile draws no pictogram of its own — without
+    // this the primary button on this screen came up with an empty icon box.
+    arrow.setVisible(hasNext);
+    arrow.setPosition(dalshe.iconX, dalshe.iconY);
 
-    return [menuBtn, dalshe, dalsheLabel, dalsheSubtitle];
+    return [menuBtn, dalshe];
   }
 }

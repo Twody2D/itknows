@@ -32,6 +32,8 @@ const UI_STRINGS = {
   levelsSectorBest: { ru: 'ЛУЧШЕЕ ПО СЕКТОРУ', en: 'SECTOR BEST' },
   levelsNoBest: { ru: 'ЕЩЁ НЕ ПРОЙДЕН ЦЕЛИКОМ', en: 'NOT CLEARED YET' },
   levelsChallengeReset: { ru: 'ДО СБРОСА', en: 'RESETS IN' },
+  /** For the daily card on a squeezed map, where the full phrase cannot be shrunk into the title row and stay readable. */
+  levelsChallengeShort: { ru: 'ИСПЫТАНИЕ', en: 'CHALLENGE' },
   levelsUnit: { ru: 'ЮНИТ', en: 'UNIT' },
   levelSelectLevel: { ru: 'Уровень', en: 'Level' },
   dailyChallenge: { ru: 'Испытание дня', en: 'Daily challenge' },
@@ -158,11 +160,6 @@ const UI_STRINGS = {
   shopFittingRoom: { ru: 'ПРИМЕРКА', en: 'FITTING ROOM' },
   shopSystemSampleUnavailable: { ru: 'Тон ещё не настроен.', en: 'This tone isn’t wired up yet.' },
   shopCollection: { ru: 'СОБРАНО ОБЛИКОВ', en: 'SKINS COLLECTED' },
-  shopWillRemain: { ru: 'ОСТАНЕТСЯ', en: 'LEFT' },
-  // Same abbreviation convention the rail already uses ("БЕЗ РЕК.") — the
-  // fallback for a 3-digit price beside a 3-digit balance, where the panel's
-  // fixed width no longer leaves room for the whole word.
-  shopWillRemainShort: { ru: 'ОСТ.', en: 'LEFT' },
   shopLockedName: { ru: '???', en: '???' },
   shopLockedCondition: { ru: '5 СЕКТОРОВ', en: '5 SECTORS' },
   shopOneTimePurchase: { ru: 'РАЗОВАЯ ПОКУПКА', en: 'ONE-TIME PURCHASE' },

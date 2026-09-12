@@ -16,7 +16,7 @@ import { playerTexturePrefix } from '@/data/shop/skinVisuals';
 import { levelSelectComment } from '@/data/dialogues/levelSelect';
 import { DAILY_CHALLENGE_VARIANT_ID, currentChallengeTimeMs, getDailyChallenge } from '@/gameplay/DailyChallenge';
 import { rebuildOnResize } from '@/ui/relayout';
-import { addCheckGlyph, addDiamondGlyph, addPlayTriangle } from '@/ui/glyphs';
+import { addCheckGlyph, addChevronGlyph, addDiamondGlyph, addPlayTriangle } from '@/ui/glyphs';
 
 /**
  * The level map, rebuilt against Claude Design mockup 4e: one sector at a
@@ -24,15 +24,14 @@ import { addCheckGlyph, addDiamondGlyph, addPlayTriangle } from '@/ui/glyphs';
  * blown up into a single lit PLAY card, instead of six identical numbered
  * buttons.
  *
- * Two deliberate departures from the mockup, both because the drawing would
- * otherwise state something the game does not do:
- * - **No chips.** The mockup's three-chip row counts collectibles that do
- *   not exist in this game. The card shows what the save really holds
- *   instead: cleared or not, and the personal best time from the player's
- *   own ghost record.
- * - **No padlocks.** Levels are not gated behind completion here (existing
- *   design, not an oversight), so an untouched level keeps the mockup's dim
- *   treatment but never draws a lock it could not enforce.
+ * One deliberate departure from the mockup, because the drawing would
+ * otherwise state something the game does not do: **no chips**. The mockup's
+ * three-chip row counts collectibles that do not exist in this game. The card
+ * shows what the save really holds instead: cleared or not, and the personal
+ * best time from the player's own ghost record.
+ *
+ * The padlocks are real (`isLevelUnlocked`) — a locked tile gets no hit zone
+ * at all, so it cannot be tapped past.
  */
 const SMALL_SLOTS: [number, number][] = [
   [44, 60],
@@ -44,7 +43,13 @@ const SMALL_SLOTS: [number, number][] = [
 const SMALL_W = 76;
 const BIG = { x: 298, y: 48, w: 140, h: 98 };
 const SHOWCASE = { x: 44, y: 150, w: 76, h: 88 };
-const DAILY = { x: 298, y: 158, w: 118, h: 62 };
+/**
+ * Widened from the mockup's 118 to line up with the PLAY card directly above
+ * it — which is also the width at which "ИСПЫТАНИЕ ДНЯ" fits the title row
+ * whole at a size a seven-year-old can read. At 118 the full phrase had to be
+ * shrunk past that floor and gave way to the short form even on a wide canvas.
+ */
+const DAILY = { x: 298, y: 158, w: BIG.w, h: 62 };
 /** The mockup's own content zone: 12..468, with SYSTEM's column at 492. */
 const MAP_X = 12;
 const MAP_W = 456;
@@ -205,13 +210,14 @@ export class LevelSelectScene extends Phaser.Scene {
     this.scene.start('GameplayScene', { levelId, entryTransition: true });
   }
 
-  private hit(x: number, y: number, w: number, h: number, onClick: () => void): void {
+  private hit(x: number, y: number, w: number, h: number, onClick: () => void): Phaser.GameObjects.Zone {
     const zone = this.add.zone(x + w / 2, y + h / 2, w, h).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
     zone.on('pointerup', () => {
       playSfx('uiClick');
       onClick();
     });
     this.items.push(zone);
+    return zone;
   }
 
   private renderSector(): void {
@@ -267,29 +273,29 @@ export class LevelSelectScene extends Phaser.Scene {
     const draw = (mx: number, forward: boolean): void => {
       const x = this.sx(mx);
       const w = Math.max(16, this.sw(22));
-      const g = this.add.graphics();
-      g.fillStyle(PALETTE.metalDark, 1);
-      g.fillRect(x, 38, w, 200);
-      g.lineStyle(1, PALETTE.metalEdge, 1);
-      g.strokeRect(x + 0.5, 38.5, w - 1, 199);
-      g.lineStyle(2, PALETTE.cyan, 1);
-      g.beginPath();
       const cx = x + w / 2;
-      if (forward) {
-        g.moveTo(cx - 3, 132);
-        g.lineTo(cx + 3, 138);
-        g.lineTo(cx - 3, 144);
-      } else {
-        g.moveTo(cx + 3, 132);
-        g.lineTo(cx - 3, 138);
-        g.lineTo(cx + 3, 144);
-      }
-      g.strokePath();
+      const g = this.add.graphics();
       this.items.push(g);
-      this.hit(x, 38, w, 200, () => {
+      // Only the arrow head is a diagonal, so only it goes on the DOM layer;
+      // the column behind it is axis-aligned and stays on the canvas.
+      const head = addChevronGlyph(this.domText, cx, 138, 11, hexToCss(PALETTE.cyan), forward ? 'right' : 'left');
+      this.items.push(head);
+      const paint = (hover: boolean): void => {
+        g.clear();
+        g.fillStyle(hover ? PALETTE.panelHover : PALETTE.metalDark, 1);
+        g.fillRect(x, 38, w, 200);
+        g.lineStyle(1, hover ? PALETTE.cyan : PALETTE.metalEdge, 1);
+        g.strokeRect(x + 0.5, 38.5, w - 1, 199);
+        head.setColor(hexToCss(hover ? PALETTE.white : PALETTE.cyan));
+      };
+      paint(false);
+
+      const zone = this.hit(x, 38, w, 200, () => {
         this.sector = Phaser.Math.Wrap(this.sector - 1 + (forward ? 1 : -1), 0, SECTOR_COUNT) + 1;
         this.renderSector();
       });
+      zone.on('pointerover', () => paint(true));
+      zone.on('pointerout', () => paint(false));
     };
 
     draw(12, false);
@@ -474,18 +480,33 @@ export class LevelSelectScene extends Phaser.Scene {
     g.lineStyle(1, PALETTE.system, 1);
     g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     this.items.push(g);
-    this.items.push(addDiamondGlyph(this.domText, x + 14, y + 14, 12, hexToCss(PALETTE.system)));
+    this.items.push(addDiamondGlyph(this.domText, x + 13, y + 14, 10, hexToCss(PALETTE.system)));
 
+    // The title row is measured against a real inner margin on both sides —
+    // the diamond's own rotated span on the left, 10px of card on the right.
+    // It was previously fitted to within 8px of the border and read as
+    // pressed up against it.
+    //
+    // On a squeezed map the full phrase cannot be shrunk into that box and
+    // still be read by a seven-year-old, so it gives way to the written-out
+    // short form rather than being squashed below the floor size — the same
+    // long/short-by-measurement rule the pause card and the shop rail use.
+    const titleX = x + 24;
+    const titleAvailable = x + w - 10 - titleX;
+    const MIN_TITLE = 9;
+    let titleText = t('levelsChallengeShort');
+    let titleSize = this.fit(titleText, titleAvailable, 12, { bold: true });
+    const full = t('dailyChallenge');
+    const fullSize = this.fit(full, titleAvailable, 12, { bold: true });
+    if (fullSize >= MIN_TITLE) {
+      titleText = full;
+      titleSize = fullSize;
+    }
     const title = this.domText.add(
-      x + 26,
+      titleX,
       y + 14,
-      t('dailyChallenge'),
-      {
-        color: hexToCss(PALETTE.white),
-        sizePx: this.fit(t('dailyChallenge'), w - 34, 12, { bold: true }),
-        bold: true,
-        uppercase: true,
-      },
+      titleText,
+      { color: hexToCss(PALETTE.white), sizePx: titleSize, bold: true, uppercase: true },
       0,
       0.5,
     );
@@ -502,8 +523,11 @@ export class LevelSelectScene extends Phaser.Scene {
       undefined,
       { sizePx: this.st(10) },
     );
-    this.pixel(x + 8, y + 50, `${t('levelsChallengeReset')} ${this.timeToReset()}`, PALETTE.systemMuted, 1, 0, 0.5, undefined, {
-      sizePx: this.st(9),
+    // Fitted rather than just scaled with the map: at the narrowest map the
+    // countdown ran past the card's own right border.
+    const reset = `${t('levelsChallengeReset')} ${this.timeToReset()}`;
+    this.pixel(x + 8, y + 50, reset, PALETTE.systemMuted, 1, 0, 0.5, undefined, {
+      sizePx: this.fit(reset, w - 16, this.st(9), { font: 'pixel', letterSpacing: 1 }),
     });
 
     this.hit(x, y, w, h, () => {
@@ -539,12 +563,16 @@ export class LevelSelectScene extends Phaser.Scene {
     this.items.push(g);
 
     this.pixel(this.sysX + 8, 48, 'SYSTEM', PALETTE.system, 1, 0, 0.5, undefined, { sizePx: 10 });
-    this.pixel(this.sysX + 8, 56, levelSelectComment(cleared, total), PALETTE.systemLight, 1, 0, 0, colW - 16, {
-      sizePx: colW >= 110 ? 11 : 10,
-      // Prose, not a label — the mockup gives SYSTEM's running lines
-      // line-height 1.5 and no tracking (tracking is for labels only).
-      lineHeight: 1.5,
-      letterSpacing: 0,
+    // Prose, not a label — the mockup gives SYSTEM's running lines
+    // line-height 1.5 and no tracking (tracking is for labels only). The size
+    // is whatever keeps the longest word of the line whole in this column:
+    // a word too wide to fit gets split mid-word by the browser's last-resort
+    // wrap, which is how "ПОНРАВИТЬСЯ" came out as "ПОНРАВИТЬС / Я".
+    const comment = levelSelectComment(cleared, total);
+    const commentStyle = { font: 'pixel' as const, uppercase: true, lineHeight: 1.5, letterSpacing: 0 };
+    this.pixel(this.sysX + 8, 56, comment, PALETTE.systemLight, 1, 0, 0, colW - 16, {
+      ...commentStyle,
+      sizePx: this.domText.wordFitSize(comment, { ...commentStyle, color: 'transparent' }, colW - 16, colW >= 110 ? 11 : 10),
       clampLines: 6,
     });
 

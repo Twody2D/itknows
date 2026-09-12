@@ -389,6 +389,10 @@ export class GameplayScene extends Phaser.Scene {
    */
   private pauseGame(): void {
     YandexGamesService.notifyGameplayStop();
+    // The attempt/sector clocks are wall clocks, so pausing the scene does
+    // not stop them — `PauseScene` restarts them from its own shutdown,
+    // whichever of its three exits the player takes.
+    GameState.pauseClock();
     this.scene.pause();
     this.scene.launch('PauseScene', { gameplaySceneKey: this.scene.key, levelId: this.levelDef.id });
   }

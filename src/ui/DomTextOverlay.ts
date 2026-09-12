@@ -31,6 +31,8 @@ export interface DomTextHandle {
   readonly height: number;
   setText(text: string): void;
   setColor(color: string): void;
+  /** Re-sets the type size in virtual px — for a label whose text is replaced live and has to be re-fitted to its box. */
+  setSizePx(px: number): void;
   setPosition(vx: number, vy: number): void;
   setVisible(visible: boolean): void;
   destroy(): void;
@@ -125,7 +127,7 @@ export class DomTextOverlay {
   /** `originX`/`originY` (0..1) work like `PixelLabel.setOrigin` — 0.5,0.5 centers on (vx,vy); 0,0 grows right/down from it. */
   add(vx: number, vy: number, text: string, opts: DomTextOptions, originX = 0, originY = 0): DomTextHandle {
     const el = document.createElement('div');
-    const item: Item = { el, vx, vy, originX, originY, opts };
+    const item: Item = { el, vx, vy, originX, originY, opts: this.fitted(text, opts) };
     this.applyStyle(item);
     el.textContent = text;
     this.layer.appendChild(el);
@@ -146,6 +148,17 @@ export class DomTextOverlay {
       },
       setText: (value: string) => {
         el.textContent = value;
+        // Re-fitted as well as re-texted: the size that kept the previous
+        // string's longest word whole says nothing about this one's.
+        if (opts.wordWrapWidth !== undefined) {
+          item.opts = this.fitted(value, opts);
+          this.applyStyle(item);
+        }
+        reposition();
+      },
+      setSizePx: (px: number) => {
+        item.opts = { ...item.opts, sizePx: px };
+        this.applyStyle(item);
         reposition();
       },
       setColor: (color: string) => {
@@ -200,6 +213,7 @@ export class DomTextOverlay {
     this.positionItem(item);
 
     const reposition = (): void => this.positionItem(item);
+    const restyle = (): void => this.applyStyle(item);
     return {
       get width() {
         return vw;
@@ -208,8 +222,29 @@ export class DomTextOverlay {
         return vh;
       },
       setText: () => undefined,
+      setSizePx: () => undefined,
+      // Which property carries the colour depends on how the shape is built,
+      // and guessing wrong is visible: painting `background` on the triangle
+      // (a zero-sized box whose top and bottom borders are transparent) fills
+      // the border box straight through those transparent borders, so the
+      // play arrow turned into a solid square the moment the button was
+      // hovered and its icon recoloured.
       setColor: (color: string) => {
-        el.style.background = color;
+        const spec = item.shape as ShapeSpec;
+        if (spec.sides) {
+          const sides = spec.sides;
+          for (const edge of ['top', 'right', 'bottom', 'left'] as const) {
+            const side = sides[edge];
+            // A `transparent` side is structural — it is what gives the
+            // triangle its slanted edges — so it keeps its colour.
+            if (side && side[1] !== 'transparent') sides[edge] = [side[0], color];
+          }
+        } else if (spec.border !== undefined) {
+          spec.border = color;
+        } else {
+          spec.background = color;
+        }
+        restyle();
       },
       setPosition: (nx: number, ny: number) => {
         item.vx = nx;
@@ -224,6 +259,74 @@ export class DomTextOverlay {
         this.items = this.items.filter((i) => i !== item);
       },
     };
+  }
+
+  /**
+   * The largest size up to `max` at which every *word* of `text` fits
+   * `wrapWidth` on its own, measured rather than estimated.
+   *
+   * `overflow-wrap: break-word` is the browser's last resort: when a single
+   * word cannot fit its line at any break point, it is split mid-word. That
+   * is correct as a safety net and wrong as a layout, and it is what turned
+   * SYSTEM's column into "ПОНРАВИТЬС / Я." — the wrap width was simply
+   * narrower than the longest word in the line at the size it was set in.
+   * Sizing the type to the longest word removes the condition instead of
+   * papering over it; the safety net stays in place underneath.
+   */
+  /**
+   * The requested options with `sizePx` reduced — by at most 40% — to
+   * whatever keeps every word of `text` whole inside `wordWrapWidth`.
+   *
+   * Applied to every wrapped label there is, rather than opted into case by
+   * case: a word too wide for its box is split mid-word by the browser as a
+   * last resort, and one Russian word long enough to trigger it turns up in
+   * a different corner of the UI every round ("ПОНРАВИТЬС / Я.",
+   * "НЕЗАВЕРШЕ / НО."). Shrinking removes the condition; the floor keeps a
+   * pathological box from shrinking a line into invisibility, and the
+   * browser's own break stays underneath as the last resort it is.
+   */
+  private fitted(text: string, opts: DomTextOptions): DomTextOptions {
+    if (opts.wordWrapWidth === undefined) return opts;
+    const max = Math.max(6, Math.round(opts.sizePx ?? BASE_SIZE * (opts.scale ?? 1)));
+    const sizePx = this.wordFitSize(text, opts, opts.wordWrapWidth, max, Math.max(6, Math.round(max * 0.6)));
+    return sizePx === max ? opts : { ...opts, sizePx };
+  }
+
+  wordFitSize(text: string, style: DomTextOptions, wrapWidth: number, max: number, min = 7): number {
+    const words = text.split(/\s+/).filter((word) => word.length > 0);
+    if (words.length === 0 || wrapWidth <= 0) return max;
+    // Longest by character count first, then really measured: glyph widths
+    // differ, so the longest string is not always the widest, but it is a
+    // reliable shortlist and keeps this to a few probes.
+    const longest = [...words].sort((a, b) => b.length - a.length).slice(0, 3);
+    // A probe must be free to take its natural width: left wrapping (or
+    // clamped), it would measure the box it is being fitted to rather than
+    // the word.
+    const free = { ...style, color: 'transparent', sizePx: max };
+    delete free.wordWrapWidth;
+    delete free.clampLines;
+    let widest = 0;
+    for (const word of longest) {
+      const probe = this.add(-1000, -1000, word, free, 0, 0);
+      widest = Math.max(widest, probe.width);
+      probe.destroy();
+    }
+    if (widest <= 0 || widest <= wrapWidth) return max;
+    return Math.max(min, Math.floor((max * wrapWidth) / widest));
+  }
+
+  /**
+   * Fades the whole layer up from nothing, once, for a screen whose canvas
+   * blocks animate in: the labels live outside the display list, so a Phaser
+   * tween cannot reach them, and without this they would pop in fully lit
+   * over panels that are still arriving.
+   */
+  fadeInLayer(durationMs: number): void {
+    this.layer.style.opacity = '0';
+    this.layer.style.transition = `opacity ${durationMs}ms ease-out`;
+    requestAnimationFrame(() => {
+      this.layer.style.opacity = '1';
+    });
   }
 
   /**

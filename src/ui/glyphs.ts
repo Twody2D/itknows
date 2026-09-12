@@ -60,6 +60,37 @@ export function addPlayTriangle(
   );
 }
 
+/**
+ * The same two-border box as the tick, rotated a quarter turn further so the
+ * corner points sideways — every "back" and "previous/next sector" arrow in
+ * the UI. Drawn with `lineStyle` into the canvas these were the worst
+ * offenders of the lot: a 2px diagonal at a 6px rise arrives as three
+ * disconnected steps once the canvas is upscaled.
+ */
+export function addChevronGlyph(
+  domText: DomTextOverlay,
+  vx: number,
+  vy: number,
+  size: number,
+  color: string,
+  direction: 'left' | 'right' = 'left',
+): DomTextHandle {
+  const stroke = Math.max(1, size / 5);
+  const arm = size * 0.62;
+  return domText.addShape(
+    vx,
+    vy,
+    arm,
+    arm,
+    {
+      sides: { left: [stroke, color], bottom: [stroke, color] },
+      rotate: direction === 'left' ? 45 : -135,
+    },
+    0.5,
+    0.5,
+  );
+}
+
 /** Mockup: a plain square rotated 45°. */
 export function addDiamondGlyph(
   domText: DomTextOverlay,

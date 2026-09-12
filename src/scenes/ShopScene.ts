@@ -31,7 +31,7 @@ import type { TrailKind } from '@/gameplay/TrailFx';
 import { FxManager } from '@/fx/FxManager';
 import { PACKS } from '@/data/dialogues';
 import { rebuildOnResize } from '@/ui/relayout';
-import { addCheckGlyph, addDiamondGlyph, addPlayTriangle } from '@/ui/glyphs';
+import { addCheckGlyph, addChevronGlyph, addDiamondGlyph, addPlayTriangle } from '@/ui/glyphs';
 
 // Rail order top-to-bottom, per the Claude Design showroom mockup — БЕЗ РЕК.
 // sits at the bottom as the one solid gold shape in the rail, which is what
@@ -307,17 +307,21 @@ export class ShopScene extends Phaser.Scene {
     bg.fillRect(0, TOPBAR_H - 1, width, 1);
 
     const chev = this.add.graphics();
-    chev.fillStyle(PALETTE.metalMid, 1);
-    chev.lineStyle(1, PALETTE.metalEdge, 1);
-    chev.fillRect(8, 4, 20, 20);
-    chev.strokeRect(8, 4, 20, 20);
-    chev.lineStyle(2, PALETTE.cyan, 1);
-    chev.beginPath();
-    chev.moveTo(21, 9);
-    chev.lineTo(15, 14);
-    chev.lineTo(21, 19);
-    chev.strokePath();
+    // Diagonal on the DOM layer, box on the canvas — same split as every
+    // other back arrow in the game (`ui/glyphs`).
+    const arrow = addChevronGlyph(this.domText, 18, 14, 11, hexToCss(PALETTE.cyan));
+    const paintBack = (hover: boolean): void => {
+      chev.clear();
+      chev.fillStyle(hover ? PALETTE.panelHover : PALETTE.metalMid, 1);
+      chev.lineStyle(1, hover ? PALETTE.cyan : PALETTE.metalEdge, 1);
+      chev.fillRect(8, 4, 20, 20);
+      chev.strokeRect(8, 4, 20, 20);
+      arrow.setColor(hexToCss(hover ? PALETTE.white : PALETTE.cyan));
+    };
+    paintBack(false);
     const chevronZone = this.add.zone(18, 14, 32, 28).setOrigin(0.5, 0.5).setInteractive({ useHandCursor: true });
+    chevronZone.on('pointerover', () => paintBack(true));
+    chevronZone.on('pointerout', () => paintBack(false));
     chevronZone.on('pointerup', () => {
       playSfx('uiClick');
       if (this.view === 'main') this.scene.stop();
@@ -1272,9 +1276,19 @@ export class ShopScene extends Phaser.Scene {
     if (price === undefined) return;
 
     const affordable = balance >= price;
-    const delta = affordable ? balance - price : price - balance;
-    const captionColor = affordable ? PALETTE.labelMuted : PALETTE.dangerAlt;
     const rowW = rightX - leftX;
+
+    // Only a shortfall earns a caption here. The row used to spell out the
+    // balance left over after the purchase ("ОСТАНЕТСЯ 680") beside the
+    // price, which is arithmetic the player did not ask for and the wallet
+    // in the topbar answers anyway — the owner's call to drop it. What is
+    // left is the one thing the price alone does not say: that there is not
+    // enough for it.
+    if (affordable) {
+      const priceText = this.pixel(rightX, y, String(price), PALETTE.reward, 2, 1, 0.5, true, { sizePx: 15 });
+      this.coin(rightX - priceText.width - 9, y, 10, false);
+      return;
+    }
 
     const fits = (text: string, sizePx: number, priceW: number): boolean => {
       const probe = this.pixel(-1000, -1000, text, PALETTE.white, 1, 0, 0.5, false, { sizePx });
@@ -1283,15 +1297,15 @@ export class ShopScene extends Phaser.Scene {
       return w + 8 + priceW + 14 <= rowW;
     };
 
-    // A 3-digit price ("ОСТАНЕТСЯ 680" beside "680") does not fit this row
-    // at the mockup's fixed 15px/9px pair on this panel's fixed width once
-    // the balance is 3 digits too. The price shrinks first (it has more
-    // headroom before turning
-    // illegible); if the full caption still doesn't fit even at a small
-    // floor size, it swaps for the rail's own abbreviation convention
-    // ("БЕЗ РЕК.") rather than clipping mid-word into an ellipsis.
-    const full = `${affordable ? t('shopWillRemain') : t('shopNotEnough')} ${delta}`;
-    const short = `${affordable ? t('shopWillRemainShort') : t('shopNotEnoughShort')} ${delta}`;
+    // "НЕ ХВАТАЕТ 320" beside a 3-digit price does not fit this row at the
+    // mockup's fixed 15px/9px pair on this panel's fixed width. The price
+    // shrinks first (it has more headroom before turning illegible); if the
+    // full caption still doesn't fit even at a small floor size, it swaps for
+    // the rail's own abbreviation convention ("БЕЗ РЕК.") rather than
+    // clipping mid-word into an ellipsis.
+    const delta = price - balance;
+    const full = `${t('shopNotEnough')} ${delta}`;
+    const short = `${t('shopNotEnoughShort')} ${delta}`;
     let priceSize = 15;
     let caption = full;
     let captionSize = 9;
@@ -1312,12 +1326,12 @@ export class ShopScene extends Phaser.Scene {
       captionSize = 7;
     }
 
-    const priceText = this.pixel(rightX, y, String(price), affordable ? PALETTE.reward : PALETTE.goldSole, 2, 1, 0.5, true, {
+    const priceText = this.pixel(rightX, y, String(price), PALETTE.goldSole, 2, 1, 0.5, true, {
       sizePx: priceSize,
     });
-    this.coin(rightX - priceText.width - 9, y, 10, !affordable);
+    this.coin(rightX - priceText.width - 9, y, 10, true);
 
-    this.pixel(leftX, y, caption, captionColor, 1, 0, 0.5, true, {
+    this.pixel(leftX, y, caption, PALETTE.dangerAlt, 1, 0, 0.5, true, {
       sizePx: captionSize,
       wordWrapWidth: Math.max(40, rightX - priceText.width - 14 - leftX),
       clampLines: 1,
@@ -1462,6 +1476,14 @@ export class ShopScene extends Phaser.Scene {
     if (iconDisc) this.content.push(iconDisc);
     if (iconPip) this.content.push(iconPip);
 
+    // Built once and moved, like the coin. It used to be created inside
+    // `redraw`, which runs on every hover and press, so each pass over the
+    // button left another tick stacked on the DOM layer until the panel was
+    // rebuilt.
+    const iconTick =
+      opts.icon === 'check' ? addCheckGlyph(this.domText, x, y, 12, hexToCss(PALETTE.bgVoid)) : null;
+    if (iconTick) this.content.push(iconTick);
+
     const redraw = (hover: boolean, press: boolean): void => {
       g.clear();
       const dy = press ? 4 : 0;
@@ -1496,7 +1518,7 @@ export class ShopScene extends Phaser.Scene {
       } else if (opts.icon === 'check') {
         g.fillStyle(opts.accent, 1);
         g.fillRect(iconCx - 7, iconCy - 7, 14, 14);
-        this.content.push(addCheckGlyph(this.domText, iconCx, iconCy, 12, hexToCss(PALETTE.bgVoid)));
+        iconTick?.setPosition(iconCx, iconCy);
       }
 
       label.setPosition(x + w / 2 + (opts.icon === 'none' ? 0 : 9), y + dy + h / 2);
@@ -1542,20 +1564,28 @@ export class ShopScene extends Phaser.Scene {
 
     // Spot light down the box + a pedestal glow, tinted by the skin's own
     // visor — the one thing that changes color from skin to skin.
+    //
+    // Both are sized from the box rather than from the mockup's own numbers:
+    // the cone's 48px foot and the 44px pool were drawn against the wide
+    // panel's 56px stage, and on a narrow canvas the stage is 40px, so the
+    // light spilled out over the panel on both sides and the block read as
+    // unfinished. Kept 3px clear of the border either way.
     const cone = this.add.graphics();
     const cx = boxX + boxW / 2;
+    const footHalf = Math.min(24, boxW / 2 - 3);
+    const mouthHalf = Math.min(10, Math.max(3, footHalf - 6));
     cone.fillStyle(visor, 0.1);
     cone.fillPoints(
       [
-        new Phaser.Geom.Point(cx - 10, PREVIEW_TOP + 2),
-        new Phaser.Geom.Point(cx + 10, PREVIEW_TOP + 2),
-        new Phaser.Geom.Point(cx + 24, PREVIEW_TOP + boxH - 8),
-        new Phaser.Geom.Point(cx - 24, PREVIEW_TOP + boxH - 8),
+        new Phaser.Geom.Point(cx - mouthHalf, PREVIEW_TOP + 2),
+        new Phaser.Geom.Point(cx + mouthHalf, PREVIEW_TOP + 2),
+        new Phaser.Geom.Point(cx + footHalf, PREVIEW_TOP + boxH - 8),
+        new Phaser.Geom.Point(cx - footHalf, PREVIEW_TOP + boxH - 8),
       ],
       true,
     );
     cone.fillStyle(visor, 0.22);
-    cone.fillEllipse(cx, PREVIEW_TOP + boxH - 8, 44, 10);
+    cone.fillEllipse(cx, PREVIEW_TOP + boxH - 8, footHalf * 2, 10);
     this.content.push(cone);
 
     const sprite = this.addSprite(item.id, cx, PREVIEW_TOP + boxH - 8, 1.7, undefined);
@@ -1563,8 +1593,9 @@ export class ShopScene extends Phaser.Scene {
     if (sprite && this.anims.exists(`${prefix}-idle`)) sprite.play(`${prefix}-idle`);
 
     const pedestal = this.add.graphics();
+    const pedestalHalf = Math.min(18, boxW / 2 - 4);
     pedestal.fillStyle(PALETTE.cyanDim, 1);
-    pedestal.fillRect(cx - 18, PREVIEW_TOP + boxH - 9, 36, 4);
+    pedestal.fillRect(cx - pedestalHalf, PREVIEW_TOP + boxH - 9, pedestalHalf * 2, 4);
     this.content.push(pedestal);
 
     // Right column: name, rarity, and the three colors the skin is made of.
@@ -1716,8 +1747,13 @@ export class ShopScene extends Phaser.Scene {
   // ---- death FX scene (two frames: intact -> the real burst) -------------
 
   private buildDeathScene(item: ShopItem, unlocked: boolean): void {
-    const boxW = 62;
     const boxH = 64;
+    // Two stages side by side, sized from the panel instead of the mockup's
+    // fixed 62: on the narrow panel (126px) a pair of 62px stages is wider
+    // than the space between them, so they overlapped by 14px and read as one
+    // box with a line down it. This always leaves a real gap between them.
+    const GAP = 12;
+    const boxW = Math.min(62, Math.floor((this.detailW - 16 - GAP) / 2));
     const leftX = this.detailX + 8;
     const rightX = this.detailX + this.detailW - 8 - boxW;
 
@@ -1731,12 +1767,25 @@ export class ShopScene extends Phaser.Scene {
     g.strokeRect(rightX + 0.5, PREVIEW_TOP + 0.5, boxW - 1, boxH - 1);
     this.content.push(g);
 
-    const arrow = this.add.graphics();
-    arrow.fillStyle(PALETTE.dangerAlt, 1);
-    const arrowY = PREVIEW_TOP + boxH / 2;
-    arrow.fillRect(leftX + boxW + 2, arrowY - 1, 8, 2);
-    arrow.fillTriangle(leftX + boxW + 10, arrowY - 4, leftX + boxW + 10, arrowY + 4, leftX + boxW + 14, arrowY);
-    this.content.push(arrow);
+    // The "before -> after" arrow lives in the gap between the two stages,
+    // and on a narrow panel that gap is smaller than the arrow: drawn at its
+    // fixed 14px it started inside the right-hand stage, so it printed a
+    // stripe across the android standing there. It is centred in whatever gap
+    // there really is, shrunk to fit it, and dropped outright when the two
+    // stages are all but touching — the second stage's own red border
+    // already says which of the two is the "after".
+    const gap = rightX - (leftX + boxW);
+    if (gap >= 9) {
+      const arrow = this.add.graphics();
+      arrow.fillStyle(PALETTE.dangerAlt, 1);
+      const arrowY = PREVIEW_TOP + boxH / 2;
+      const len = Math.min(14, gap - 4);
+      const x0 = leftX + boxW + Math.round((gap - len) / 2);
+      const head = Math.max(3, Math.round(len * 0.3));
+      arrow.fillRect(x0, arrowY - 1, len - head, 2);
+      arrow.fillTriangle(x0 + len - head, arrowY - 4, x0 + len - head, arrowY + 4, x0 + len, arrowY);
+      this.content.push(arrow);
+    }
 
     if (!unlocked) {
       this.drawLockGlyph(g, rightX + boxW / 2, PREVIEW_TOP + boxH / 2);
@@ -1871,9 +1920,13 @@ export class ShopScene extends Phaser.Scene {
     // An uncapped label can grow past `systemH` into whatever sits below it
     // (the skin-collection box, for character), because SYSTEM's lines vary
     // in length. Capped to exactly the lines the box actually has room for.
-    const sysLineSize = 11;
     const sysLineHeight = 1.5;
     const sysTextTop = DETAIL_TOP + 22;
+    // Sized so the longest word of the line still fits the column whole. Left
+    // at a fixed 11px, a word wider than the column got split mid-word by the
+    // browser's last-resort wrap — which is how SYSTEM came to say
+    // "ПОНРАВИТЬС / Я."
+    const sysLineSize = this.systemLineSize(this.systemLineText);
     const sysMaxLines = Math.max(1, Math.floor((DETAIL_TOP + systemH - sysTextTop) / (sysLineSize * sysLineHeight)));
     this.systemLineLabel = this.pixel(this.sysX + 8, sysTextTop, this.systemLineText, PALETTE.systemLight, 1, 0, 0, true, {
       sizePx: sysLineSize,
@@ -1934,7 +1987,20 @@ export class ShopScene extends Phaser.Scene {
     // Kept on screen until the next line replaces it — the SYSTEM panel is a
     // fixture of the showroom, not a toast that blinks out and leaves a hole.
     this.systemLineText = payload.text;
+    // Re-fitted, not just re-texted: the size that kept the previous line's
+    // longest word whole says nothing about this one's.
+    this.systemLineLabel?.setSizePx(this.systemLineSize(payload.text));
     this.systemLineLabel?.setText(payload.text);
+  }
+
+  /** The size at which no word of `text` has to be split to fit SYSTEM's column. */
+  private systemLineSize(text: string): number {
+    return this.domText.wordFitSize(
+      text,
+      { color: 'transparent', font: 'pixel', uppercase: true, lineHeight: 1.5, letterSpacing: 0 },
+      this.sysW - 16,
+      11,
+    );
   }
 
   // ---- premium ("БЕЗ РЕК.") ----------------------------------------------

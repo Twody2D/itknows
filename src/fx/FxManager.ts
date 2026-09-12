@@ -6,6 +6,13 @@ import { FxSettings } from './FxSettings';
 type Emitter = Phaser.GameObjects.Particles.ParticleEmitter;
 type Alphable = Phaser.GameObjects.GameObject & { alpha: number };
 
+/** Fragment colours per Death FX variant — see `deathBurst`. */
+const DEATH_FRAGMENT_TINT: Record<'static' | 'glitch' | 'data_wipe', number[]> = {
+  static: [PALETTE.white, PALETTE.danger],
+  glitch: [PALETTE.cyan, PALETTE.system],
+  data_wipe: [PALETTE.white, PALETTE.cyanGlow],
+};
+
 /**
  * Every burst effect in the game (jump dust, landing dust, death, victory,
  * trap warning-pulse) plus camera shake, in one place. Every particle
@@ -88,31 +95,47 @@ export class FxManager {
   }
 
   /**
-   * Pixel-fragment scatter + flash + a short glitch slice — the whole thing
-   * settles within the death-restart budget (CLAUDE.md #5, < 700ms total).
-   * `variant` is a purely cosmetic shop unlock (`InventoryService`'s
-   * `death_fx` slot) — `static` is this exact effect, unchanged; `glitch`
-   * layers on two extra, wider glitch-slice passes; `data_wipe` (SYSTEM
-   * ACCESS bundle exclusive) goes further still — a bigger burst and a held
-   * white flash, matching its "full wipe" billing instead of quietly
-   * behaving like `static` (shop showroom redesign, 2026-09-06 — the bundle
-   * previously granted this variant with no distinct effect of its own).
-   * Neither variant touches timing or the death itself, only what it looks
-   * like.
+   * Pixel-fragment scatter + flash + glitch tearing — the whole thing settles
+   * within the death-restart budget (CLAUDE.md #5, < 700ms total). `variant`
+   * is a purely cosmetic shop unlock (`InventoryService`'s `death_fx` slot),
+   * and none of the three touches timing or the death itself.
+   *
+   * Each one now has its own signature rather than differing only in how many
+   * slices it draws — side by side in the shop's preview the three read as
+   * the same effect at three intensities, which is not something to charge
+   * 120 credits for (owner's call, 2026-09-12):
+   * - `static` — the standard shutdown: red-hot fragments, a red flash, one
+   *   pass of cyan scanline tearing.
+   * - `glitch` — colour separation: the tearing splits into cyan and violet
+   *   passes kicked far in opposite directions, over a cool flash and a
+   *   tighter, faster fragment burst. Cold and wide where `static` is hot and
+   *   compact.
+   * - `data_wipe` (SYSTEM ACCESS bundle exclusive) — erasure: a white bar
+   *   sweeps through where the android stood, under a held white flash and
+   *   the biggest fragment count. Reads as being deleted, not blown up.
    */
   deathBurst(x: number, y: number, variant: 'static' | 'glitch' | 'data_wipe' = 'static', shake = true): void {
-    if (FxSettings.particlesEnabled) this.deathEmitter.explode(variant === 'data_wipe' ? 22 : 14, x, y);
-    this.flash(x, y, variant === 'data_wipe' ? PALETTE.white : PALETTE.danger, variant === 'data_wipe' ? 0.34 : 0.22);
-    this.glitchSlice(x, y);
+    if (FxSettings.particlesEnabled) {
+      // The fragments carry the variant's colour too, otherwise all three
+      // rain the same red and the signature is only half applied.
+      this.deathEmitter.setParticleTint(DEATH_FRAGMENT_TINT[variant]);
+      this.deathEmitter.explode(variant === 'data_wipe' ? 24 : variant === 'glitch' ? 10 : 14, x, y);
+    }
+
     if (variant === 'glitch') {
-      this.glitchSlice(x, y - 4, 6);
-      this.glitchSlice(x, y + 4, 9);
+      this.flash(x, y, PALETTE.cyan, 0.18);
+      this.glitchSlice(x, y - 5, 12, PALETTE.cyan);
+      this.glitchSlice(x, y + 3, -12, PALETTE.system);
+      this.glitchSlice(x, y - 1, 7, PALETTE.white);
+    } else if (variant === 'data_wipe') {
+      this.flash(x, y, PALETTE.white, 0.34);
+      this.wipeBar(x, y);
+      this.glitchSlice(x, y, 4, PALETTE.white);
+    } else {
+      this.flash(x, y, PALETTE.danger, 0.22);
+      this.glitchSlice(x, y, 5, PALETTE.cyan);
     }
-    if (variant === 'data_wipe') {
-      this.glitchSlice(x, y - 5, 11);
-      this.glitchSlice(x, y + 5, 14);
-      this.glitchSlice(x, y, 18);
-    }
+
     // `shake: false` is for the shop's looping preview — the same burst
     // without jolting a screen the player is reading, never for real deaths.
     if (shake) this.shake(140, variant === 'data_wipe' ? 0.01 : 0.006);
@@ -177,11 +200,17 @@ export class FxManager {
     });
   }
 
-  /** A cheap pixel-art stand-in for a digital glitch: a few thin slices that kick sideways and fade, no shader. `kick` widens the sideways offset — the `glitch` Death FX variant calls this twice more with a wider kick than the base effect uses. */
-  private glitchSlice(x: number, y: number, kick = 5): void {
+  /**
+   * A cheap pixel-art stand-in for a digital glitch: a few thin slices that
+   * kick sideways and fade, no shader. `kick` sets how far they slide and
+   * which way the pass leans (negative mirrors it), `color` which channel the
+   * pass stands for — that pair is what gives `glitch` its colour-separated
+   * tearing without a second effect to maintain.
+   */
+  private glitchSlice(x: number, y: number, kick = 5, color: number = PALETTE.cyan): void {
     for (let i = 0; i < 3; i++) {
       const w = 10 + i * 4;
-      const slice = this.scene.add.rectangle(x, y - 6 + i * 5, w, 1, PALETTE.cyan, 0.5).setDepth(145);
+      const slice = this.scene.add.rectangle(x, y - 6 + i * 5, w, 1, color, 0.5).setDepth(145);
       if (this.clipMask) slice.setMask(this.clipMask);
       this.scene.tweens.add({
         targets: slice,
@@ -192,6 +221,21 @@ export class FxManager {
         onComplete: () => slice.destroy(),
       });
     }
+  }
+
+  /** DATA WIPE's own mark: a solid white bar that sweeps down through the android and thins out as it goes — an erase head, not an explosion. */
+  private wipeBar(x: number, y: number): void {
+    const bar = this.scene.add.rectangle(x, y - 16, 30, 6, PALETTE.white, 0.9).setDepth(146);
+    if (this.clipMask) bar.setMask(this.clipMask);
+    this.scene.tweens.add({
+      targets: bar,
+      y: y + 6,
+      scaleY: 0.15,
+      alpha: 0,
+      duration: 260,
+      ease: 'Quad.easeIn',
+      onComplete: () => bar.destroy(),
+    });
   }
 
   private pulseRing(x: number, y: number): void {
