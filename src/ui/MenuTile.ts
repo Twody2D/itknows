@@ -12,6 +12,8 @@ export interface MenuTileLabelState {
   color: number;
   /** Press nudge, for the caller to apply to its own label so text sinks with the face. */
   offsetY: number;
+  /** PALETTE hex the pictogram should take — reported for the same reason as `color`: a diagonal icon is drawn on the DOM layer, not into the canvas. */
+  iconColor: number;
 }
 
 export interface MenuTileOptions {
@@ -88,6 +90,9 @@ export class MenuTile extends Phaser.GameObjects.Container {
   /** Where the caller should put its DOM label: left edge, vertical centre. */
   readonly labelX: number;
   readonly labelY: number;
+  /** Centre of the pictogram box, for an icon the caller draws on the DOM layer (see `DIAGONAL_ICONS`). */
+  readonly iconX: number;
+  readonly iconY: number;
 
   constructor(scene: Phaser.Scene, opts: MenuTileOptions) {
     super(scene, opts.x, opts.y);
@@ -110,6 +115,8 @@ export class MenuTile extends Phaser.GameObjects.Container {
 
     this.labelX = opts.x + contentLeft + m.iconBox + m.gap;
     this.labelY = opts.y + centerY;
+    this.iconX = opts.x + iconCx;
+    this.iconY = opts.y + centerY;
 
     const hit = scene.add
       .zone(opts.width / 2, centerY, opts.width + m.hitPadX * 2, opts.height + m.hitPadY * 2)
@@ -182,6 +189,6 @@ export class MenuTile extends Phaser.GameObjects.Container {
     if (!this.ready) return;
     const labelColor =
       variant === 'primary' ? PALETTE.bgVoid : press ? PALETTE.textMuted : PALETTE.white;
-    this.opts.onLabelState({ hover, press, color: labelColor, offsetY });
+    this.opts.onLabelState({ hover, press, color: labelColor, offsetY, iconColor: this.iconColor(hover, press) });
   }
 }

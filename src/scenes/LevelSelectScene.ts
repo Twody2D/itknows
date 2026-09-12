@@ -8,7 +8,7 @@ import { buildScreenTopbar, attachEscape } from '@/ui/ScreenChrome';
 import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
 import { fadeIn } from '@/ui/SceneFade';
 import { playSfx } from '@/audio/SfxManager';
-import { LEVELS_PER_SECTOR, SECTOR_COUNT, levelIdFor, sectorIdOf, sectorName } from '@/gameplay/sectors';
+import { LEVELS_PER_SECTOR, SECTOR_COUNT, isLevelUnlocked, levelIdFor, sectorIdOf, sectorName } from '@/gameplay/sectors';
 import { SaveService } from '@/services/SaveService';
 import { GhostService } from '@/services/GhostService';
 import { InventoryService } from '@/services/InventoryService';
@@ -16,7 +16,7 @@ import { playerTexturePrefix } from '@/data/shop/skinVisuals';
 import { levelSelectComment } from '@/data/dialogues/levelSelect';
 import { DAILY_CHALLENGE_VARIANT_ID, currentChallengeTimeMs, getDailyChallenge } from '@/gameplay/DailyChallenge';
 import { rebuildOnResize } from '@/ui/relayout';
-import { drawCheck } from '@/ui/glyphs';
+import { addCheckGlyph, addDiamondGlyph, addPlayTriangle } from '@/ui/glyphs';
 
 /**
  * The level map, rebuilt against Claude Design mockup 4e: one sector at a
@@ -310,6 +310,7 @@ export class LevelSelectScene extends Phaser.Scene {
 
   private buildSmallCard(levelId: string, number: number, mx: number, y: number, h: number): void {
     const done = SaveService.isCompleted(levelId);
+    const unlocked = isLevelUnlocked(levelId, (id: string) => SaveService.isCompleted(id));
     const best = done ? this.bestTimeText(levelId) : null;
     const x = this.sx(mx);
     const w = this.sw(SMALL_W);
@@ -321,11 +322,16 @@ export class LevelSelectScene extends Phaser.Scene {
     g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
     this.items.push(g);
 
+    if (!unlocked) {
+      this.buildLockedTile(x, y, w, h, number);
+      return;
+    }
+
     if (done) {
       const badge = this.add.graphics();
       badge.fillStyle(PALETTE.cyan, 1);
       badge.fillRect(x + w - 20, y + 6, 12, 12);
-      drawCheck(badge, x + w - 14, y + 12, 3, PALETTE.bgVoid);
+      this.items.push(addCheckGlyph(this.domText, x + w - 14, y + 12, 10, hexToCss(PALETTE.bgVoid)));
       this.items.push(badge);
     }
 
@@ -360,6 +366,30 @@ export class LevelSelectScene extends Phaser.Scene {
     this.hit(x, y, w, h, () => this.startLevel(levelId));
   }
 
+  /**
+   * Mockup 4e's locked tile: a padlock over a dimmed number, both centred,
+   * and no hit zone at all — the level really is shut until the one before it
+   * is cleared (`isLevelUnlocked`), so the tile must not answer a tap.
+   */
+  private buildLockedTile(x: number, y: number, w: number, h: number, number: number): void {
+    const cx = x + w / 2;
+    const top = y + Math.round((h - 43) / 2);
+
+    const lock = this.add.graphics();
+    lock.fillStyle(PALETTE.metalEdge, 1);
+    lock.fillRect(cx - 9, top + 8, 18, 14);
+    // Shackle: three bars rather than a stroked rect, so it keeps the flat
+    // open bottom the mockup draws.
+    lock.fillRect(cx - 4, top, 8, 2);
+    lock.fillRect(cx - 4, top, 2, 10);
+    lock.fillRect(cx + 2, top, 2, 10);
+    this.items.push(lock);
+
+    this.pixel(cx, top + 34, String(number).padStart(2, '0'), PALETTE.textDisabled, 2, 0.5, 0.5, undefined, {
+      sizePx: this.st(16),
+    });
+  }
+
   private buildCurrentCard(levelId: string, number: number, sectorDone: boolean): void {
     const y = BIG.y;
     const h = BIG.h;
@@ -382,16 +412,21 @@ export class LevelSelectScene extends Phaser.Scene {
       sizePx: this.st(26),
     });
 
-    const play = this.add.graphics();
-    play.fillStyle(PALETTE.bgVoid, 1);
-    play.fillTriangle(x + 12, y + 42, x + 12, y + 64, x + 29, y + 53);
-    this.items.push(play);
+    this.items.push(addPlayTriangle(this.domText, x + 20, y + 53, 17, 22, hexToCss(PALETTE.bgVoid)));
 
     const label = this.domText.add(
       x + 36,
       y + 53,
       t('levelsPlay'),
-      { color: hexToCss(PALETTE.bgVoid), sizePx: this.fit(t('levelsPlay'), w - 44, 22), bold: true, uppercase: true },
+      {
+        color: hexToCss(PALETTE.bgVoid),
+        // Measured in the same weight it renders in: the probe used to run
+        // without `bold`, and Rubik's heavy step is wide enough that the word
+        // then overflowed the card it was being fitted to.
+        sizePx: this.fit(t('levelsPlay'), w - 44, 22, { bold: true }),
+        bold: true,
+        uppercase: true,
+      },
       0,
       0.5,
     );
@@ -438,13 +473,8 @@ export class LevelSelectScene extends Phaser.Scene {
     g.fillRect(x, y, w, h);
     g.lineStyle(1, PALETTE.system, 1);
     g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-    g.fillStyle(PALETTE.system, 1);
-    g.save();
-    g.translateCanvas(x + 14, y + 14);
-    g.rotateCanvas(Math.PI / 4);
-    g.fillRect(-6, -6, 12, 12);
-    g.restore();
     this.items.push(g);
+    this.items.push(addDiamondGlyph(this.domText, x + 14, y + 14, 12, hexToCss(PALETTE.system)));
 
     const title = this.domText.add(
       x + 26,

@@ -43,3 +43,33 @@ export function levelIdFor(sectorNumber: number, levelNumber: number): string {
 export function sectorIdOf(levelId: string): string {
   return `sector-${String(sectorNumberOf(levelId)).padStart(2, '0')}`;
 }
+
+export function levelNumberOf(levelId: string): number {
+  const match = LEVEL_ID_RE.exec(levelId);
+  return match ? Number(match[2]) : 1;
+}
+
+/**
+ * The level immediately before `levelId` in campaign order, or `null` for the
+ * very first level of the campaign. Sector boundaries are crossed: the level
+ * before `sector-02-level-01` is `sector-01-level-06`.
+ */
+export function previousLevelId(levelId: string): string | null {
+  const sector = sectorNumberOf(levelId);
+  const level = levelNumberOf(levelId);
+  if (level > 1) return levelIdFor(sector, level - 1);
+  if (sector > 1) return levelIdFor(sector - 1, LEVELS_PER_SECTOR);
+  return null;
+}
+
+/**
+ * Campaign progression: a level opens once the one before it is cleared.
+ *
+ * `isCompleted` is the caller's own lookup (`SaveService`) rather than an
+ * import, so this stays a pure function the level-select screen and the
+ * tests can both drive without touching storage.
+ */
+export function isLevelUnlocked(levelId: string, isCompleted: (id: string) => boolean): boolean {
+  const previous = previousLevelId(levelId);
+  return previous === null || isCompleted(previous);
+}

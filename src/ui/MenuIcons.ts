@@ -5,6 +5,16 @@ import { GLYPHS } from '@/art/font/glyphs';
 export type MenuIconKind = 'play' | 'levels' | 'shop' | 'help' | 'settings' | 'skin';
 
 /**
+ * Kinds whose shape is built from diagonals. The canvas is blown up with
+ * nearest-neighbour filtering, which turns any diagonal drawn into it into a
+ * staircase, so these two are drawn on the DOM layer instead (`ui/glyphs`)
+ * and this class leaves them alone. Everything else here is axis-aligned
+ * rectangles, which survive the upscale as the crisp blocks they are meant
+ * to be.
+ */
+export const DIAGONAL_ICONS: ReadonlySet<MenuIconKind> = new Set<MenuIconKind>(['play', 'skin']);
+
+/**
  * Menu button pictograms, drawn as pure geometry at the size they're shown.
  *
  * Every one is legible before it's read — that's the point of pairing them
@@ -41,11 +51,9 @@ export class MenuIcon extends Phaser.GameObjects.Container {
   private redraw(): void {
     const g = this.g;
     g.clear();
+    if (DIAGONAL_ICONS.has(this.kind)) return;
 
     switch (this.kind) {
-      case 'play':
-        this.drawPlay(g);
-        break;
       case 'levels':
         this.drawLevels(g);
         break;
@@ -58,22 +66,9 @@ export class MenuIcon extends Phaser.GameObjects.Container {
       case 'settings':
         this.drawSettings(g);
         break;
-      case 'skin':
-        this.drawSkin(g);
-        break;
     }
   }
 
-  /** 22x28 solid triangle pointing right — universal "start", and the only filled shape in the menu. */
-  private drawPlay(g: Phaser.GameObjects.Graphics): void {
-    g.fillStyle(this.accent, 1);
-    g.beginPath();
-    g.moveTo(-11, -14);
-    g.lineTo(11, 0);
-    g.lineTo(-11, 14);
-    g.closePath();
-    g.fillPath();
-  }
 
   /** Four 7x7 cells, 2px gutter: three lit (cleared), one dim (locked) — reads as a progress map. */
   private drawLevels(g: Phaser.GameObjects.Graphics): void {
@@ -152,15 +147,4 @@ export class MenuIcon extends Phaser.GameObjects.Container {
     }
   }
 
-  /** An 8x8 square on its corner — a loose "part/plate you can swap". */
-  private drawSkin(g: Phaser.GameObjects.Graphics): void {
-    g.fillStyle(this.accent, 1);
-    g.beginPath();
-    g.moveTo(0, -5);
-    g.lineTo(5, 0);
-    g.lineTo(0, 5);
-    g.lineTo(-5, 0);
-    g.closePath();
-    g.fillPath();
-  }
 }

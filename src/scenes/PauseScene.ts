@@ -11,6 +11,7 @@ import { FxSettings } from '@/fx/FxSettings';
 import { playSfx } from '@/audio/SfxManager';
 import { formatMmSsTenths } from '@/utils/formatTime';
 import { rebuildOnResize } from '@/ui/relayout';
+import { addPlayTriangle } from '@/ui/glyphs';
 
 interface PauseSceneData {
   gameplaySceneKey: string;
@@ -185,8 +186,7 @@ export class PauseScene extends Phaser.Scene {
     primary.fillRect(x, 66, COL_W, 56);
     primary.lineStyle(2, PALETTE.white, 1);
     primary.strokeRect(x + 1, 67, COL_W - 2, 54);
-    primary.fillStyle(PALETTE.bgVoid, 1);
-    primary.fillTriangle(x + 14, 82, x + 14, 106, x + 32, 94);
+    addPlayTriangle(this.domText, x + 23, 94, 18, 24, hexToCss(PALETTE.bgVoid));
     // 20px, not the 24px a first pass would reach for: the spec measured the
     // word at 185px there, against a 232px content box already spending 42px
     // on padding, arrow and gap — the last letter clipped.

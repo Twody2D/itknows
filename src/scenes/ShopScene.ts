@@ -31,7 +31,7 @@ import type { TrailKind } from '@/gameplay/TrailFx';
 import { FxManager } from '@/fx/FxManager';
 import { PACKS } from '@/data/dialogues';
 import { rebuildOnResize } from '@/ui/relayout';
-import { drawCheck } from '@/ui/glyphs';
+import { addCheckGlyph, addDiamondGlyph, addPlayTriangle } from '@/ui/glyphs';
 
 // Rail order top-to-bottom, per the Claude Design showroom mockup — БЕЗ РЕК.
 // sits at the bottom as the one solid gold shape in the rail, which is what
@@ -154,6 +154,8 @@ interface RailHandle {
   zone: Phaser.GameObjects.Zone;
   top: number;
   h: number;
+  /** Only the premium row has one — its glyph is a diagonal and so lives on the DOM layer. */
+  diamond: DomTextHandle | undefined;
 }
 
 /** Live "test run" state for the trail preview — a real run/jump/fall cycle so every trail kind actually reaches its own spawn condition (`TrailFx` only emits above a speed/fall threshold). */
@@ -447,13 +449,10 @@ export class ShopScene extends Phaser.Scene {
   /** Category glyphs per the mockup's own geometry notes — БЕЗ РЕК. is the one solid gold diamond, so the paid tab reads as different at a glance. */
   private drawCategoryIcon(g: Phaser.GameObjects.Graphics, category: ShopCategory, cx: number, cy: number, color: number): void {
     switch (category) {
+      // The diamond is the one category glyph built from diagonals, so it is
+      // drawn on the DOM layer (`rail.diamond`) instead of stair-stepping
+      // through the canvas upscale.
       case 'premium':
-        g.fillStyle(color, 1);
-        g.save();
-        g.translateCanvas(cx, cy);
-        g.rotateCanvas(Math.PI / 4);
-        g.fillRect(-6, -6, 12, 12);
-        g.restore();
         break;
       case 'character':
         g.fillStyle(color, 1);
@@ -526,7 +525,12 @@ export class ShopScene extends Phaser.Scene {
         this.selectCategory(i);
       });
 
-      this.railHandles.push({ category, bg, icon, label, zone, top: rowTop, h: rowHeight });
+      const diamond =
+        category === 'premium'
+          ? addDiamondGlyph(this.domText, RAIL_W / 2, cy - 6, 12, hexToCss(PALETTE.cyanDim))
+          : undefined;
+
+      this.railHandles.push({ category, bg, icon, label, zone, top: rowTop, h: rowHeight, diamond });
       y += rowHeight + gap;
     });
 
@@ -550,6 +554,7 @@ export class ShopScene extends Phaser.Scene {
       rail.icon.clear();
       this.drawCategoryIcon(rail.icon, rail.category, RAIL_W / 2, rail.top + rail.h / 2 - 6, isActive ? accent : PALETTE.cyanDim);
       rail.label.setColor(hexToCss(isActive ? PALETTE.white : PALETTE.labelMuted));
+      rail.diamond?.setColor(hexToCss(isActive ? accent : PALETTE.cyanDim));
     }
   }
 
@@ -558,6 +563,7 @@ export class ShopScene extends Phaser.Scene {
       rail.bg.setVisible(visible);
       rail.icon.setVisible(visible);
       rail.label.setVisible(visible);
+      rail.diamond?.setVisible(visible);
       if (visible) rail.zone.setInteractive({ useHandCursor: true });
       else rail.zone.disableInteractive();
     }
@@ -841,8 +847,8 @@ export class ShopScene extends Phaser.Scene {
       const badge = this.add.graphics();
       badge.fillStyle(accent, 1);
       badge.fillRect(x + w - 16, y - 4, 16, 16);
-      drawCheck(badge, x + w - 8, y + 4, 4, PALETTE.bgVoid);
       this.content.push(badge);
+      this.content.push(addCheckGlyph(this.domText, x + w - 8, y + 4, 12, hexToCss(PALETTE.bgVoid)));
     }
 
     if (unlocked) {
@@ -1490,7 +1496,7 @@ export class ShopScene extends Phaser.Scene {
       } else if (opts.icon === 'check') {
         g.fillStyle(opts.accent, 1);
         g.fillRect(iconCx - 7, iconCy - 7, 14, 14);
-        drawCheck(g, iconCx, iconCy, 4, PALETTE.bgVoid);
+        this.content.push(addCheckGlyph(this.domText, iconCx, iconCy, 12, hexToCss(PALETTE.bgVoid)));
       }
 
       label.setPosition(x + w / 2 + (opts.icon === 'none' ? 0 : 9), y + dy + h / 2);
@@ -2005,14 +2011,7 @@ export class ShopScene extends Phaser.Scene {
 
     // Headline row — the gold diamond plus the promise, at full card width.
     const bannerY = offerY + headerH + 14;
-    const diamond = this.add.graphics();
-    diamond.fillStyle(PALETTE.reward, 1);
-    diamond.save();
-    diamond.translateCanvas(offerX + 20, bannerY);
-    diamond.rotateCanvas(Math.PI / 4);
-    diamond.fillRect(-6, -6, 12, 12);
-    diamond.restore();
-    this.content.push(diamond);
+    this.content.push(addDiamondGlyph(this.domText, offerX + 20, bannerY, 12, hexToCss(PALETTE.reward)));
 
     // Mockup: 15px. A narrow canvas shrinks the card, so the headline drops to
     // whatever size actually clears its own gold bar — measured, not chosen
@@ -2049,7 +2048,7 @@ export class ShopScene extends Phaser.Scene {
       const check = this.add.graphics();
       check.fillStyle(PALETTE.patrolVisor, 1);
       check.fillRect(offerX + 12, y - 6, 12, 12);
-      drawCheck(check, offerX + 18, y, 3.5, PALETTE.bgVoid);
+      this.content.push(addCheckGlyph(this.domText, offerX + 18, y, 11, hexToCss(PALETTE.bgVoid)));
       this.content.push(check);
 
       const text = this.domText.add(
@@ -2361,9 +2360,8 @@ export class ShopScene extends Phaser.Scene {
     const glyph = this.add.graphics();
     glyph.fillStyle(disabled ? PALETTE.textDisabled : PALETTE.cyan, 1);
     glyph.fillRect(x + 8, y + 8, 16, 12);
-    glyph.fillStyle(PALETTE.bgVoid, 1);
-    glyph.fillTriangle(x + 14, y + 11, x + 14, y + 17, x + 19, y + 14);
     this.content.push(glyph);
+    this.content.push(addPlayTriangle(this.domText, x + 16, y + 14, 5, 6, hexToCss(PALETTE.bgVoid)));
 
     this.buildEarnAmount(x + 8, y + 60, EARN_AMOUNTS.rewardedAd);
 
@@ -2399,7 +2397,7 @@ export class ShopScene extends Phaser.Scene {
     const glyph = this.add.graphics();
     glyph.lineStyle(2, PALETTE.patrolVisor, 1);
     glyph.strokeRect(x + 9, y + 7, 14, 14);
-    drawCheck(glyph, x + 16, y + 14, 3.5, PALETTE.patrolVisor);
+    this.content.push(addCheckGlyph(this.domText, x + 16, y + 14, 11, hexToCss(PALETTE.patrolVisor)));
     this.content.push(glyph);
 
     this.buildEarnAmount(x + 8, y + 60, EARN_AMOUNTS.levelComplete);

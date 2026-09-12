@@ -1,36 +1,72 @@
-import type Phaser from 'phaser';
+import type { DomTextHandle, DomTextOverlay } from './DomTextOverlay';
 
 /**
- * The mockup's tick, drawn as pixel art on whole pixels.
+ * The mockup's small UI marks — tick, play triangle, diamond — drawn on the
+ * DOM layer rather than into the game canvas.
  *
- * The mockup builds it in CSS from one box with a left and a bottom border
- * rotated -45°, which is two strokes of identical weight meeting at a right
- * angle. A rotated rectangle can't be copied literally here: the canvas is
- * 270px tall and gets blown up with nearest-neighbour filtering, so anything
- * drawn off the pixel grid arrives as a smeared, ragged edge. It is stepped
- * instead — one column of the stroke per pixel of travel, which is what a
- * 45° line looks like when it is drawn rather than rotated.
+ * The canvas is 270px tall and is blown up to the viewport with
+ * nearest-neighbour filtering so the hand-authored pixel art stays crisp.
+ * That is right for sprites and wrong for these: a diagonal drawn into it
+ * arrives as a visible staircase, which is why the tick had to be stepped by
+ * hand and still read as chipped. The mockup builds all three out of plain
+ * CSS boxes, and a CSS box on the DOM layer is painted by the browser at
+ * native screen resolution — after the canvas upscale, like the text beside
+ * it — so the edges come out smooth at any size.
  *
- * Every column is the same `2u` tall. That uniform weight is the whole point:
- * the version this replaces mixed 1u and 2u columns along the two arms, and
- * the tick came out visibly chipped, thin in the middle of a stroke and
- * blunt at the ends.
- *
- * `size` is the nominal glyph size in virtual px; the stroke is a third of
- * it, at least one pixel.
+ * Sizes are in virtual px, matching the mockup's own numbers.
  */
-export function drawCheck(
-  g: Phaser.GameObjects.Graphics,
-  cx: number,
-  cy: number,
+
+/**
+ * Mockup: a box with only its left and bottom borders, rotated -45°. `size`
+ * is the tick's nominal box; the arms and stroke are proportions of it, so a
+ * badge and a button can ask for different sizes and get the same shape.
+ */
+export function addCheckGlyph(
+  domText: DomTextOverlay,
+  vx: number,
+  vy: number,
   size: number,
-  color: number,
-): void {
-  const u = Math.max(1, Math.round(size / 3));
-  // Top offset of each column, in units of `u`: down three, then up four.
-  const columns = [2, 3, 4, 3, 2, 1, 0];
-  const left = Math.round(cx - (columns.length * u) / 2);
-  const top = Math.round(cy - 3 * u);
-  g.fillStyle(color, 1);
-  columns.forEach((dy, i) => g.fillRect(left + i * u, top + dy * u, u, 2 * u));
+  color: string,
+): DomTextHandle {
+  const stroke = Math.max(1, size / 6);
+  return domText.addShape(
+    vx,
+    vy,
+    size * 0.52,
+    size * 0.3,
+    { sides: { left: [stroke, color], bottom: [stroke, color] }, rotate: -45 },
+    0.5,
+    0.5,
+  );
+}
+
+/** Mockup: a zero-sized box whose left border is the fill and whose top and bottom borders are transparent. */
+export function addPlayTriangle(
+  domText: DomTextOverlay,
+  vx: number,
+  vy: number,
+  w: number,
+  h: number,
+  color: string,
+): DomTextHandle {
+  return domText.addShape(
+    vx,
+    vy,
+    0,
+    0,
+    { sides: { left: [w, color], top: [h / 2, 'transparent'], bottom: [h / 2, 'transparent'] } },
+    0.5,
+    0.5,
+  );
+}
+
+/** Mockup: a plain square rotated 45°. */
+export function addDiamondGlyph(
+  domText: DomTextOverlay,
+  vx: number,
+  vy: number,
+  size: number,
+  color: string,
+): DomTextHandle {
+  return domText.addShape(vx, vy, size, size, { background: color, rotate: 45 }, 0.5, 0.5);
 }

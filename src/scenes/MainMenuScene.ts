@@ -16,6 +16,8 @@ import { fadeIn } from '@/ui/SceneFade';
 import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
 import { t } from '@/i18n/ui';
 import { rebuildOnResize, type RelayoutHandle } from '@/ui/relayout';
+import { DIAGONAL_ICONS } from '@/ui/MenuIcons';
+import { addDiamondGlyph, addPlayTriangle } from '@/ui/glyphs';
 
 /**
  * "Showcase + command column" (design spec 1a).
@@ -280,6 +282,7 @@ export class MainMenuScene extends Phaser.Scene {
     // Content is centred here rather than left-aligned, so the tile needs the
     // label's width — which only the DOM knows.
     const contentWidth = 8 + 5 + label.width;
+    const glyph = addDiamondGlyph(this.domText, 0, 0, 8, hexToCss(PALETTE.system));
     const tile: MenuTile = new MenuTile(this, {
       x: box.x,
       y: box.y,
@@ -291,10 +294,11 @@ export class MainMenuScene extends Phaser.Scene {
       hoverAccent: PALETTE.system,
       iconAccent: PALETTE.system,
       onClick: () => this.openOverlay('ShopScene', { category: 'character' }),
-      onLabelState: (state) => this.syncLabel(label, tile, state, 'skin'),
+      onLabelState: (state) => this.syncLabel(label, tile, state, 'skin', glyph),
       contentWidth,
     });
     label.setPosition(tile.labelX, tile.labelY);
+    glyph.setPosition(tile.iconX, tile.iconY);
   }
 
   private buildCreditsCounter(): void {
@@ -467,6 +471,10 @@ export class MainMenuScene extends Phaser.Scene {
     // at 120px wide with a short word, the fixed inset already reads fine.
     const contentWidth = spec.variant === 'primary' ? 22 + 16 + label.width : undefined;
 
+    const glyph = DIAGONAL_ICONS.has(spec.icon)
+      ? addPlayTriangle(this.domText, 0, 0, 22, 28, hexToCss(spec.iconAccent))
+      : undefined;
+
     const tile: MenuTile = new MenuTile(this, {
       x: box.x,
       y: box.y,
@@ -478,10 +486,11 @@ export class MainMenuScene extends Phaser.Scene {
       hoverAccent: spec.hoverAccent,
       iconAccent: spec.iconAccent,
       onClick: spec.onClick,
-      onLabelState: (state) => this.syncLabel(label, tile, state, commentKind),
+      onLabelState: (state) => this.syncLabel(label, tile, state, commentKind, glyph),
       ...(contentWidth !== undefined ? { contentWidth } : {}),
     });
     label.setPosition(tile.labelX, tile.labelY);
+    glyph?.setPosition(tile.iconX, tile.iconY);
 
     if (spec.variant === 'primary') this.addPlayPulse(tile);
   }
@@ -510,11 +519,17 @@ export class MainMenuScene extends Phaser.Scene {
     tile: MenuTile,
     state: MenuTileLabelState,
     commentKind?: MenuCommentKind,
+    glyph?: DomTextHandle,
   ): void {
     label.setColor(hexToCss(state.color));
     // Keeps the text sinking with the face on press, so the button reads as
     // one object rather than a label sitting on a moving panel.
     label.setPosition(tile.labelX, tile.labelY + state.offsetY);
+    // A diagonal pictogram lives on the DOM layer too (`DIAGONAL_ICONS`), so
+    // it sinks and recolours with the rest of the button rather than staying
+    // put while the face moves under it.
+    glyph?.setColor(hexToCss(state.iconColor));
+    glyph?.setPosition(tile.iconX, tile.iconY + state.offsetY);
 
     if (state.hover && commentKind && !this.commentedOn.has(commentKind)) {
       this.commentedOn.add(commentKind);

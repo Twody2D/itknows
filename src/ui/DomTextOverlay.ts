@@ -36,7 +36,10 @@ export interface DomTextHandle {
   destroy(): void;
 }
 
-interface ShapeSpec {
+/** One CSS border: width in *virtual* px and a colour, or `transparent` for the triangle trick. */
+export type BorderSide = readonly [widthPx: number, color: string];
+
+export interface ShapeSpec {
   vw: number;
   vh: number;
   background?: string;
@@ -44,6 +47,15 @@ interface ShapeSpec {
   borderWidthPx?: number;
   radius?: number;
   glow?: string;
+  /** Clockwise rotation in degrees, applied about the shape's own centre. */
+  rotate?: number;
+  /**
+   * Individual borders, for the two shapes the mockup builds out of them: a
+   * tick is a box with only its left and bottom borders drawn and rotated
+   * -45°, and a triangle is a zero-sized box whose remaining borders are
+   * transparent.
+   */
+  sides?: { top?: BorderSide; right?: BorderSide; bottom?: BorderSide; left?: BorderSide };
 }
 
 interface Item {
@@ -168,7 +180,7 @@ export class DomTextOverlay {
     vy: number,
     vw: number,
     vh: number,
-    style: { background?: string; border?: string; borderWidthPx?: number; radius?: number; glow?: string },
+    style: Omit<ShapeSpec, 'vw' | 'vh'>,
     originX = 0.5,
     originY = 0.5,
   ): DomTextHandle {
@@ -253,6 +265,13 @@ export class DomTextOverlay {
       el.style.background = s.background ?? 'transparent';
       el.style.borderRadius = s.radius === undefined ? '0' : `${s.radius * scaleY}px`;
       el.style.border = s.border ? `${Math.max(1, (s.borderWidthPx ?? 1) * scaleY)}px solid ${s.border}` : '';
+      if (s.sides) {
+        const side = (spec: BorderSide | undefined): string => (spec ? `${spec[0] * scaleY}px solid ${spec[1]}` : '0');
+        el.style.borderTop = side(s.sides.top);
+        el.style.borderRight = side(s.sides.right);
+        el.style.borderBottom = side(s.sides.bottom);
+        el.style.borderLeft = side(s.sides.left);
+      }
       el.style.boxShadow = s.glow ? `0 0 ${6 * scaleY}px ${s.glow}` : '';
       return;
     }
@@ -323,7 +342,8 @@ export class DomTextOverlay {
     const { scaleX, scaleY, rect } = this.currentScale();
     item.el.style.left = `${rect.left + item.vx * scaleX}px`;
     item.el.style.top = `${rect.top + item.vy * scaleY}px`;
-    item.el.style.transform = `translate(${-item.originX * 100}%, ${-item.originY * 100}%)`;
+    const spin = item.shape?.rotate === undefined ? '' : ` rotate(${item.shape.rotate}deg)`;
+    item.el.style.transform = `translate(${-item.originX * 100}%, ${-item.originY * 100}%)${spin}`;
   }
 
   private reposition(): void {
