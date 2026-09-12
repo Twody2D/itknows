@@ -29,7 +29,6 @@ import { SwingingSpikeTrap } from '@/traps/SwingingSpikeTrap';
 import { LoopSpikeTrap } from '@/traps/LoopSpikeTrap';
 import { hash01, stringHash } from '@/art/hash';
 import { PALETTE } from '@/config/palette';
-import { EXIT_VISUAL_HEIGHT_TILES } from '@/art/drawTiles';
 
 export interface LethalHazard {
   id: string;
@@ -516,12 +515,21 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
   const exitX = def.exitCol * TILE_SIZE + exitWidth / 2;
   const exitY = exitSurfaceY - exitHeight / 2;
 
-  const exitVisualHeight = EXIT_VISUAL_HEIGHT_TILES * TILE_SIZE;
-  const exitSprite = scene.add.image(exitX, exitSurfaceY - exitVisualHeight / 2, 'exit-active');
-  exitSprite.postFX.addGlow(PALETTE.cyan, 0, 0, false, 0.3, 6);
+  // Bottom-anchored to the surface line, and animated with light rather than
+  // geometry.
+  //
+  // This used to be centre-anchored with a `scale: 1 -> 1.04` tween, which on
+  // a 50px pixel-art sprite under `roundPixels` is a 2px change snapping
+  // between integers — so the door visibly jittered, and because it grew from
+  // its centre, its bottom edge sank a pixel into the floor and came back out
+  // every cycle. That is the "portal moves strangely" the owner spotted.
+  // Pulsing the glow says the same thing ("this is alive, come here") without
+  // moving a single pixel — the same treatment the menu's PLAY tile uses.
+  const exitSprite = scene.add.image(exitX, exitSurfaceY, 'exit-active').setOrigin(0.5, 1);
+  const exitGlow = exitSprite.postFX.addGlow(PALETTE.cyan, 1, 0, false, 0.3, 6);
   scene.tweens.add({
-    targets: exitSprite,
-    scale: { from: 1, to: 1.04 },
+    targets: exitGlow,
+    outerStrength: { from: 1, to: 4 },
     duration: 1400,
     yoyo: true,
     repeat: -1,

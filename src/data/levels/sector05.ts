@@ -1,22 +1,30 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
 
 /**
- * SECTOR 05 — SYSTEM CORE. The campaign's closing argument, and the only
- * sector that attacks the habit the previous four built.
+ * SECTOR 05 — SYSTEM CORE. Waiting now costs something.
  *
- * Sectors 02 and 03 taught patience: find the safe tile, watch the cycle,
- * then commit. Sector 04 taught the opposite for crumbling ground. This one
- * takes the safe tile away — the pursuer makes standing still cost
- * something, so every wait is now a trade rather than a free action. Nothing
- * here is faster than the player (`speedFactor` below 1, CLAUDE.md #13), so
- * the pressure is always survivable by moving well; it is never a race that
- * can be lost at the spawn point.
+ * The campaign's closing argument, and the only sector that attacks the
+ * habit the previous four built. Sectors 03 and 04 taught patience: find the
+ * safe tile, read the cycle, then commit. This one takes the safe tile away
+ * — the pursuer turns every wait into a trade instead of a free action, and
+ * suddenly every beam the player learned to sit and watch is expensive.
  *
- * ONE FAKE EXIT IN THE WHOLE SECTOR (`sector-05-level-03`), which is the
- * cap CLAUDE.md #4.7 sets. It is on the obvious path, at ground level, with
- * the real exit plainly visible above it — its core does not glow, which is
- * the distinguishing mark the same rule requires, and reaching it costs a
- * walk back rather than a life.
+ *   01 HUNTED      — something is behind you
+ *   02 CHASE       — and the floor is moving too
+ *   03 MIRROR      — the exit you expected is not the exit
+ *   04 GAUNTLET    — four families, one screen
+ *   05 PRESSURE    — beams to wait for, with the wait charged for
+ *   06 SYSTEM CORE — the full height of the screen
+ *
+ * Nothing here is faster than the player (`speedFactor` below 1, CLAUDE.md
+ * #13), so the pressure is always survivable by moving well; it is never a
+ * race that was lost at the spawn point.
+ *
+ * ONE FAKE EXIT IN THE WHOLE SECTOR (`sector-05-level-03`), the cap
+ * CLAUDE.md #4.7 sets. It stands on the obvious path at ground level with
+ * the real exit plainly visible above it, its core unlit — the
+ * distinguishing mark the same rule requires — and reaching it costs a walk
+ * back rather than a life.
  */
 export const SECTOR_05_LEVELS: LevelDef[] = [
   {
@@ -30,55 +38,40 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     playerStartCol: 4,
     exitCol: 43,
     traps: [
-      // Slower than the player by a wide margin, and it starts three
-      // columns behind them: this is a clock, not a predator. Every spike
-      // pair and the pit are things the player already knows how to solve —
-      // what is new is that dithering in front of them now has a price.
+      // Slower than the player by a wide margin and starting three columns
+      // behind them: a clock, not a predator. Every spike pair and the pit
+      // are things the player already knows how to solve — what is new is
+      // that hesitating in front of them now has a price.
       { type: 'pursuer', id: 'pursuer-01', col: 1, row: 21, speedFactor: 0.6 },
       { type: 'moving-spike', id: 'mspike-01', fromCol: 34, fromRow: 19, toCol: 40, toRow: 19, travelMs: 2400 },
     ],
   },
   {
     id: 'sector-05-level-02',
-    name: 'CIRCUIT',
+    name: 'CHASE',
     width: 48,
     groundRow: 22,
-    gaps: [],
-    spikeColumns: [],
-    platforms: [
-      { col: 12, row: 19, width: 5 },
-      { col: 20, row: 16, width: 5 },
-      { col: 28, row: 13, width: 6 },
-    ],
-    playerStartCol: 2,
-    exitCol: 30,
-    exitRow: 13,
+    // Sector 01's moving hole, with something behind you. On its own the
+    // sliding floor is a patience puzzle: wait for the slab, step on,
+    // ride. Here waiting is the one thing that is not free, so the crossing
+    // has to be taken at the moment it opens rather than the moment it is
+    // comfortable.
+    gaps: [[16, 33]],
+    spikeColumns: [9, 10],
+    platforms: [],
+    playerStartCol: 4,
+    exitCol: 43,
     traps: [
-      // A one-way circuit, never reversing — which is exactly what makes it
-      // harder to read than a patrol. A ping-pong teaches "it comes straight
-      // back"; this comes back around the other side, so the safe moment has
-      // to be counted rather than felt.
+      { type: 'pursuer', id: 'pursuer-01', col: 1, row: 21, speedFactor: 0.55 },
       {
-        type: 'loop-spike',
-        id: 'loop-01',
-        waypoints: [
-          { col: 14, row: 17 },
-          { col: 20, row: 17 },
-          { col: 20, row: 20 },
-          { col: 14, row: 20 },
-        ],
-        travelMs: 1150,
-      },
-      {
-        type: 'loop-spike',
-        id: 'loop-02',
-        waypoints: [
-          { col: 25, row: 14 },
-          { col: 31, row: 14 },
-          { col: 31, row: 17 },
-          { col: 25, row: 17 },
-        ],
-        travelMs: 1000,
+        type: 'moving-platform',
+        id: 'movp-01',
+        fromCol: 16,
+        fromRow: 22,
+        toCol: 21,
+        toRow: 22,
+        width: 13,
+        travelMs: 2400,
       },
     ],
   },
@@ -98,10 +91,10 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     exitCol: 36,
     exitRow: 13,
     traps: [
-      // Straight ahead on the ground, where every exit in the campaign so
-      // far has been. The real one is above and to the right, lit, and
-      // visible from the spawn — the level is a question about whether the
-      // player has been reading or pattern-matching.
+      // Straight ahead on the ground, where every exit for four sectors has
+      // been. The real one is above and to the right, lit, and visible from
+      // the spawn — the level is a question about whether the player has
+      // been reading or pattern-matching.
       { type: 'fake-exit', id: 'fake-exit-01', col: 27, row: 22 },
       { type: 'laser', id: 'laser-01', col: 31, topRow: 17, bottomRow: 21 },
       { type: 'moving-spike', id: 'mspike-01', fromCol: 27, fromRow: 15, toCol: 32, toRow: 15, travelMs: 1700 },
@@ -141,10 +134,10 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     playerStartCol: 4,
     exitCol: 43,
     traps: [
-      // The pursuer returns against the sector's timed hazards rather than
-      // against plain geometry: every laser here is a wait, and the wait is
-      // now being charged for. The ground between them is still wide enough
-      // to take that wait — just not twice.
+      // The pursuer against the sector's timed hazards rather than against
+      // plain geometry: every beam here is a wait, and the wait is now
+      // being charged for. The ground between them is still wide enough to
+      // take that wait — just not twice.
       { type: 'pursuer', id: 'pursuer-01', col: 1, row: 21, speedFactor: 0.55 },
       { type: 'laser', id: 'laser-01', col: 17, topRow: 16, bottomRow: 21 },
       { type: 'laser', id: 'laser-02', col: 24, topRow: 16, bottomRow: 21, initialIdleMs: 800 },
@@ -159,14 +152,12 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     gaps: [[17, 21]],
     spikeColumns: [9, 10],
     // The campaign's tallest climb: six tiers from the ground to row 4, the
-    // full height of the screen, with the exit at the top. Every tier is a
-    // hazard the player has already met, none of them new — the finale is
-    // about doing all of it in one run, not about one last surprise.
-    // The row-10 tier is deliberately short and out of reach of the tier
-    // below it: `dp-01` is the step that bridges them, so the one crumbling
-    // platform in the level is load-bearing rather than decorative. It sat
-    // flush against this ledge in the first draft, which made it a wider
-    // ledge and nothing more.
+    // full height of the screen, with the exit at the top. Every hazard on
+    // it has been met before and none of them is new — the finale is about
+    // doing all of it in one run, not about one last surprise. The row-10
+    // tier is short and out of reach of the one below on purpose, so the
+    // single crumbling ledge in the level is load-bearing rather than
+    // decorative.
     platforms: [
       { col: 24, row: 19, width: 5 },
       { col: 32, row: 16, width: 5 },

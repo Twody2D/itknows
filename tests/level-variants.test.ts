@@ -16,19 +16,19 @@ describe.each(flatVariants)('validateLevel: $levelId ($variantId)', ({ def }) =>
 
 describe('LevelFactory variant resolution', () => {
   it('returns the base level for an unknown variantId', () => {
-    const level = getLevel('sector-02-level-01', 'nonexistent');
-    expect(level.id).toBe('sector-02-level-01');
+    const level = getLevel('sector-03-level-01', 'nonexistent');
+    expect(level.id).toBe('sector-03-level-01');
     expect(level.traps?.[0]).toMatchObject({ id: 'laser-01' });
   });
 
   it('returns the base level for "standard" or no variantId', () => {
-    const base = getLevel('sector-02-level-01');
-    expect(getLevel('sector-02-level-01', 'standard')).toBe(base);
+    const base = getLevel('sector-03-level-01');
+    expect(getLevel('sector-03-level-01', 'standard')).toBe(base);
   });
 
   it('resolves a real gentle variant that retunes the hazard without moving the level', () => {
-    const base = getLevel('sector-02-level-01');
-    const gentle = getLevel('sector-02-level-01', 'gentle');
+    const base = getLevel('sector-03-level-01');
+    const gentle = getLevel('sector-03-level-01', 'gentle');
     // A variant may only change how an already-present hazard behaves
     // (`variants.ts`) — so the timing differs and everything the solver
     // proved reachable stays byte-for-byte identical.
@@ -40,7 +40,7 @@ describe('LevelFactory variant resolution', () => {
   });
 
   it('resolves a real bold variant for a level that has one', () => {
-    const bold = getLevel('sector-02-level-01', 'bold');
+    const bold = getLevel('sector-03-level-01', 'bold');
     expect(bold.traps?.[0]).toMatchObject({ type: 'laser' });
   });
 

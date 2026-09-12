@@ -1,133 +1,134 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
 
 /**
- * SECTOR 02 — NEON GRID. The sector of timed vertical beams: lasers that
- * kill, timing gates that only block, and one bridge that moves on its own
- * schedule.
+ * SECTOR 02 — NEON GRID. Nothing holds still.
  *
- * What the sector is actually teaching is patience. Sector 01's hazards
- * could all be beaten by moving well; these cannot be beaten by moving at
- * all, only by choosing *when*. Every beam here has somewhere safe to stand
- * and watch it from — that standing room is load-bearing, not decoration,
- * and it is why a laser is fair even though it kills on contact. The level
- * is one screen (`LevelDef`), so the beam's whole cycle is visible from the
- * spawn point before the player commits to anything.
+ * Sector 01 taught that the floor can betray you. This one takes the idea
+ * off the ground: ledges that crumble once you land, spikes that travel on
+ * curves instead of lines, and one bridge that is genuinely the only way
+ * across. The common thread is that standing still stops being the safe
+ * default — which is the exact habit sector 03's timed beams will then
+ * demand back.
  *
- * NOTHING HERE IS RIDDEN INTO A BEAM. A hazard the player cannot steer away
- * from while it is lethal would break CLAUDE.md #4.5's reaction window no
- * matter how long its warning phase runs, so no laser ever crosses the path
- * `movp-01` carries the player along — the beams sit on the solid ground at
- * either end of the ride, where waiting is possible.
+ *   01 CRUMBLE   — the ledge falls after you land on it
+ *   02 PENDULUM  — a spike that swings, and visibly slows to turn
+ *   03 ORBIT     — a spike that circles and never slows
+ *   04 FREEFALL  — the floor that drops, now over a real pit
+ *   05 BRIDGE    — a pit no jump can cross
+ *   06 GRID CORE — all of it, climbing
  */
 export const SECTOR_02_LEVELS: LevelDef[] = [
   {
     id: 'sector-02-level-01',
-    name: 'GRID ENTRY',
-    width: 48,
-    groundRow: 22,
-    // The pit comes before the beam so the two lessons never overlap: clear
-    // it, land, and only then face something that has to be waited out.
-    gaps: [[16, 19]],
-    spikeColumns: [10, 11],
-    platforms: [],
-    playerStartCol: 2,
-    exitCol: 43,
-    traps: [
-      {
-        type: 'laser',
-        id: 'laser-01',
-        col: 30,
-        topRow: 16,
-        bottomRow: 21,
-      },
-    ],
-  },
-  {
-    id: 'sector-02-level-02',
-    name: 'OFFSET',
+    name: 'CRUMBLE',
     width: 48,
     groundRow: 22,
     gaps: [],
     spikeColumns: [],
-    // The climb puts the exit above both beams, so they are crossed on the
-    // way up rather than run past on a flat floor — and each tier is a
-    // place to stand and watch the next one from.
     platforms: [
-      { col: 14, row: 19, width: 5 },
-      { col: 22, row: 16, width: 5 },
-      { col: 30, row: 13, width: 5 },
-      { col: 38, row: 10, width: 6 },
+      { col: 10, row: 19, width: 4 },
+      { col: 35, row: 7, width: 6 },
     ],
     playerStartCol: 2,
-    exitCol: 40,
-    exitRow: 10,
+    exitCol: 37,
+    exitRow: 7,
     traps: [
-      // Same timing shape, deliberately out of phase (roughly half a cycle
-      // apart) — there is no fixed "safe beat" that clears both, so they
-      // have to be watched rather than memorised. Both are independently
-      // honest at the default warning, and the tier before each is wide
-      // enough to wait on indefinitely.
-      { type: 'laser', id: 'laser-01', col: 20, topRow: 14, bottomRow: 21 },
-      { type: 'laser', id: 'laser-02', col: 28, topRow: 11, bottomRow: 18, initialIdleMs: 1150 },
+      // The middle of the climb is made of ledges that crumble on contact,
+      // so the ladder can only be taken in one unbroken run. Failing it
+      // drops the player onto clean ground with nothing underneath — the
+      // cost of a mistake is the climb, not the attempt. That is what makes
+      // this the right place to learn the mechanic rather than sector 05.
+      { type: 'disappearing-platform', id: 'dp-01', col: 17, row: 16, width: 3 },
+      { type: 'disappearing-platform', id: 'dp-02', col: 23, row: 13, width: 3 },
+      { type: 'disappearing-platform', id: 'dp-03', col: 29, row: 10, width: 3 },
+    ],
+  },
+  {
+    id: 'sector-02-level-02',
+    name: 'PENDULUM',
+    width: 48,
+    groundRow: 22,
+    gaps: [[24, 27]],
+    spikeColumns: [16, 17],
+    platforms: [{ col: 32, row: 19, width: 5 }],
+    playerStartCol: 2,
+    exitCol: 43,
+    traps: [
+      // A swing visibly decelerates to turn around at each extreme, and the
+      // deceleration is the read: the safe moment is when the spike is
+      // farthest away, not a fixed beat. Three of them at different periods
+      // across one corridor, so there is no single rhythm that clears the
+      // level — each has to be watched on approach.
+      { type: 'swinging-spike', id: 'swing-01', pivotCol: 12, pivotRow: 15, lengthTiles: 3, maxAngleDeg: 42, periodMs: 2100 },
+      { type: 'swinging-spike', id: 'swing-02', pivotCol: 21, pivotRow: 15, lengthTiles: 4, maxAngleDeg: 38, periodMs: 1700 },
+      { type: 'swinging-spike', id: 'swing-03', pivotCol: 31, pivotRow: 14, lengthTiles: 3, maxAngleDeg: 46, periodMs: 2400 },
     ],
   },
   {
     id: 'sector-02-level-03',
-    name: 'GATE',
+    name: 'ORBIT',
     width: 48,
     groundRow: 22,
-    gaps: [[26, 29]],
-    spikeColumns: [34, 35],
-    platforms: [{ col: 14, row: 19, width: 5 }],
+    gaps: [],
+    spikeColumns: [],
+    platforms: [
+      { col: 10, row: 19, width: 5 },
+      { col: 19, row: 16, width: 5 },
+      { col: 28, row: 13, width: 5 },
+      { col: 37, row: 10, width: 6 },
+    ],
     playerStartCol: 2,
-    exitCol: 43,
+    exitCol: 39,
+    exitRow: 10,
     traps: [
-      // A timing gate blocks but never kills, so this is the sector's one
-      // safe place to learn the read: mistime it and you lose a beat, not
-      // the attempt. It sits before the laser on purpose — the same
-      // "watch the cycle, then go" skill, rehearsed without stakes first.
-      { type: 'timing-gate', id: 'gate-01', col: 20, topRow: 16, bottomRow: 21 },
-      { type: 'laser', id: 'laser-01', col: 38, topRow: 16, bottomRow: 21 },
+      // The opposite read to the pendulum, which is why it follows it
+      // directly: a fixed arm at constant speed, never slowing, never
+      // reversing. Each one is parked on the gap between two tiers, so the
+      // jump is always available and only ever at the wrong moment. The
+      // steady sweep is its own telegraph (`TrapDef.ts`) — no warning phase
+      // needed, and crossable first try by anyone watching.
+      { type: 'orbit-spike', id: 'orbit-01', pivotCol: 17, pivotRow: 18, radiusTiles: 1.75, periodMs: 2400 },
+      { type: 'orbit-spike', id: 'orbit-02', pivotCol: 26, pivotRow: 15, radiusTiles: 1.75, periodMs: 2000 },
+      { type: 'orbit-spike', id: 'orbit-03', pivotCol: 35, pivotRow: 12, radiusTiles: 1.75, periodMs: 2800 },
     ],
   },
   {
     id: 'sector-02-level-04',
-    name: 'CROSSFIRE',
+    name: 'FREEFALL',
     width: 48,
     groundRow: 22,
-    gaps: [[18, 22]],
-    spikeColumns: [12, 13],
-    // A climb whose tiers alternate sides: the player crosses the level's
-    // width three times, and a beam guards each crossing.
-    platforms: [
-      { col: 24, row: 19, width: 6 },
-      { col: 34, row: 16, width: 6 },
-      { col: 24, row: 13, width: 6 },
-      { col: 14, row: 10, width: 6 },
-    ],
+    // Sector 01 taught the dropping floor at ground level, where falling
+    // through it was the lesson. Here the same stones are the only footing
+    // over a twenty-five-column pit, so the crossing is one committed
+    // rhythm rather than four separate jumps.
+    gaps: [[14, 38]],
+    spikeColumns: [8, 9],
+    platforms: [],
     playerStartCol: 2,
-    exitCol: 15,
-    exitRow: 10,
+    exitCol: 43,
     traps: [
-      { type: 'laser', id: 'laser-01', col: 32, topRow: 17, bottomRow: 21 },
-      { type: 'laser', id: 'laser-02', col: 31, topRow: 11, bottomRow: 15, initialIdleMs: 800 },
-      { type: 'laser', id: 'laser-03', col: 21, topRow: 8, bottomRow: 12, initialIdleMs: 1500 },
+      { type: 'falling-platform', id: 'flp-01', col: 14, row: 19, width: 3 },
+      { type: 'falling-platform', id: 'flp-02', col: 20, row: 19, width: 3 },
+      { type: 'falling-platform', id: 'flp-03', col: 26, row: 19, width: 3 },
+      { type: 'falling-platform', id: 'flp-04', col: 32, row: 19, width: 3 },
     ],
   },
   {
     id: 'sector-02-level-05',
-    name: 'MOVING BRIDGE',
+    name: 'BRIDGE',
     width: 48,
     groundRow: 22,
-    // A pit far wider than any jump — the bridge is not a shortcut here, it
-    // is the only way across, which is what makes waiting for it the whole
-    // level. `LevelValidator` models the ride as a real edge between the
-    // platform's two ends, so "solvable" means solvable *by riding it*.
+    // A pit far wider than any jump, with a slab that is genuinely
+    // transport rather than a moving floor — the same trap as sector 01's
+    // SHIFT, sized the other way round so what reads is the bridge, not the
+    // hole. `LevelValidator` models the ride as a real edge between its two
+    // ends, so "solvable" here means solvable *by riding it*.
     gaps: [[17, 33]],
     spikeColumns: [10, 11],
-    platforms: [],
+    platforms: [{ col: 38, row: 19, width: 5 }],
     playerStartCol: 2,
-    exitCol: 43,
+    exitCol: 40,
+    exitRow: 19,
     traps: [
       {
         type: 'moving-platform',
@@ -139,11 +140,12 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
         width: 3,
         travelMs: 3400,
       },
-      // Both beams stand on solid ground, never over the ride — see the
-      // file doc comment. The first is the toll for boarding, the second
-      // the toll for getting off, and each has a full landing to wait on.
-      { type: 'laser', id: 'laser-01', col: 13, topRow: 16, bottomRow: 21 },
-      { type: 'laser', id: 'laser-02', col: 38, topRow: 16, bottomRow: 21, initialIdleMs: 900 },
+      // On solid ground at the boarding end, never over the ride: a hazard
+      // the player cannot steer away from while it is lethal would break
+      // CLAUDE.md #4.5's reaction window no matter how long its warning ran.
+      // This is the toll for getting on, taken somewhere it is possible to
+      // wait.
+      { type: 'swinging-spike', id: 'swing-01', pivotCol: 13, pivotRow: 15, lengthTiles: 4, maxAngleDeg: 40, periodMs: 1800 },
     ],
   },
   {
@@ -151,32 +153,32 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
     name: 'GRID CORE',
     width: 48,
     groundRow: 22,
-    gaps: [[20, 26]],
-    spikeColumns: [8, 9, 33, 34],
-    // The sector's exam: a gate to read, a bridge to board, beams on both
-    // banks and a climb to an exit that is above all of it.
+    // The sector's exam: cross a moving floor, climb ledges that will not
+    // wait, and do it under an orbit that never stops. The exit is at the
+    // top, so every idea has to be solved on the way through.
+    gaps: [[15, 20]],
+    spikeColumns: [9, 10],
     platforms: [
-      { col: 36, row: 19, width: 5 },
-      { col: 30, row: 16, width: 5 },
-      { col: 37, row: 13, width: 6 },
+      { col: 24, row: 19, width: 5 },
+      { col: 38, row: 13, width: 6 },
     ],
     playerStartCol: 2,
-    exitCol: 39,
+    exitCol: 40,
     exitRow: 13,
     traps: [
-      { type: 'timing-gate', id: 'gate-01', col: 14, topRow: 16, bottomRow: 21 },
       {
         type: 'moving-platform',
         id: 'movp-01',
-        fromCol: 18,
-        fromRow: 19,
-        toCol: 27,
-        toRow: 19,
-        width: 3,
-        travelMs: 2600,
+        fromCol: 15,
+        fromRow: 22,
+        toCol: 17,
+        toRow: 22,
+        width: 4,
+        travelMs: 2200,
       },
-      { type: 'laser', id: 'laser-01', col: 31, topRow: 17, bottomRow: 21 },
-      { type: 'laser', id: 'laser-02', col: 34, topRow: 11, bottomRow: 15, initialIdleMs: 1300 },
+      { type: 'disappearing-platform', id: 'dp-01', col: 31, row: 16, width: 4 },
+      { type: 'orbit-spike', id: 'orbit-01', pivotCol: 29, pivotRow: 18, radiusTiles: 1.75, periodMs: 1900 },
+      { type: 'swinging-spike', id: 'swing-01', pivotCol: 36, pivotRow: 9, lengthTiles: 3, maxAngleDeg: 44, periodMs: 1600 },
     ],
   },
 ];
