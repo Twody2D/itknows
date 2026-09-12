@@ -1,6 +1,7 @@
 import { TILE_SIZE } from '@/config/display';
 import type { LevelDef } from './LevelDef';
-import { maxHorizontalReach } from './jumpPhysics';
+import { exitRowOf } from './LevelDef';
+import { MAX_JUMP_RISE_PX, maxHorizontalReach } from './jumpPhysics';
 
 interface Segment {
   label: string;
@@ -36,26 +37,46 @@ function groundSegments(def: LevelDef): Segment[] {
   return segments;
 }
 
-function platformSegments(def: LevelDef): Segment[] {
-  const segments = def.platforms.map((p, i) => ({
+/**
+ * Every standable surface, plus the "ride" edges a moving platform adds.
+ *
+ * A moving platform is two places, not one: where it starts and where it
+ * ends. Modelling it only at its start position (what this used to do) is
+ * wrong in the direction that matters — a bridge across a pit wider than a
+ * jump would be reported unsolvable even though riding it is the intended
+ * and only solution, which is precisely what a bridge is for. Both
+ * endpoints become nodes and the ride between them becomes an edge in both
+ * directions, since the platform comes back.
+ *
+ * The other platform-family traps stay single nodes at their nominal
+ * position; per-instant timing (is the disappearing platform there *now*)
+ * is out of scope here, see the module doc comment below.
+ */
+function platformSegments(def: LevelDef): { segments: Segment[]; rides: Array<[Segment, Segment]> } {
+  const segments: Segment[] = def.platforms.map((p, i) => ({
     label: `platform-${i}`,
     fromCol: p.col,
     toCol: p.col + p.width - 1,
     row: p.row,
   }));
+  const rides: Array<[Segment, Segment]> = [];
 
-  // Dynamic platform-family traps are approximated by the tile position
-  // they're defined at (moving platforms: their start position). Exact
-  // per-instant timing/position of dynamic traps is intentionally out of
-  // scope here — see the module doc comment below.
   for (const trap of def.traps ?? []) {
     if (trap.type === 'moving-platform') {
-      segments.push({
-        label: `moving-platform-${trap.id}`,
+      const start: Segment = {
+        label: `moving-platform-${trap.id}@start`,
         fromCol: trap.fromCol,
         toCol: trap.fromCol + trap.width - 1,
         row: trap.fromRow,
-      });
+      };
+      const end: Segment = {
+        label: `moving-platform-${trap.id}@end`,
+        fromCol: trap.toCol,
+        toCol: trap.toCol + trap.width - 1,
+        row: trap.toRow,
+      };
+      segments.push(start, end);
+      rides.push([start, end]);
     } else if (trap.type === 'disappearing-platform' || trap.type === 'falling-platform') {
       segments.push({
         label: `${trap.type}-${trap.id}`,
@@ -66,40 +87,52 @@ function platformSegments(def: LevelDef): Segment[] {
     }
   }
 
-  return segments;
+  return { segments, rides };
 }
 
 function segmentContainsCol(segment: Segment, col: number): boolean {
   return col >= segment.fromCol && col <= segment.toCol;
 }
 
-function edgeGapPx(a: Segment, b: Segment): number | null {
+/** Horizontal px between the two segments' nearest edges; 0 when their column ranges overlap. */
+function edgeGapPx(a: Segment, b: Segment): number {
   if (a.toCol < b.fromCol) return (b.fromCol - a.toCol - 1) * TILE_SIZE;
   if (b.toCol < a.fromCol) return (a.fromCol - b.toCol - 1) * TILE_SIZE;
-  return null; // column ranges overlap — treat as directly reachable (e.g. a platform above ground)
+  return 0;
 }
 
-function canJumpBetween(a: Segment, b: Segment): boolean {
-  const gapPx = edgeGapPx(a, b);
-  if (gapPx === null) return true;
-  if (gapPx <= 0) return true;
-
-  const aY = a.row * TILE_SIZE;
-  const bY = b.row * TILE_SIZE;
-  // a -> b: b's rise above a is (aY - bY); b -> a: a's rise above b is (bY - aY).
-  const reachAtoB = maxHorizontalReach(aY - bY);
-  const reachBtoA = maxHorizontalReach(bY - aY);
-  return gapPx <= Math.max(reachAtoB, reachBtoA);
+/**
+ * Can the player get from standing on `from` to standing on `to`, in that
+ * direction, with one jump?
+ *
+ * DIRECTED ON PURPOSE. Dropping ten tiles down is free; climbing ten tiles
+ * back up is impossible, and the two are not the same edge. This used to
+ * connect a pair whenever *either* direction worked and to treat any two
+ * segments whose columns overlapped as mutually reachable regardless of
+ * height — which is harmless for a flat corridor (the shape every level had
+ * when it was written) and completely wrong for a climb, where it would
+ * happily certify a level whose exit platform sits ten tiles above anything
+ * the player can reach. Since levels are now one screen and built upward
+ * (`LevelDef`), that is the normal case, not an edge case.
+ */
+function canReach(from: Segment, to: Segment): boolean {
+  const fromY = from.row * TILE_SIZE;
+  const toY = to.row * TILE_SIZE;
+  // Positive when `to` sits above `from` — the height the jump has to gain.
+  const rise = fromY - toY;
+  if (rise > MAX_JUMP_RISE_PX) return false;
+  return edgeGapPx(from, to) <= maxHorizontalReach(rise);
 }
 
 /**
  * Reachability solver over level geometry (CLAUDE.md #4.3 / master-prompt
  * §22). Builds one graph node per contiguous ground run and per platform
  * (including dynamic platform-family traps at their nominal position), and
- * connects any two nodes whose edge-to-edge gap is within
- * `maxHorizontalReach` of a full-held jump (`jumpPhysics.ts` — the same
- * constants the real Player controller uses). BFS from the spawn column to
- * the exit column proves the level is physically completable.
+ * connects node A to node B when a single full-held jump from A both gains
+ * B's height and covers the horizontal gap (`jumpPhysics.ts` — the same
+ * constants the real Player controller uses). Edges are directed, so a
+ * one-way drop is never mistaken for a way back up. BFS from the spawn
+ * column to the exit proves the level is physically completable.
  *
  * Scope: this validates STATIC geometry — a jump-reachable path exists.
  * It does not simulate trap timing (whether a laser's active window can be
@@ -112,7 +145,12 @@ function canJumpBetween(a: Segment, b: Segment): boolean {
  * trap placements themselves to be honest by construction.
  */
 export function validateLevel(def: LevelDef): ValidationResult {
-  const segments = [...groundSegments(def), ...platformSegments(def)];
+  const { segments: platforms, rides } = platformSegments(def);
+  const segments = [...groundSegments(def), ...platforms];
+
+  /** Segments reachable from `segment` by riding a moving platform it is standing on. */
+  const ridesFrom = (segment: Segment): Segment[] =>
+    rides.flatMap(([a, b]) => (a === segment ? [b] : b === segment ? [a] : []));
 
   if (segments.length === 0) {
     return { valid: false, reason: 'no ground segments at all' };
@@ -123,11 +161,17 @@ export function validateLevel(def: LevelDef): ValidationResult {
     return { valid: false, reason: `player start column ${def.playerStartCol} is not on solid ground` };
   }
 
+  // The exit may stand on any real surface, not just the ground row — an
+  // exit on the top tier is what turns a one-screen level into a climb
+  // (`LevelDef.exitRow`). Both of its columns must sit on the *same*
+  // segment: an exit bridging two platforms with a gap under its right half
+  // is not something the player can stand in.
+  const exitRow = exitRowOf(def);
   const exitSegment = segments.find(
-    (s) => s.row === def.groundRow && (segmentContainsCol(s, def.exitCol) || segmentContainsCol(s, def.exitCol + 1)),
+    (s) => s.row === exitRow && segmentContainsCol(s, def.exitCol) && segmentContainsCol(s, def.exitCol + 1),
   );
   if (!exitSegment) {
-    return { valid: false, reason: `exit column ${def.exitCol} is not on solid ground` };
+    return { valid: false, reason: `exit columns ${def.exitCol}-${def.exitCol + 1} do not sit on one surface at row ${exitRow}` };
   }
 
   const visited = new Set<Segment>([startSegment]);
@@ -140,10 +184,15 @@ export function validateLevel(def: LevelDef): ValidationResult {
     }
     for (const other of segments) {
       if (visited.has(other)) continue;
-      if (canJumpBetween(current, other)) {
+      if (canReach(current, other)) {
         visited.add(other);
         queue.push(other);
       }
+    }
+    for (const other of ridesFrom(current)) {
+      if (visited.has(other)) continue;
+      visited.add(other);
+      queue.push(other);
     }
   }
 

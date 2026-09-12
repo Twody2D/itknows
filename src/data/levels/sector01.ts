@@ -1,1018 +1,257 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
-import type { LevelSectionConfig } from '@/gameplay/LevelSections';
 
 /**
- * SECTOR 01 — SYSTEM BOOT. Teaches move → jump → exit, then the first honest
- * trap, then progressively combines gaps, spikes and one-way platforms
- * (master-prompt §24: first ten minutes / §66: teach → practice → combine).
+ * SECTOR 01 — SYSTEM BOOT. The whole vocabulary, one word at a time: move,
+ * jump a gap, read a static spike, climb, and one thing that actually kills
+ * you and is remembered for it.
+ *
+ * ONE SCREEN. Every level here is `LEVEL_WIDTH_TILES` wide and the camera
+ * never moves (`LevelDef`, `GameplayScene.setupCameras`), so the player sees
+ * the whole problem before touching the controls. Levels are read first and
+ * executed second — which is why difficulty can come from precision and
+ * timing without ever becoming unfair.
  *
  * FIRST MANDATORY DYNAMIC HAZARD (`sector-01-level-01`, `mspike-01`, right
- * after the first gap — 34 tiles from spawn). Direct request from the
- * project owner, refined twice in the asking: the campaign needed a moment,
- * near the very start, where the player actually dies to something and
- * remembers the spot — not just static geometry you eyeball once and never
- * think about again — and specifically wanted it *invisible* until it
- * ambushes, not another slow visible patrol. This reverses two things that
- * were true before: (1) sector 01 was pure static hazards, the first
- * dynamic threat was level 05's laser; (2) `moving-spike` (see sector 05's
- * file doc comment) had only ever guarded an *optional* bonus path and
- * never had a warning phase at all, because CLAUDE.md #4 rules out shipping
- * an unverified mandatory dynamic-timed crossing "on a guess". Both are
- * deliberate, approved reversals, not oversights.
+ * after the first gap). Direct request from the project owner, refined twice
+ * in the asking: the campaign needed a moment, near the very start, where
+ * the player actually dies to something and remembers the spot — not just
+ * static geometry you eyeball once and never think about again — and
+ * specifically wanted it *invisible* until it ambushes, not another slow
+ * visible patrol.
  *
- * `ambush: true` (`TrapDef.ts`/`AmbushSpikeTrap.ts`) is *not* the ordinary
- * `moving-spike` — it's a genuinely new, separately-verified variant built
- * specifically for this request: invisible while idle, then it visibly
- * drops fast (`Cubic.easeIn`, "sudden" on purpose) and lands lethal. What
- * makes "invisible until it ambushes" still honest under CLAUDE.md #4.2
- * (≥250ms visible warning before anything can kill you) is where the line
- * between "visible" and "lethal" actually falls: the entire fall itself —
- * from the moment it appears to the moment it lands — *is* the honest
- * warning phase (`timing.warningMs: 500`, double the `MIN_WARNING_MS`
- * floor); `isLethal()` only turns true once `active` begins, timed to start
- * right as the drop tween finishes. It looks like it's already falling on
- * you the instant you see it — it isn't lethal yet until it's actually
- * there. Placed right after the level's first gap rather than at spawn: the
- * player has already been taught to jump by the time they reach it, so it's
- * the first thing new *since* that lesson landed, not stacked underneath it.
+ * `ambush: true` (`TrapDef.ts`/`AmbushSpikeTrap.ts`) is not the ordinary
+ * `moving-spike`: invisible while idle, then it visibly drops fast and lands
+ * lethal. What makes "invisible until it ambushes" still honest under
+ * CLAUDE.md #4.2 (≥250ms visible warning before anything can kill you) is
+ * where the line between "visible" and "lethal" falls: the entire fall —
+ * from the moment it appears to the moment it lands — *is* the warning phase
+ * (`timing.warningMs: 500`, double the `MIN_WARNING_MS` floor); `isLethal()`
+ * only turns true once `active` begins, timed to start as the drop finishes.
  *
- * TRIGGERED BY POSITION, NOT BY A TIMER. The first working version ran its
- * own independent idle/warning/active/cooldown cycle regardless of where the
- * player was — verified live across 12 sampled arrival times, it only
- * actually caught the player once. That's a coin flip wearing a trap
- * costume, not the moment the project owner asked for: something that
- * lands "right above me as I pass" and punishes not reacting, not one that
- * depends on when you happen to walk by. Fixed by reusing the existing
- * trigger-zone mechanism (`TriggerTrap`, already established by every
- * `trig-0N`/`laser-0N` pair in sectors 02-05): `mspike-01` is now
- * `loop: false` (inert, waiting) and only starts its fall when
- * `mspike-01-trigger` fires on contact. The trigger sits 55px before the
- * landing column — moveSpeed (110px/s) × warningMs (500ms) — so a player who
- * keeps running at normal speed with zero reaction arrives exactly as it
- * lands; stopping or stepping back during the visible fall is what survives
- * it. This is still gap-jump-cost-free RNG-free determinism (CLAUDE.md #6):
- * the same input sequence always produces the same outcome, it's just gated
- * on player position instead of wall-clock time.
- *
- * Dying here still costs almost nothing (32 tiles of running plus one jump,
- * no checkpoint needed) — that's what makes the very first, genuinely
- * surprising encounter forgivable; the honest warning phase is what makes
- * every encounter after it fair. A death here routes through the existing
- * `early_death` Commentator category unchanged (attempts this brief always
- * qualify) — no new dialogue plumbing needed.
- *
- * Verified live, not assumed fair by analogy with sector 05's optional-path
- * uses (headless browser), on the real death→restart cycle
- * (`this.scene.restart(...)`), not a test-only reload: invisible and
- * harmless throughout `idle`, waiting for `mspike-01-trigger`; visible and
- * still harmless for the entire `warning`/fall; lethal only once landed
- * (`active`); three consecutive real attempts that cross the trigger and
- * keep running with no reaction die three times, every time in `active`,
- * with no state carried over between restarts; stopping right after the
- * trigger survives every time — the honest point of putting it here at all.
- *
- * LENGTH. These levels used to be 40-70 tiles — six or seven seconds of
- * running each, which is why the whole sector could be cleared in one sitting
- * without dying. They now run 120-250 tiles, structured as
- * intro → challenge → variation → combination → system → final with a
- * checkpoint between the major blocks. A level is no longer a single idea you
- * either fluff or nail in eight seconds; it's a stretch you have to hold
- * together. The difficulty comes from sustaining attention over a longer run,
- * not from tighter windows — every individual jump here is the same
- * comfortably-clearable jump it always was.
- *
- * CHECKPOINTS. Deliberately sparse: none at all on the two levels that can't
- * really kill you (01-02), one past the midpoint on 03-05, two on the sector
- * finale. A checkpoint every other block turned the run into a series of
- * short hops with no stretch long enough to feel like it was at stake — the
- * whole point of the added length. They exist to stop a late mistake costing
- * the entire level (CLAUDE.md #4 — length must not mean a longer punishment),
- * not to remove the cost of a mistake.
- *
- * GEOMETRY BUDGET (`jumpPhysics.ts`, unchanged): a full-held jump clears
- * ~55px horizontally (5.5 tiles) at the same height and rises ~32px (3.2
- * tiles). Every gap here is 2-3 tiles; the two 6-tile pits (level 04 and 06)
- * are explicitly bridged by a platform mid-pit, and both are proven by
- * `LevelValidator` in tests, not by eye. Platform steps stay at a 2-row
- * (20px) rise per hop.
- *
- * SURPRISE DENSITY, RAMPING PER LEVEL. Direct playtest feedback: a single
- * ambush spike on level 01 alone wasn't enough — "ran through everything,
- * nothing killed me except the one ship at the start" — and the ask was
- * explicit: 3 from the very first level, more with each level after that.
- * Every level in this sector now carries a mix of ambush spikes (mspike-0N,
- * see `mspike-01`'s doc comment below for the full mechanism) and sudden
- * pits (`falling-platform` at ground level instead of its usual elevated-
- * bonus role — ordinary-looking ground that immediately starts sinking the
- * instant you step on it, still carrying you for ~320ms (the honest
- * telegraph) before it drops away, precedented by sector-04-level-04 FREEFALL
- * already doing this as mandatory content): 3 on level 01, ramping to 7 by
- * level 06. Every single one still obeys the same rules as `mspike-01` —
- * honestly telegraphed, `LevelValidator`-provable independent of whether the
- * trap actually fires, kept several tiles clear of every other hazard (never
- * stacked on a static spike cluster, an existing gap, a checkpoint, a laser,
- * the fake exit, or — level 04 specifically — the staircase).
- *
- * RIGHT-AT-THE-DOOR AMBUSHES. A second follow-up ask: some levels also drop
- * one immediately before the exit itself — "relax, you made it" being
- * exactly the wrong moment. Levels 02, 04 and 06 each land one there (01,
- * 03, 05 don't — "sometimes", not "every level", is what keeps it a
- * surprise rather than a pattern the player learns to expect at every exit).
- * Level 01 didn't need a separate one added: `mspike-02` already lands 6
- * tiles before that level's own exit.
- *
- * Verified live for every placement across the sector: unreacted contact
- * dies in the trap's own honest lethal phase every time; stopping (ambush
- * spikes) or crossing without stopping (sudden pits) survives every time.
+ * TRIGGERED BY POSITION, NOT BY A TIMER. Its trigger sits exactly
+ * `AMBUSH_TRIGGER_LEAD` columns before the landing column — 55px from the
+ * trigger's centre, which is `moveSpeed` (110px/s) times `warningMs`
+ * (500ms) — so a player who crosses it and keeps running at normal speed
+ * with no reaction arrives exactly as it lands. Stopping during the visible
+ * fall is what survives it. That offset is the contract; moving the spike
+ * means moving the trigger with it.
  */
+
+/** The ambush spike's honest cycle — see the file doc comment. Shared so the two placements can't drift apart. */
+const AMBUSH_TIMING = { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 } as const;
+
+/** Columns between an ambush trigger's left edge and its spike's column — `moveSpeed × warningMs` measured from the trigger's centre. */
+const AMBUSH_TRIGGER_LEAD = 6;
+
 export const SECTOR_01_LEVELS: LevelDef[] = [
   {
     id: 'sector-01-level-01',
     name: 'BOOT',
-    width: 120,
+    width: 48,
     groundRow: 22,
-    // Pure gaps through the first two thirds — the only lesson is "move,
-    // jump, keep going", so the tutorial hints have room to land with
-    // nothing else competing for attention. The back third breaks that
-    // silence on purpose: a level that's still 100% gaps at tile 120 read as
-    // empty no matter how long it ran (player feedback — first danger felt
-    // too far away). A small pair, then a proper 3-wide cluster, right
-    // before the closing run: the first "wait, there's something new here"
-    // beat built from the sector's own gap/spike vocabulary, still jumped
-    // rather than timed, still on obviously solid ground with room to land
-    // on both sides. (`mspike-01` below, right after the first gap, is the
-    // level's actual first surprise — this later cluster is the second, and
-    // an ordinary one.)
-    gaps: [
-      [26, 27],
-      [44, 46],
-      [58, 59],
-      [70, 71],
-      [74, 76],
-      [88, 89],
-      [98, 100],
-    ],
-    spikeColumns: [64, 65, 80, 81, 82],
+    // One gap, wide enough to need a real jump and narrow enough that a
+    // held run-and-jump clears it without thinking. The tutorial hints
+    // (`TutorialHints`, wired to this level id in `GameplayScene`) land in
+    // the flat run before it with nothing competing for attention.
+    gaps: [[16, 18]],
+    // The level's second beat, and an ordinary one: a static pair on
+    // obviously solid ground with room to land either side, after the
+    // ambush has already taught that the floor is not automatically safe.
+    spikeColumns: [36, 37],
     platforms: [],
     playerStartCol: 2,
-    exitCol: 114,
+    exitCol: 43,
     traps: [
-      // The campaign's first death that isn't "you mistimed a jump" —
-      // deliberately as close to free as a death can be (see the file's top
-      // doc comment for the full reasoning and the honesty argument). Placed
-      // right after the level's first gap (col 26-27), not before it: the
-      // player has already been taught to jump by the time they reach it,
-      // so this is the first thing new *since* the jump lesson landed, not
-      // one more thing stacked on top of it. Clear flat ground on both
-      // sides, nothing else competing for attention when it first appears.
-      //
-      // `loop: false` — this does NOT free-run its own idle/warning/active
-      // cycle. It sits inert until `mspike-01-trigger` below fires, so it
-      // falls exactly when the player is actually there, every single time,
-      // instead of on an independent timer the player might walk past on
-      // either side of (verified live: an untimed independent cycle only
-      // caught a passing player in 1 of 12 sampled arrival times — pure
-      // timing luck, not a real threat). Positioned to make ordinary,
-      // unreacting running the losing move: `mspike-01-trigger`'s center
-      // sits 55px (moveSpeed 110px/s × warningMs 500ms) before the landing
-      // column, so a player who crosses the trigger and just keeps running
-      // at normal speed with no reaction arrives right as it lands. Stopping
-      // during the visible fall is what survives it — the gap right behind
-      // this trigger means stepping back isn't a safe option here, only
-      // holding still is (verified live) — reaction speed and caution
-      // decide the outcome, not luck. `mspike-01-trigger` also sets
-      // `visible: false`: every other trigger in the campaign (sectors
-      // 02-05's `trig-0N`) shows a faint ground marker, but this one hides
-      // even that — no tell exists anywhere before the fall itself.
       {
         type: 'moving-spike',
         id: 'mspike-01',
         ambush: true,
-        fromCol: 34,
+        fromCol: 28,
         fromRow: 11,
-        toCol: 34,
+        toCol: 28,
         toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
+        timing: AMBUSH_TIMING,
         loop: false,
       },
-      // `visible: false` — every other trigger in the campaign (sectors
-      // 02-05's `trig-0N`) shows a faint ground marker, but this one is
-      // built to be a true ambush: nothing on the ground gives away where
-      // the fall starts, only the fall itself. Doesn't touch honesty
-      // (CLAUDE.md #4.2 requires telegraphing the lethal state, not the
-      // existence of a trigger) — `mspike-01`'s own warning phase still
-      // fires before it's lethal.
+      // `visible: false` — every other trigger in the campaign shows a
+      // faint ground marker; this one hides even that. It does not touch
+      // honesty (CLAUDE.md #4.2 requires telegraphing the lethal state, not
+      // the existence of a trigger) — the spike's own warning phase still
+      // fires before it can kill.
       {
         type: 'trigger',
         id: 'mspike-01-trigger',
-        col: 28,
+        col: 28 - AMBUSH_TRIGGER_LEAD,
         row: 19,
         width: 2,
         height: 3,
         targetId: 'mspike-01',
         visible: false,
       },
-      // Second surprise: a sudden pit (`FallingPlatformTrap`, see
-      // sector03-level-01's doc comment for the full mechanism) in the
-      // middle of the long clear "rhythm" stretch between the two static
-      // spike clusters — visually ordinary ground until stepped on, 350ms
-      // honest shake before it drops.
-      { type: 'falling-platform', id: 'flp-01', col: 70, row: 22, width: 2 },
-      // Third surprise: a second ambush spike, in the open runway right
-      // before the exit — the level's closing "one more thing," same
-      // honest position-triggered mechanism as `mspike-01`.
-      {
-        type: 'moving-spike',
-        id: 'mspike-02',
-        ambush: true,
-        fromCol: 108,
-        fromRow: 11,
-        toCol: 108,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-02-trigger',
-        col: 102,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-02',
-        visible: false,
-      },
     ],
-    // No checkpoints: the spikes are static and clearly jumpable, same as
-    // level 02's much bigger spike content — nothing here is a stretch you
-    // can't re-run in a few seconds. The three surprises above cost the same
-    // little as `mspike-01` alone did — a handful of tiles of re-running,
-    // never a whole section.
-    sections: [
-      { id: 'intro', type: 'intro', fromCol: 0, toCol: 25, requiredMechanics: ['move'] },
-      { id: 'first-gap', type: 'challenge', fromCol: 26, toCol: 43, requiredMechanics: ['gap-jump', 'moving-spike'] },
-      { id: 'wider-gap', type: 'challenge', fromCol: 44, toCol: 51, requiredMechanics: ['gap-jump'] },
-      { id: 'rhythm', type: 'variation', fromCol: 52, toCol: 83, requiredMechanics: ['gap-jump', 'spike-jump'] },
-      {
-        id: 'closing-run',
-        type: 'combination',
-        fromCol: 84,
-        toCol: 101,
-        requiredMechanics: ['gap-jump', 'spike-jump'],
-      },
-      { id: 'exit', type: 'final', fromCol: 102, toCol: 119 },
-    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-01-level-02',
-    name: 'FIRST WARNING',
-    width: 140,
+    name: 'ASCENT',
+    width: 48,
     groundRow: 22,
-    // Gaps only reappear in the last block for the STATIC ones — the first
-    // two thirds are the spike lesson on its own, uncomplicated. The 4 gaps
-    // below (46-47, 76-77) belong to the two sudden-pit falling-platforms in
-    // `traps`, not the static-gap lesson proper.
-    gaps: [
-      [46, 47],
-      [76, 77],
-      [110, 111],
-      [124, 126],
+    gaps: [],
+    // Directly under the middle of the climb. Falling off a tier costs the
+    // climb; falling off it *here* costs the attempt. Visible from the
+    // spawn point, and the player steers in the air, so it is always a
+    // choice rather than a punishment for being high up.
+    spikeColumns: [20, 21],
+    // The sector's vertical lesson, and the shape every later climb reuses:
+    // three rows of rise per hop (30px against a 34.7px ceiling on a
+    // full-held jump) and three empty columns across (30px against the
+    // 40.6px that same jump covers while gaining three rows). Comfortably
+    // inside both limits, so the ladder is about committing to the jump,
+    // not about frame-perfect spacing.
+    platforms: [
+      { col: 10, row: 19, width: 4 },
+      { col: 17, row: 16, width: 4 },
+      { col: 24, row: 13, width: 4 },
+      { col: 31, row: 10, width: 4 },
+      { col: 38, row: 7, width: 5 },
     ],
-    spikeColumns: [22, 23, 24, 38, 39, 54, 55, 56, 70, 71, 84, 85, 86, 100, 101],
-    // Honest bypass over the third cluster: the ground route under it is
-    // always available, this is just the calmer way across.
-    platforms: [{ col: 83, row: 20, width: 5 }],
     playerStartCol: 2,
-    exitCol: 134,
-    // Still no checkpoints — spikes are jumped, not timed, and the level has
-    // no stretch you can't re-run in seconds; the same is true of the 4
-    // surprises below (see sector01-level-01's doc comment for the general
-    // reasoning) — each one costs a few seconds of re-running, never a
-    // whole section.
-    traps: [
-      // Second campaign level with an ambush spike, first one placed twice
-      // in a single level — right after the first static-spike cluster,
-      // well clear of it (CLAUDE.md #4: never stack a dynamic timed thing
-      // directly on another obstacle).
-      {
-        type: 'moving-spike',
-        id: 'mspike-01',
-        ambush: true,
-        fromCol: 32,
-        fromRow: 11,
-        toCol: 32,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-01-trigger',
-        col: 26,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-01',
-        visible: false,
-      },
-      // Sudden pit between the second and third static-spike clusters.
-      { type: 'falling-platform', id: 'flp-01', col: 46, row: 22, width: 2 },
-      // Second ambush spike, between the third and fourth clusters.
-      {
-        type: 'moving-spike',
-        id: 'mspike-02',
-        ambush: true,
-        fromCol: 64,
-        fromRow: 11,
-        toCol: 64,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-02-trigger',
-        col: 58,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-02',
-        visible: false,
-      },
-      // Second sudden pit, well before the platform bypass over the fourth
-      // cluster starts.
-      { type: 'falling-platform', id: 'flp-02', col: 76, row: 22, width: 2 },
-      // Right at the door: a third ambush spike landing one tile before the
-      // exit itself — "made it past everything, relax" is exactly the
-      // moment this punishes. Same honest mechanism as the other two, just
-      // placed to be a gotcha at the finish line instead of mid-level.
-      {
-        type: 'moving-spike',
-        id: 'mspike-03',
-        ambush: true,
-        fromCol: 133,
-        fromRow: 11,
-        toCol: 133,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-03-trigger',
-        col: 127,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-03',
-        visible: false,
-      },
-    ],
-    sections: [
-      { id: 'intro', type: 'intro', fromCol: 0, toCol: 17, requiredMechanics: ['move'] },
-      { id: 'first-spikes', type: 'challenge', fromCol: 18, toCol: 27, requiredMechanics: ['spike-jump'] },
-      { id: 'spike-practice', type: 'challenge', fromCol: 28, toCol: 45, requiredMechanics: ['spike-jump'] },
-      {
-        id: 'clusters-and-bridge',
-        type: 'variation',
-        fromCol: 46,
-        toCol: 93,
-        optionalRoute: true,
-        requiredMechanics: ['spike-jump', 'platform'],
-      },
-      {
-        id: 'spikes-and-gaps',
-        type: 'combination',
-        fromCol: 94,
-        toCol: 127,
-        requiredMechanics: ['spike-jump', 'gap-jump'],
-      },
-      { id: 'exit', type: 'final', fromCol: 128, toCol: 139 },
-    ] satisfies LevelSectionConfig[],
+    exitCol: 40,
+    // First exit off the ground in the campaign: the level's whole question
+    // becomes "how do I get up there", asked before the player moves.
+    exitRow: 7,
   },
   {
     id: 'sector-01-level-03',
-    name: 'GAP AND SPIKE',
-    width: 165,
+    name: 'TEETH',
+    width: 48,
     groundRow: 22,
     gaps: [
-      [16, 17],
-      [34, 36],
-      [62, 63],
-      [78, 80],
-      [82, 83],
-      [104, 105],
-      [120, 122],
-      [140, 141],
-      [146, 147],
+      [12, 15],
+      [24, 27],
+      [35, 37],
     ],
-    spikeColumns: [26, 27, 46, 47, 48, 70, 71, 92, 93, 112, 113, 132, 133, 134, 152, 153],
-    // Each bridge sits directly over a spike cluster — an alternate route, not
-    // a trick (CLAUDE.md #4). Jumping the spikes on the ground always works.
-    platforms: [
-      { col: 45, row: 20, width: 5 },
-      { col: 90, row: 20, width: 5 },
-      { col: 131, row: 20, width: 5 },
-    ],
+    spikeColumns: [19, 20, 31, 32],
+    platforms: [],
     playerStartCol: 2,
-    exitCol: 159,
-    // One, just past the midpoint.
-    checkpoints: [88],
-    // Third campaign level with the ambush spike / sudden pit vocabulary
-    // (see sector01-level-01's doc comment) — always in a generously clear
-    // stretch (10+ tiles), never stacked on the level's own gap/spike/bridge
-    // geometry.
+    exitCol: 43,
     traps: [
+      // A slow, always-visible patrol over the middle pit — the honest
+      // opposite of level 01's ambush, and the pairing is the point: one
+      // hazard that hides and one that never does, so "watch it and go" is
+      // learned right after "stop when something falls".
       {
         type: 'moving-spike',
         id: 'mspike-01',
-        ambush: true,
-        fromCol: 56,
-        fromRow: 11,
-        toCol: 56,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
+        fromCol: 23,
+        fromRow: 19,
+        toCol: 29,
+        toRow: 19,
+        travelMs: 2200,
       },
-      {
-        type: 'trigger',
-        id: 'mspike-01-trigger',
-        col: 50,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-01',
-        visible: false,
-      },
-      // Right after the checkpoint (88), well clear of it.
-      { type: 'falling-platform', id: 'flp-01', col: 82, row: 22, width: 2 },
-      {
-        type: 'moving-spike',
-        id: 'mspike-02',
-        ambush: true,
-        fromCol: 100,
-        fromRow: 11,
-        toCol: 100,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-02-trigger',
-        col: 94,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-02',
-        visible: false,
-      },
-      { type: 'falling-platform', id: 'flp-02', col: 146, row: 22, width: 2 },
     ],
-    sections: [
-      { id: 'intro', type: 'intro', fromCol: 0, toCol: 15, requiredMechanics: ['move'] },
-      { id: 'gaps', type: 'challenge', fromCol: 16, toCol: 41, requiredMechanics: ['gap-jump'] },
-      {
-        id: 'gap-and-spike',
-        type: 'combination',
-        fromCol: 42,
-        toCol: 87,
-        checkpointAfter: true,
-        requiredMechanics: ['gap-jump', 'spike-jump'],
-      },
-      {
-        id: 'bridges',
-        type: 'variation',
-        fromCol: 88,
-        toCol: 127,
-        optionalRoute: true,
-        requiredMechanics: ['platform', 'spike-jump'],
-      },
-      {
-        id: 'closing-run',
-        type: 'combination',
-        fromCol: 128,
-        toCol: 150,
-        requiredMechanics: ['gap-jump', 'spike-jump', 'platform'],
-      },
-      { id: 'exit', type: 'final', fromCol: 151, toCol: 164 },
-    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-01-level-04',
-    name: 'RISE',
-    width: 190,
+    name: 'OVERHANG',
+    width: 48,
     groundRow: 22,
-    gaps: [
-      [18, 19],
-      [40, 42],
-      [57, 58],
-      [64, 65],
-      // The first pit too wide to clear in one jump (6 tiles / 60px against a
-      // ~55px reach) — the platform mid-pit below is the crossing, and the
-      // level's whole point: a platform can be the route, not a bonus.
-      [84, 89],
-      [102, 103],
-      [110, 112],
-      [134, 135],
-      [150, 151],
-      [156, 158],
-      [176, 177],
-    ],
-    spikeColumns: [28, 29, 50, 51, 52, 72, 73, 96, 97, 118, 119, 144, 145, 146, 166, 167],
+    // The pit under the middle of the climb: the tier chain crosses it, and
+    // missing a hop there is a death rather than a re-climb. It is directly
+    // below the two tightest jumps in the level and plainly visible from
+    // the spawn.
+    gaps: [[20, 24]],
+    spikeColumns: [13, 14],
     platforms: [
-      { col: 86, row: 20, width: 2 },
-      // Up two rows, along, back down — the staircase the level is named for.
-      { col: 120, row: 20, width: 3 },
-      { col: 126, row: 18, width: 3 },
-      { col: 132, row: 20, width: 3 },
-      // A single 2-tile bonus platform in the level's plainest stretch
-      // (152-154, between the gap at 150-151 and the static spikes at
-      // 166-167) — stepping onto it is never required, the ground path
-      // below (already `LevelValidator`-proven) is untouched.
-      { col: 152, row: 20, width: 2 },
+      { col: 8, row: 19, width: 3 },
+      { col: 14, row: 16, width: 3 },
+      { col: 20, row: 13, width: 4 },
+      // The descent. A climb that only ever goes up is one idea repeated;
+      // stepping back down to get further right makes the player read the
+      // shape rather than mash jump.
+      { col: 28, row: 16, width: 3 },
+      { col: 34, row: 13, width: 4 },
+      { col: 40, row: 10, width: 5 },
     ],
     playerStartCol: 2,
-    exitCol: 184,
-    // One, right after the wide bridged pit — the level's one real gate.
-    checkpoints: [94],
-    // Fourth campaign level with the ambush spike / sudden pit vocabulary —
-    // none placed anywhere near the staircase (116-139, already a delicate
-    // hand-tuned combination) or the checkpoint.
-    traps: [
-      {
-        type: 'moving-spike',
-        id: 'mspike-01',
-        ambush: true,
-        fromCol: 36,
-        fromRow: 11,
-        toCol: 36,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-01-trigger',
-        col: 30,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-01',
-        visible: false,
-      },
-      { type: 'falling-platform', id: 'flp-01', col: 57, row: 22, width: 2 },
-      {
-        type: 'moving-spike',
-        id: 'mspike-02',
-        ambush: true,
-        fromCol: 81,
-        fromRow: 11,
-        toCol: 81,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-02-trigger',
-        col: 75,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-02',
-        visible: false,
-      },
-      { type: 'falling-platform', id: 'flp-02', col: 102, row: 22, width: 2 },
-      { type: 'falling-platform', id: 'flp-03', col: 150, row: 22, width: 2 },
-      // Right at the door, same as level 02's closer — lands well clear of
-      // both the gap at 176-177 and the exit itself (col 184).
-      {
-        type: 'moving-spike',
-        id: 'mspike-03',
-        ambush: true,
-        fromCol: 180,
-        fromRow: 11,
-        toCol: 180,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-03-trigger',
-        col: 174,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-03',
-        visible: false,
-      },
-      // Guards the bonus platform above — continuous, always visible,
-      // never required. Standard sweep; `gentle`/`bold` only retune it.
-      {
-        type: 'orbit-spike',
-        id: 'orbit-01',
-        pivotCol: 153,
-        pivotRow: 17,
-        radiusTiles: 1.75,
-        periodMs: 2200,
-      },
-    ],
-    sections: [
-      { id: 'intro', type: 'intro', fromCol: 0, toCol: 17, requiredMechanics: ['move'] },
-      { id: 'gaps', type: 'challenge', fromCol: 18, toCol: 45, requiredMechanics: ['gap-jump'] },
-      {
-        id: 'spikes-and-wide-pit',
-        type: 'combination',
-        fromCol: 46,
-        toCol: 93,
-        checkpointAfter: true,
-        requiredMechanics: ['spike-jump', 'gap-jump', 'platform'],
-      },
-      { id: 'approach', type: 'challenge', fromCol: 94, toCol: 115, requiredMechanics: ['spike-jump', 'gap-jump'] },
-      {
-        id: 'staircase',
-        type: 'variation',
-        fromCol: 116,
-        toCol: 139,
-        requiredMechanics: ['platform', 'platform-chain'],
-      },
-      {
-        id: 'closing-run',
-        type: 'combination',
-        fromCol: 140,
-        toCol: 175,
-        requiredMechanics: ['spike-jump', 'gap-jump'],
-      },
-      { id: 'exit', type: 'final', fromCol: 176, toCol: 189 },
-    ] satisfies LevelSectionConfig[],
+    exitCol: 41,
+    exitRow: 10,
   },
   {
     id: 'sector-01-level-05',
-    name: 'PRESSURE',
-    width: 215,
+    name: 'PATROL',
+    width: 48,
     groundRow: 22,
-    gaps: [
-      [14, 15],
-      [36, 38],
-      [43, 44],
-      [60, 61],
-      [82, 84],
-      [89, 90],
-      [108, 109],
-      [130, 132],
-      [154, 155],
-      [178, 180],
-      [200, 201],
-    ],
-    spikeColumns: [
-      24, 25, 26, 48, 49, 70, 71, 72, 94, 95, 118, 119, 120, 142, 143, 166, 167, 168, 190, 191,
-    ],
+    gaps: [],
+    spikeColumns: [8, 9],
+    // Two honest routes across the same stretch, which is what gives
+    // `DifficultyDirector` something to observe and vary later (CLAUDE.md
+    // #6 — "персональнее, а не сложнее"): duck along the ground and time
+    // the patrol, or climb the tiers and walk over it. Neither is strictly
+    // better; the ground is shorter, the tiers are safer.
     platforms: [
-      { col: 23, row: 20, width: 5 },
-      { col: 117, row: 20, width: 5 },
-      { col: 165, row: 20, width: 5 },
-      // Bonus platform between `laser-01` (100) and `laser-02` (148) — the
-      // level's longest clear stretch, ground path unaffected.
-      { col: 106, row: 20, width: 2 },
+      { col: 12, row: 19, width: 4 },
+      { col: 19, row: 16, width: 5 },
+      { col: 27, row: 16, width: 5 },
+      { col: 35, row: 19, width: 4 },
     ],
     playerStartCol: 2,
-    exitCol: 209,
-    // One, after the first laser — the first thing in the campaign that can
-    // kill you without you touching it.
-    checkpoints: [138],
+    exitCol: 43,
     traps: [
-      // First non-static threat in the campaign: full standing height, can
-      // only be waited out, not jumped or ducked — the same honest
-      // patience-not-reflexes pattern sector 02 opens with. Each one stands on
-      // clear ground with no gap or spike within several tiles, so the only
-      // new thing being taught is "SYSTEM can put something in your way that
-      // isn't a spike," never a timing check stacked on another obstacle.
-      { type: 'laser', id: 'laser-01', col: 100, topRow: 16, bottomRow: 21 },
-      { type: 'laser', id: 'laser-02', col: 148, topRow: 16, bottomRow: 21 },
-      { type: 'laser', id: 'laser-03', col: 196, topRow: 16, bottomRow: 21 },
-      // Fifth campaign level with the ambush spike / sudden pit vocabulary
-      // — every one kept several tiles clear of a laser, same discipline as
-      // the lasers themselves (never stacked on another dynamic hazard).
       {
         type: 'moving-spike',
         id: 'mspike-01',
-        ambush: true,
-        fromCol: 57,
-        fromRow: 11,
-        toCol: 57,
+        fromCol: 14,
+        fromRow: 21,
+        toCol: 32,
         toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-01-trigger',
-        col: 51,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-01',
-        visible: false,
-      },
-      { type: 'falling-platform', id: 'flp-01', col: 43, row: 22, width: 2 },
-      {
-        type: 'moving-spike',
-        id: 'mspike-02',
-        ambush: true,
-        fromCol: 79,
-        fromRow: 11,
-        toCol: 79,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-02-trigger',
-        col: 73,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-02',
-        visible: false,
-      },
-      { type: 'falling-platform', id: 'flp-02', col: 89, row: 22, width: 2 },
-      {
-        type: 'moving-spike',
-        id: 'mspike-03',
-        ambush: true,
-        fromCol: 162,
-        fromRow: 11,
-        toCol: 162,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-03-trigger',
-        col: 156,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-03',
-        visible: false,
-      },
-      // Guards the bonus platform above — continuous, always visible,
-      // never required. Standard swing; `gentle`/`bold` only retune it.
-      {
-        type: 'swinging-spike',
-        id: 'swing-01',
-        pivotCol: 107,
-        pivotRow: 15,
-        lengthTiles: 3,
-        maxAngleDeg: 42,
-        periodMs: 1900,
+        travelMs: 3000,
       },
     ],
-    sections: [
-      { id: 'intro', type: 'intro', fromCol: 0, toCol: 13, requiredMechanics: ['move'] },
-      {
-        id: 'gaps',
-        type: 'challenge',
-        fromCol: 14,
-        toCol: 43,
-        checkpointAfter: true,
-        requiredMechanics: ['gap-jump'],
-      },
-      {
-        id: 'spike-bridge',
-        type: 'variation',
-        fromCol: 44,
-        toCol: 89,
-        optionalRoute: true,
-        requiredMechanics: ['spike-jump', 'platform'],
-      },
-      {
-        id: 'first-laser',
-        type: 'system',
-        fromCol: 90,
-        toCol: 137,
-        checkpointAfter: true,
-        requiredMechanics: ['laser', 'gap-jump'],
-      },
-      {
-        id: 'laser-and-spikes',
-        type: 'combination',
-        fromCol: 138,
-        toCol: 185,
-        requiredMechanics: ['laser', 'spike-jump', 'platform'],
-      },
-      {
-        id: 'closing-run',
-        type: 'combination',
-        fromCol: 186,
-        toCol: 205,
-        requiredMechanics: ['laser', 'gap-jump'],
-      },
-      { id: 'exit', type: 'final', fromCol: 206, toCol: 214 },
-    ] satisfies LevelSectionConfig[],
   },
   {
     id: 'sector-01-level-06',
-    name: 'SECTOR EXIT',
-    width: 250,
+    name: 'BOOT COMPLETE',
+    width: 48,
     groundRow: 22,
-    gaps: [
-      [16, 17],
-      [38, 40],
-      [45, 46],
-      [62, 63],
-      // Second wide pit — same bridged crossing RISE taught, now with the
-      // rest of the sector's vocabulary around it.
-      [80, 81],
-      [86, 91],
-      [112, 113],
-      [130, 131],
-      [136, 138],
-      [160, 161],
-      [184, 186],
-      [208, 209],
-      [230, 232],
-    ],
-    spikeColumns: [
-      26, 27, 50, 51, 52, 74, 75, 100, 101, 102, 124, 125, 148, 149, 150, 172, 173, 196, 197, 198, 220, 221,
-    ],
+    // Everything the sector taught, in one screen: a gap to clear, spikes
+    // to read, a patrol to time and a climb to finish on. The exit is at
+    // the top, so the patrol has to be beaten on the way *through* rather
+    // than outrun to a door on the same floor.
+    gaps: [[17, 20]],
+    spikeColumns: [10, 11, 27, 28],
     platforms: [
-      { col: 88, row: 20, width: 2 },
-      { col: 99, row: 20, width: 5 },
-      { col: 147, row: 20, width: 5 },
-      { col: 195, row: 20, width: 5 },
+      { col: 22, row: 19, width: 4 },
+      { col: 29, row: 16, width: 4 },
+      { col: 36, row: 13, width: 4 },
+      { col: 41, row: 10, width: 5 },
     ],
     playerStartCol: 2,
-    exitCol: 244,
-    // Two on the sector finale — after the bridged pit, and after the long
-    // laser stretch. It's the only level here where losing everything to the
-    // fake exit at tile 238 would be a genuinely sour ending.
-    checkpoints: [96, 192],
+    exitCol: 42,
+    exitRow: 10,
     traps: [
-      { type: 'laser', id: 'laser-01', col: 106, topRow: 16, bottomRow: 21 },
-      { type: 'laser', id: 'laser-02', col: 156, topRow: 16, bottomRow: 21 },
-      { type: 'laser', id: 'laser-03', col: 178, topRow: 16, bottomRow: 21 },
-      // The sector's promised "first serious SYSTEM trick": a fake exit a few
-      // tiles before the real one. Never lethal by construction
-      // (`FakeExit.reject()` only nudges its own sprite) and visually
-      // distinguishable (no glow on the exit core) per CLAUDE.md #4.7 — the
-      // trick is that it looks identical enough at a glance to make a careless
-      // player briefly think they're done, not that it's unfair.
-      { type: 'fake-exit', id: 'fake-exit-01', col: 238, row: 22 },
-      // Sixth and final campaign level with the ambush spike / sudden pit
-      // vocabulary in sector 01 — the finale gets the most of them (7, the
-      // sector's peak), still every one several tiles clear of a laser, the
-      // wide bridged pit, the fake exit, and both checkpoints — except the
-      // very last one below, deliberately layered right against the fake
-      // exit on purpose (see its own comment).
       {
         type: 'moving-spike',
         id: 'mspike-01',
-        ambush: true,
-        fromCol: 35,
-        fromRow: 11,
-        toCol: 35,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
+        fromCol: 30,
+        fromRow: 15,
+        toCol: 36,
+        toRow: 15,
+        travelMs: 1900,
       },
-      {
-        type: 'trigger',
-        id: 'mspike-01-trigger',
-        col: 29,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-01',
-        visible: false,
-      },
-      { type: 'falling-platform', id: 'flp-01', col: 45, row: 22, width: 2 },
+      // Deliberately in the air at row 19 rather than along row 21, where
+      // the static spikes at 10-11 already sit: a patrol sharing their row
+      // reads as one smeared hazard instead of two things to solve. Up
+      // here it is the jump *over* the spikes that has to be timed, which
+      // is the sector's two lessons asked as one question.
       {
         type: 'moving-spike',
         id: 'mspike-02',
-        ambush: true,
-        fromCol: 71,
-        fromRow: 11,
-        toCol: 71,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-02-trigger',
-        col: 65,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-02',
-        visible: false,
-      },
-      { type: 'falling-platform', id: 'flp-02', col: 80, row: 22, width: 2 },
-      {
-        type: 'moving-spike',
-        id: 'mspike-03',
-        ambush: true,
-        fromCol: 121,
-        fromRow: 11,
-        toCol: 121,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-03-trigger',
-        col: 115,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-03',
-        visible: false,
-      },
-      { type: 'falling-platform', id: 'flp-03', col: 130, row: 22, width: 2 },
-      // The sector's last word: the trigger sits just before the fake exit
-      // (238), so the fall is already underway while the player is still
-      // dealing with "wait, is that it?" — and the spike itself lands three
-      // tiles past the fake exit, right before the *actual* one (244).
-      // Two independently honest threats overlapping in time, neither one
-      // lethal because of the other (the fake exit never kills by
-      // construction) — layered, not combined, same discipline sector 03's
-      // file doc comment lays out for PRESSURE VALVE.
-      {
-        type: 'moving-spike',
-        id: 'mspike-04',
-        ambush: true,
-        fromCol: 241,
-        fromRow: 11,
-        toCol: 241,
-        toRow: 21,
-        timing: { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 },
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-04-trigger',
-        col: 235,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-04',
-        visible: false,
+        fromCol: 5,
+        fromRow: 19,
+        toCol: 16,
+        toRow: 19,
+        travelMs: 2600,
       },
     ],
-    sections: [
-      { id: 'intro', type: 'intro', fromCol: 0, toCol: 15, requiredMechanics: ['move'] },
-      {
-        id: 'gaps',
-        type: 'challenge',
-        fromCol: 16,
-        toCol: 45,
-        requiredMechanics: ['gap-jump'],
-      },
-      {
-        id: 'spikes-and-wide-pit',
-        type: 'combination',
-        fromCol: 46,
-        toCol: 95,
-        checkpointAfter: true,
-        requiredMechanics: ['spike-jump', 'gap-jump', 'platform'],
-      },
-      {
-        id: 'first-laser',
-        type: 'system',
-        fromCol: 96,
-        toCol: 143,
-        requiredMechanics: ['laser', 'spike-jump'],
-      },
-      {
-        id: 'lasers-and-bridge',
-        type: 'combination',
-        fromCol: 144,
-        toCol: 191,
-        checkpointAfter: true,
-        optionalRoute: true,
-        requiredMechanics: ['laser', 'platform', 'gap-jump'],
-      },
-      {
-        id: 'last-run',
-        type: 'combination',
-        fromCol: 192,
-        toCol: 225,
-        requiredMechanics: ['spike-jump', 'gap-jump', 'platform'],
-      },
-      {
-        id: 'fake-exit',
-        type: 'system',
-        fromCol: 226,
-        toCol: 243,
-        requiredMechanics: ['fake-exit', 'gap-jump'],
-      },
-      { id: 'exit', type: 'final', fromCol: 244, toCol: 249 },
-    ] satisfies LevelSectionConfig[],
   },
 ];

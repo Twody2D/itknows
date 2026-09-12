@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { TILE_SIZE } from '@/config/display';
+import { SIDE_WALL_PX, TILE_SIZE } from '@/config/display';
 import {
   SPIKE_HITBOX_WIDTH,
   SPIKE_HITBOX_HEIGHT,
@@ -7,7 +7,7 @@ import {
   SPIKE_HITBOX_OFFSET_Y,
 } from '@/config/physics';
 import type { LevelDef } from './LevelDef';
-import { LEVEL_HEIGHT_TILES } from './LevelDef';
+import { LEVEL_HEIGHT_TILES, exitRowOf } from './LevelDef';
 import type { TrapDef } from '@/traps/TrapDef';
 import { LaserTrap } from '@/traps/LaserTrap';
 import { MovingSpikeTrap } from '@/traps/MovingSpikeTrap';
@@ -57,11 +57,6 @@ export interface BuiltTraps {
   all: Array<{ destroy: () => void }>;
 }
 
-export interface CheckpointZone {
-  col: number;
-  zone: Phaser.GameObjects.Zone;
-}
-
 export interface BuiltLevel {
   groundGroup: Phaser.Physics.Arcade.StaticGroup;
   spikesGroup: Phaser.Physics.Arcade.StaticGroup;
@@ -72,7 +67,6 @@ export interface BuiltLevel {
   worldWidth: number;
   worldHeight: number;
   traps: BuiltTraps;
-  checkpoints: CheckpointZone[];
 }
 
 function isInAnyGap(col: number, gaps: Array<[number, number]>): boolean {
@@ -421,6 +415,25 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
 
   const levelSeed = stringHash(def.id);
 
+  // Side walls. The level is exactly the narrowest viewport wide, so every
+  // wider screen has spare width either side of it; this fills that width
+  // with solid rock instead of void, full height, drawn over whatever the
+  // background layers do or don't reach. Decoration only — the player is
+  // stopped at the level's real edge by the physics world bounds
+  // (`GameplayScene`), and the wall is what makes stopping there read as a
+  // wall rather than as an invisible barrier.
+  for (const wallLeft of [-SIDE_WALL_PX, worldWidth]) {
+    // `tile-ground-fill` alone is sub-surface rock and reads as pure black
+    // against the void (checked live) — it needs a ground to sit on and an
+    // edge to end at. The rim is the same 2px cyan the ground runs use for
+    // their own top surface, so a wall face says "solid" in exactly the
+    // vocabulary the rest of the level already speaks.
+    scene.add.rectangle(wallLeft, 0, SIDE_WALL_PX, worldHeight, PALETTE.bgIndigo, 1).setOrigin(0, 0).setDepth(-6);
+    scene.add.tileSprite(wallLeft, 0, SIDE_WALL_PX, worldHeight, 'tile-ground-fill').setOrigin(0, 0).setDepth(-5);
+    const innerEdge = wallLeft < 0 ? 0 : worldWidth;
+    scene.add.rectangle(innerEdge, 0, 2, worldHeight, PALETTE.cyan, 0.85).setOrigin(0.5, 0).setDepth(-4);
+  }
+
   // Ground is built per contiguous run, not per column. Every tile in a run
   // shares one surface row, so the run's collision is a single body and its
   // sub-surface fill a single tiled sprite. Both matter now that levels are
@@ -492,16 +505,19 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
   }
 
   // Physics zone stays at the original 2x3-tile footprint (`LevelValidator`
-  // checks exactly `exitCol`/`exitCol+1` sit on solid ground) — only the
-  // sprite drawn on top of it is bigger, bottom-anchored to the same ground
-  // line, the same way the player's sprite overflows its own hitbox.
+  // checks exactly `exitCol`/`exitCol+1` sit on one surface) — only the
+  // sprite drawn on top of it is bigger, bottom-anchored to the same
+  // surface line, the same way the player's sprite overflows its own hitbox.
+  // The surface is the ground row by default and a platform row when the
+  // level puts its exit up a tier (`LevelDef.exitRow`).
+  const exitSurfaceY = exitRowOf(def) * TILE_SIZE;
   const exitWidth = 2 * TILE_SIZE;
   const exitHeight = 3 * TILE_SIZE;
   const exitX = def.exitCol * TILE_SIZE + exitWidth / 2;
-  const exitY = def.groundRow * TILE_SIZE - exitHeight / 2;
+  const exitY = exitSurfaceY - exitHeight / 2;
 
   const exitVisualHeight = EXIT_VISUAL_HEIGHT_TILES * TILE_SIZE;
-  const exitSprite = scene.add.image(exitX, def.groundRow * TILE_SIZE - exitVisualHeight / 2, 'exit-active');
+  const exitSprite = scene.add.image(exitX, exitSurfaceY - exitVisualHeight / 2, 'exit-active');
   exitSprite.postFX.addGlow(PALETTE.cyan, 0, 0, false, 0.3, 6);
   scene.tweens.add({
     targets: exitSprite,
@@ -519,19 +535,6 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
     y: def.groundRow * TILE_SIZE,
   };
 
-  const checkpoints: CheckpointZone[] = (def.checkpoints ?? []).map((col) => {
-    const x = col * TILE_SIZE + TILE_SIZE / 2;
-    const y = def.groundRow * TILE_SIZE - TILE_SIZE;
-    // A visible post, dim until crossed — a checkpoint the player can't see
-    // coming isn't a checkpoint, it's an invisible rule (CLAUDE.md #4).
-    const marker = scene.add.rectangle(x, y, 2, TILE_SIZE * 2, PALETTE.cyanDim, 0.8);
-    marker.setData('markerFor', col);
-    const zone = scene.add.zone(x, y, TILE_SIZE, TILE_SIZE * 3);
-    scene.physics.add.existing(zone, true);
-    zone.setData('marker', marker);
-    return { col, zone };
-  });
-
   const traps = buildTraps(scene, def.traps ?? []);
 
   return {
@@ -543,7 +546,6 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
     spawn,
     worldWidth,
     worldHeight,
-    checkpoints,
     traps,
   };
 }

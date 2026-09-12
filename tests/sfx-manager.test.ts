@@ -17,7 +17,6 @@ describe('SfxManager.playSfx', () => {
     'trapWarning',
     'trapTrigger',
     'levelComplete',
-    'checkpoint',
     'uiClick',
   ] as const;
 

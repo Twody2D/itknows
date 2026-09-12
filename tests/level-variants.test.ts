@@ -22,14 +22,21 @@ describe('LevelFactory variant resolution', () => {
   });
 
   it('returns the base level for "standard" or no variantId', () => {
-    expect(getLevel('sector-02-level-03').playerStartCol).toBe(6);
-    expect(getLevel('sector-02-level-03', 'standard').playerStartCol).toBe(6);
+    const base = getLevel('sector-02-level-01');
+    expect(getLevel('sector-02-level-01', 'standard')).toBe(base);
   });
 
-  it('resolves a real gentle variant with different content than the base', () => {
-    const base = getLevel('sector-02-level-03');
-    const gentle = getLevel('sector-02-level-03', 'gentle');
-    expect(gentle.playerStartCol).not.toBe(base.playerStartCol);
+  it('resolves a real gentle variant that retunes the hazard without moving the level', () => {
+    const base = getLevel('sector-02-level-01');
+    const gentle = getLevel('sector-02-level-01', 'gentle');
+    // A variant may only change how an already-present hazard behaves
+    // (`variants.ts`) — so the timing differs and everything the solver
+    // proved reachable stays byte-for-byte identical.
+    expect(gentle.traps?.[0]).not.toEqual(base.traps?.[0]);
+    expect(gentle.platforms).toEqual(base.platforms);
+    expect(gentle.gaps).toEqual(base.gaps);
+    expect(gentle.playerStartCol).toBe(base.playerStartCol);
+    expect(gentle.exitCol).toBe(base.exitCol);
   });
 
   it('resolves a real bold variant for a level that has one', () => {

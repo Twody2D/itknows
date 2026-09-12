@@ -17,7 +17,7 @@ import { GhostService } from '@/services/GhostService';
 import { TrailFx } from '@/gameplay/TrailFx';
 import type { TrailKind } from '@/gameplay/TrailFx';
 import { buildLevel } from '@/gameplay/Level';
-import type { BuiltLevel, CheckpointZone } from '@/gameplay/Level';
+import type { BuiltLevel } from '@/gameplay/Level';
 import type { LevelDef } from '@/gameplay/LevelDef';
 import { getLevel, getNextLevelId } from '@/gameplay/LevelFactory';
 import { GameState } from '@/core/GameState';
@@ -39,26 +39,15 @@ import { isSectorFinale, sectorNumberOf } from '@/gameplay/sectors';
 import type { SectorCompleteData } from '@/scenes/SectorCompleteScene';
 import { TutorialHints } from '@/ui/TutorialHints';
 import { fadeIn } from '@/ui/SceneFade';
-import { MIN_VIRTUAL_WIDTH, TILE_SIZE } from '@/config/display';
+import { SIDE_WALL_PX, TILE_SIZE } from '@/config/display';
 import { formatMmSs } from '@/utils/formatTime';
 import { t } from '@/i18n/ui';
 
 const SYSTEM_COMMENT_DISPLAY_MS = 3800;
-/**
- * Upper bound on the world zoom — past this the visible level gets narrower
- * than levels are authored for (`MIN_VIRTUAL_WIDTH`). VISUAL RESET v1 #15:
- * tighter framing everywhere (not just touch) keeps the character a large
- * fraction of the frame; 1.28 is the highest value that still leaves at
- * least `MIN_VIRTUAL_WIDTH` visible even at `MAX_VIRTUAL_WIDTH`'s widest
- * screen (620 / 1.28 ≈ 484 > 480), so no level ever shows less than it was
- * designed against.
- */
-const MAX_WORLD_ZOOM = 1.28;
+
 
 interface GameplaySceneData {
   levelId: string;
-  /** Checkpoint tile column to respawn at instead of the level's own spawn — set by a mid-attempt death after crossing one. */
-  respawnCol?: number;
   /** Fade in from black on entry — only for deliberate navigation (main menu → gameplay, sector complete → next sector), never death-retry or a same-level restart (`ui/SceneFade.ts`). */
   entryTransition?: boolean;
   /** Skips `DifficultyDirector`'s adaptive pick entirely — Daily Challenge's only door in, since every player must land on the exact same variant for the same date for the seed (and any future shared leaderboard) to mean anything (CLAUDE.md #6). */
@@ -117,10 +106,6 @@ export class GameplayScene extends Phaser.Scene {
   private hudSystemPill!: Phaser.GameObjects.Graphics;
   /** Last whole second shown on the HUD clock — `PixelLabel.setPixelText` rebuilds a canvas texture per call, so the live timer is throttled to once a second (CLAUDE.md #9) instead of following `attemptElapsedMs`'s tenths every frame. */
   private hudLastShownSeconds = -1;
-  private hudProgressTrackX = 0;
-  private hudProgressTrackW = 0;
-  private hudProgressFill!: Phaser.GameObjects.Rectangle;
-  private hudProgressMarker!: Phaser.GameObjects.Rectangle;
   /** Best-effort "which trap probably did this" — `Player.kill()` only carries a cause, not a trap id (see BehaviorTracker's doc comment for the same limitation). */
   private lastTriggeredTrapId: string | null = null;
 
@@ -130,7 +115,6 @@ export class GameplayScene extends Phaser.Scene {
 
   private resolving = false;
   private tutorialHints?: TutorialHints;
-  private activeRespawnCol: number | undefined;
   private uiCamera?: Phaser.Cameras.Scene2D.Camera;
   private buildingUi = false;
   private useEntryFade = false;
@@ -147,7 +131,6 @@ export class GameplayScene extends Phaser.Scene {
     SaveService.setLastLevelId(this.levelDef.id);
     this.resolving = false;
     this.hesitationCommented = false;
-    this.activeRespawnCol = data.respawnCol;
     this.useEntryFade = data.entryTransition ?? false;
   }
 
@@ -181,8 +164,7 @@ export class GameplayScene extends Phaser.Scene {
     YandexGamesService.notifyGameplayStart();
     this.events.on(Phaser.Scenes.Events.RESUME, this.handleResume, this);
 
-    const spawnX =
-      this.activeRespawnCol !== undefined ? this.activeRespawnCol * TILE_SIZE + TILE_SIZE / 2 : this.level.spawn.x;
+    const spawnX = this.level.spawn.x;
 
     // Ghost and trail are pure visual overlays — created before the player
     // so draw order never lets either cover the real character (master-
@@ -194,7 +176,13 @@ export class GameplayScene extends Phaser.Scene {
 
     this.player = new Player(this, spawnX, this.level.spawn.y, this.inputState);
 
-    this.physics.world.setBounds(0, -400, this.level.worldWidth, this.level.worldHeight + 800);
+    // Ceiling at the top of the screen, floor far below it. The level is
+    // exactly one screen and the camera never scrolls, so there is no
+    // off-screen "up" to jump into any more — without the top bound the
+    // player would sail out of the frame and come back down blind. The
+    // bottom stays deep so a pit is still a real fall with a real death
+    // (`update()` kills at `worldHeight + 40`), not a landing.
+    this.physics.world.setBounds(0, 0, this.level.worldWidth, this.level.worldHeight + 800);
     this.physics.add.collider(this.player, this.level.groundGroup);
     this.physics.add.collider(this.player, this.level.platformsGroup, undefined, (playerObj, platformObj) =>
       this.isLandingOnPlatform(playerObj as Player, platformObj as Phaser.Physics.Arcade.Sprite),
@@ -205,10 +193,6 @@ export class GameplayScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.level.exitZone, () => {
       this.onExitReached();
     });
-
-    for (const checkpoint of this.level.checkpoints) {
-      this.physics.add.overlap(this.player, checkpoint.zone, () => this.activateCheckpoint(checkpoint));
-    }
 
     this.setupTraps();
 
@@ -254,32 +238,34 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   /**
-   * Two cameras: the world camera, which may be zoomed in, and a UI camera at
-   * 1:1 that draws the HUD, the pause button, touch controls and SYSTEM
-   * commentary.
+   * Two cameras: the world camera, zoomed so one screen of world is exactly
+   * one level, and a UI camera at 1:1 that draws the HUD, the pause button,
+   * touch controls and SYSTEM commentary.
    *
-   * On a phone the virtual viewport is at its widest (a 20:9 screen fills
-   * ~586 virtual px across), which made the character and the level read as
-   * tiny — you were looking at more level than you needed to. Zooming the
-   * world camera shows less of it, at a larger size, and is capped so that no
-   * less than MIN_VIRTUAL_WIDTH of level stays visible (CLAUDE.md #2 — nothing
-   * gameplay-critical may need more horizontal space than that). Zooming the
-   * single camera the scene used to have would have scaled the HUD and the
-   * thumb buttons with it, which is the opposite of what's wanted.
+   * THE WORLD CAMERA DOES NOT MOVE. A level is `LEVEL_WIDTH_TILES` wide and
+   * `LEVEL_HEIGHT_TILES` tall, the zoom makes that exactly the viewport, so
+   * there is nothing to scroll to: the player sees the whole level, every
+   * hazard on it and the exit, from the spawn point and for the whole
+   * attempt. That is the point of the one-screen format (`LevelDef`) — the
+   * level itself is the warning, so a death can always be traced back to
+   * something that was on screen the entire time.
+   *
+   * Zooming the single camera the scene used to have would have scaled the
+   * HUD and the thumb buttons with it, which is the opposite of what's
+   * wanted — hence the separate 1:1 UI camera below.
    */
   private setupCameras(): void {
     const main = this.cameras.main;
-    const zoom = Phaser.Math.Clamp(this.scale.width / MIN_VIRTUAL_WIDTH, 1, MAX_WORLD_ZOOM);
 
-    main.setBounds(0, 0, this.level.worldWidth, this.level.worldHeight);
-    main.setZoom(zoom);
-    // Plain lerp-follow, no deadzone: a deadzone rectangle here would have to
-    // be sized precisely against `scale.width/zoom` to behave, and it did
-    // not — the camera would sit frozen for well over half the screen's
-    // width of player movement, then catch up all at once, reading exactly
-    // like "the world jerks and slides back". Lerp alone tracks continuously
-    // and smoothly with no such catch-up snap.
-    main.startFollow(this.player, true, 0.12, 0.12);
+    // Zoom 1, always. The camera is wider than the level on anything but the
+    // narrowest viewport, so the level is centred and the spare width shows
+    // the side walls `buildLevel` draws past its edges. Bounds are widened by
+    // the same amount, since a bound at the level's own edge would refuse the
+    // negative scroll that centring needs.
+    main.setBounds(-SIDE_WALL_PX, 0, this.level.worldWidth + SIDE_WALL_PX * 2, this.level.worldHeight);
+    main.setZoom(1);
+    main.stopFollow();
+    main.setScroll((this.level.worldWidth - this.scale.width) / 2, 0);
     main.setRoundPixels(true);
 
     this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
@@ -448,7 +434,6 @@ export class GameplayScene extends Phaser.Scene {
       this.hudLastShownSeconds = shownSeconds;
       this.hudTimeText.setPixelText(formatMmSs(attemptElapsedMs));
     }
-    if (this.player.isAlive()) this.updateProgressBar();
   }
 
   /** Nudges the player by a moving platform's per-frame delta while standing on it. */
@@ -546,35 +531,6 @@ export class GameplayScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
 
-    // Level-progress bar (real data: player x / this.level.worldWidth,
-    // same fraction `Commentator.commentOnDeath` already uses) — centered so
-    // it stays clear of both the strip and the pause button across the
-    // 480-620 floating-width range (master-prompt §2).
-    this.hudProgressTrackW = Math.min(240, this.scale.width - 160);
-    this.hudProgressTrackX = this.scale.width / 2 - this.hudProgressTrackW / 2;
-    const trackY = 15;
-
-    this.add
-      .rectangle(this.hudProgressTrackX, trackY, this.hudProgressTrackW, 6, PALETTE.metalEdge, 0.7)
-      .setOrigin(0, 0.5)
-      .setScrollFactor(0)
-      .setDepth(899);
-    this.hudProgressFill = this.add
-      .rectangle(this.hudProgressTrackX, trackY, 0, 6, PALETTE.cyan, 1)
-      .setOrigin(0, 0.5)
-      .setScrollFactor(0)
-      .setDepth(900);
-    this.hudProgressMarker = this.add
-      .rectangle(this.hudProgressTrackX, trackY, 3, 12, PALETTE.white, 1)
-      .setOrigin(0.5, 0.5)
-      .setScrollFactor(0)
-      .setDepth(901);
-    this.add
-      .rectangle(this.hudProgressTrackX + this.hudProgressTrackW, trackY, 6, 10, PALETTE.reward, 1)
-      .setOrigin(0.5, 0.5)
-      .setScrollFactor(0)
-      .setDepth(900);
-    this.updateProgressBar();
 
     this.hudSystemPill = this.add.graphics().setScrollFactor(0).setDepth(899).setVisible(false);
 
@@ -638,14 +594,6 @@ export class GameplayScene extends Phaser.Scene {
     this.hudSystemPill.setVisible(true);
   }
 
-  /** Fill width + "you are here" marker from real player position — `Graphics`/`Rectangle` resizing is a property mutation, not a texture rebuild, so (unlike `PixelLabel`) this is cheap enough to run every frame. */
-  private updateProgressBar(): void {
-    const fraction = Phaser.Math.Clamp(this.player.x / this.level.worldWidth, 0, 1);
-    const fillW = this.hudProgressTrackW * fraction;
-    this.hudProgressFill.width = fillW;
-    this.hudProgressMarker.x = this.hudProgressTrackX + fillW;
-  }
-
   /**
    * Renders whatever THE SYSTEM says, decoupled from who said it
    * (Commentator emits `system:comment`; this scene just displays it). A
@@ -699,36 +647,31 @@ export class GameplayScene extends Phaser.Scene {
       attemptElapsedMs,
       totalDeaths: GameState.run.deaths,
       repeatDeathCount: SystemMemory.snapshot().repeatDeathCount,
-      progressFraction: Phaser.Math.Clamp(payload.x / this.level.worldWidth, 0, 1),
+      progressFraction: this.progressToExit(payload.x, payload.y),
     });
 
     this.time.delayedCall(450, () => {
-      this.scene.restart({ levelId: this.levelDef.id, respawnCol: this.activeRespawnCol });
+      this.scene.restart({ levelId: this.levelDef.id });
     });
   }
 
-  /** Crossing a checkpoint moves this attempt's death-respawn point forward — never backward, and it never re-fires for one already passed. */
-  private activateCheckpoint(checkpoint: CheckpointZone): void {
-    if (this.activeRespawnCol !== undefined && checkpoint.col <= this.activeRespawnCol) return;
-    this.activeRespawnCol = checkpoint.col;
-    playSfx('checkpoint');
-
-    const marker = checkpoint.zone.getData('marker') as Phaser.GameObjects.Rectangle | undefined;
-    marker?.setFillStyle(PALETTE.cyan, 1);
-
-    const label = new PixelLabel(this, checkpoint.zone.x, checkpoint.zone.y - 20, 'CHECKPOINT', {
-      color: hexToCss(PALETTE.cyan),
-      strokeColor: hexToCss(PALETTE.outline),
-      scale: 2,
-    }).setOrigin(0.5, 1);
-    this.tweens.add({
-      targets: label,
-      alpha: { from: 1, to: 0 },
-      y: label.y - 6,
-      duration: 900,
-      delay: 300,
-      onComplete: () => label.destroy(),
-    });
+  /**
+   * How close an attempt got to the exit — 0 at the spawn point, 1 at the
+   * door — as straight-line distance rather than horizontal position.
+   *
+   * This feeds THE SYSTEM's `near_exit` commentary, and horizontal position
+   * stopped meaning anything the moment levels became one screen and started
+   * being built upward (`LevelDef`). On a climb the exit is often almost
+   * directly above the spawn, so `x / worldWidth` would have called a death
+   * at the bottom of the ladder "nearly there" — the one kind of mistake
+   * that makes a commentator sound like it is not watching the same game.
+   */
+  private progressToExit(x: number, y: number): number {
+    const exit = this.level.exitZone;
+    const fromSpawn = Phaser.Math.Distance.Between(this.level.spawn.x, this.level.spawn.y, exit.x, exit.y);
+    if (fromSpawn <= 0) return 1;
+    const remaining = Phaser.Math.Distance.Between(x, y, exit.x, exit.y);
+    return Phaser.Math.Clamp(1 - remaining / fromSpawn, 0, 1);
   }
 
   private onExitReached(): void {

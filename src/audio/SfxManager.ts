@@ -21,7 +21,7 @@ import './AudioSettings';
  * it's folded into `levelComplete` for now.
  *
  * Pitch variation: the sounds a player hears many times per attempt (jump,
- * land, uiClick) or many times per level (checkpoint, trapTrigger) get a
+ * land, uiClick) or many times per level (trapTrigger) get a
  * small random frequency jitter so they don't fatigue into an audible tick-
  * tick-tick loop. This is cosmetic randomness in the audio layer only — it
  * never touches gameplay state, timing, or geometry, so it doesn't conflict
@@ -38,7 +38,6 @@ export type SfxName =
   | 'trapWarning'
   | 'trapTrigger'
   | 'levelComplete'
-  | 'checkpoint'
   | 'uiClick';
 
 /** ±`percent` random multiplier, e.g. `jitter(0.05)` => somewhere in [0.95, 1.05]. */
@@ -133,20 +132,6 @@ const PATCHES: Record<SfxName, () => void> = {
         delaySec: i * 0.09,
       });
     }
-  },
-  checkpoint: () => {
-    const mul = jitter(0.04);
-    AudioEngine.playTone({
-      frequency: 500 * mul,
-      endFrequency: 720 * mul,
-      type: 'sine',
-      durationMs: 130,
-      attackMs: 3,
-      decayMs: 40,
-      sustainLevel: 0.4,
-      releaseMs: 60,
-      gain: 0.13,
-    });
   },
   uiClick: () => {
     AudioEngine.playTone({

@@ -1,10 +1,26 @@
 import type { TrapDef } from '@/traps/TrapDef';
-import type { LevelSectionConfig } from './LevelSections';
 
 /**
  * Level format: structured geometry plus optional dynamic traps, not a
  * hand-drawn tile grid or a JSON blob repeating per-tile data (CLAUDE.md
  * §54 — reusable definitions).
+ *
+ * ONE SCREEN, NO SCROLL. Every level is exactly `LEVEL_WIDTH_TILES` wide and
+ * `LEVEL_HEIGHT_TILES` tall, which is exactly what the camera shows on any
+ * device. That is the whole point of the format rather than an incidental
+ * size limit: the player can see every hazard, every platform and the exit
+ * from the spawn point, before moving. It makes CLAUDE.md #4's closing
+ * question ("мог ли игрок этого избежать, зная то, что было видно на
+ * экране?") structurally true instead of something each level has to be
+ * audited for — the level *is* the telegraph, and a trap's own warning
+ * phase becomes a second line of defence for moving parts rather than the
+ * only thing standing between the player and an unfair death.
+ *
+ * Difficulty therefore comes from arrangement and precision, never from
+ * length. A single jump rises ~3.4 tiles and covers ~5.8 tiles of flat
+ * ground (`jumpPhysics.ts`), so the 27-tile height is worth about seven
+ * stacked tiers — levels are built upward, which is also what CLAUDE.md #2
+ * asks for ("уровни проектируются по высоте").
  */
 export interface PlatformDef {
   /** Tile column of the platform's left edge. */
@@ -18,7 +34,7 @@ export interface PlatformDef {
 export interface LevelDef {
   id: string;
   name: string;
-  /** Level width in tiles. */
+  /** Level width in tiles — always `LEVEL_WIDTH_TILES` (`tests/level-def-sanity.test.ts` enforces it). */
   width: number;
   /** Tile row where the ground surface begins (ground fills to the bottom). */
   groundRow: number;
@@ -32,13 +48,24 @@ export interface LevelDef {
   playerStartCol: number;
   /** Exit tile column (occupies exitCol, exitCol+1). */
   exitCol: number;
-  /** Dynamic traps (all 12 non-static-spike types) — optional, empty by default. */
+  /**
+   * Surface row the exit stands on — defaults to `groundRow`.
+   *
+   * What makes a one-screen level a climb rather than a short corridor: put
+   * the exit on the top tier and the level's whole question becomes "how do
+   * I get up there", which is a question the player can study from the spawn
+   * point. The row must be a real standable surface (a platform, or the
+   * ground) — `LevelValidator` proves it is, and proves it is reachable.
+   */
+  exitRow?: number;
+  /** Dynamic traps (all 18 non-static-spike types) — optional, empty by default. */
   traps?: TrapDef[];
-  /** Tile columns where crossing (on the ground) moves the death-respawn point forward — optional, empty by default. */
-  checkpoints?: number[];
-  /** Structural breakdown of the level's shape (intro/challenge/.../final) — optional, informational (see `LevelSections.ts`). */
-  sections?: LevelSectionConfig[];
 }
 
 /** Total playfield height in tiles — matches VIRTUAL_HEIGHT / TILE_SIZE exactly. */
 export const LEVEL_HEIGHT_TILES = 27;
+
+/** The surface row the exit stands on — `exitRow` when set, the ground otherwise. */
+export function exitRowOf(def: LevelDef): number {
+  return def.exitRow ?? def.groundRow;
+}
