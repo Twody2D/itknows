@@ -278,11 +278,19 @@ export class SectorCompleteScene extends Phaser.Scene {
     this.mono(138, 148, formatMmSs(bestToShow), PALETTE.reward, 20, [0, 0.5], { bold: true, lineHeight: 1 });
 
     if (isNewRecord && previousBestMs !== null) {
+      // The badge is sized from the label, not the other way round. It was
+      // a hard-coded 52px box, which the Russian string ("НОВЫЙ РЕКОРД")
+      // overflowed on both sides — the fill has to follow whatever the
+      // measured text actually is, and the text has to shrink if even the
+      // panel's own width cannot hold it.
+      const label = t('resultNewBest').toUpperCase();
+      const padX = 5;
+      const size = this.fit(label, 104 - padX * 2, 9, { font: 'pixel', letterSpacing: 1, bold: true });
+      const text = this.mono(128 + padX, 109, label, PALETTE.bgVoid, size, [0, 0.5], { bold: true });
       const badge = this.add.graphics();
       badge.fillStyle(PALETTE.reward, 1);
-      badge.fillRect(128, 102, 52, 14);
+      badge.fillRect(128, 102, Math.min(Math.ceil(text.width) + padX * 2, 104), 14);
       container.add(badge);
-      this.mono(154, 109, t('resultNewBest').toUpperCase(), PALETTE.bgVoid, 9, [0.5, 0.5], { bold: true });
 
       this.tweens.add({
         targets: badge,

@@ -77,6 +77,13 @@ function platformSegments(def: LevelDef): { segments: Segment[]; rides: Array<[S
       };
       segments.push(start, end);
       rides.push([start, end]);
+    } else if (trap.type === 'falling-platform' && trap.armed) {
+      // Deliberately contributes no surface. An armed trapdoor is floor
+      // that a trigger takes away, so the level has to work without it:
+      // this forces every pit under one to be crossable on its own, which
+      // is what keeps "the floor vanished and I died" a mistake the player
+      // could have avoided rather than a dead end (CLAUDE.md #4.3/#4.4).
+      continue;
     } else if (trap.type === 'disappearing-platform' || trap.type === 'falling-platform') {
       segments.push({
         label: `${trap.type}-${trap.id}`,

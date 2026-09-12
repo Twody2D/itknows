@@ -6,8 +6,9 @@ import { SECTOR_04_LEVELS } from '@/data/levels/sector04';
 import { SECTOR_05_LEVELS } from '@/data/levels/sector05';
 import { LEVEL_HEIGHT_TILES, exitRowOf } from '@/gameplay/LevelDef';
 import type { LevelDef } from '@/gameplay/LevelDef';
-import { MAX_JUMP_RISE_PX } from '@/gameplay/jumpPhysics';
+import { MAX_JUMP_RISE_PX, REACH_AT_SAME_HEIGHT_PX } from '@/gameplay/jumpPhysics';
 import { LEVEL_WIDTH_TILES, TILE_SIZE } from '@/config/display';
+import { MIN_REACTION_WINDOW_MS, PHYSICS } from '@/config/physics';
 
 /**
  * Cheap structural sanity checks. This is not the reachability solver
@@ -115,6 +116,50 @@ describe.each([
       if (trap.type === 'trigger') {
         expect(ids.has(trap.targetId)).toBe(true);
       }
+    }
+  });
+
+  it('gives every armed trapdoor a trigger, and puts that trigger ahead of it', () => {
+    // The contract sector 01's `trapdoor()` helper encodes, asserted here so
+    // it survives someone hand-writing one later: an armed floor that
+    // nothing fires is simply floor, and a trigger *on* or *after* it fires
+    // once the player has already crossed — the whole trap depends on the
+    // warning arriving while they are still walking towards it.
+    const traps = level.traps ?? [];
+    const triggers = traps.filter((t): t is Extract<typeof t, { type: 'trigger' }> => t.type === 'trigger');
+    for (const trap of traps) {
+      if (trap.type !== 'falling-platform' || !trap.armed) continue;
+      const trigger = triggers.find((t) => t.targetId === trap.id);
+      expect(trigger, `${trap.id} is armed but nothing triggers it`).toBeDefined();
+      expect(trigger!.col + trigger!.width, `${trap.id}'s trigger does not sit before it`).toBeLessThanOrEqual(trap.col);
+    }
+  });
+
+  it('gives a trapdoor a real reaction window, and a pit that can be jumped from its edge', () => {
+    // The two honesty invariants a sprung floor has to satisfy, checked as
+    // geometry because that is what they are (CLAUDE.md #4.5/#4.3).
+    //
+    // 1. The run-up from the trigger to the pit is the window in which the
+    //    player still has ground under them and can act on what they just
+    //    saw. Walking it must take longer than `MIN_REACTION_WINDOW_MS`.
+    // 2. The pit must be jumpable from its own edge, which is also
+    //    `LevelValidator`'s rule: the solver counts no armed trapdoor as a
+    //    surface, so springing the trap costs an attempt rather than
+    //    stranding anyone.
+    const triggers = (level.traps ?? []).filter((t): t is Extract<typeof t, { type: 'trigger' }> => t.type === 'trigger');
+    for (const trap of level.traps ?? []) {
+      if (trap.type !== 'falling-platform' || !trap.armed) continue;
+      const pit = (level.gaps ?? []).find(([from]) => from === trap.col);
+      expect(pit, `${trap.id} does not cover a declared pit`).toBeDefined();
+      const [from, to] = pit!;
+      const trigger = triggers.find((t) => t.targetId === trap.id)!;
+      const runUpMs = ((from - trigger.col) * TILE_SIZE * 1000) / PHYSICS.moveSpeed;
+      expect(Math.round(runUpMs), `${trap.id} fires too late to be reacted to`).toBeGreaterThanOrEqual(
+        MIN_REACTION_WINDOW_MS,
+      );
+      expect((to - from + 1) * TILE_SIZE, `the pit under ${trap.id} cannot be jumped`).toBeLessThanOrEqual(
+        REACH_AT_SAME_HEIGHT_PX,
+      );
     }
   });
 

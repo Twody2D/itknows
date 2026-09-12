@@ -211,6 +211,7 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[]): BuiltTraps {
       }
 
       case 'falling-platform': {
+        const span: FallingPlatformTrap[] = [];
         for (let i = 0; i < def.width; i++) {
           const { x, y } = tileCenter(def.col + i, def.row);
           const trap = new FallingPlatformTrap(scene, {
@@ -220,11 +221,18 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[]): BuiltTraps {
             holdMs: def.holdMs,
             fallSpeed: def.fallSpeed,
             respawnMs: def.respawnMs,
+            armed: def.armed,
+            warnMs: def.warnMs,
           });
+          span.push(trap);
           result.fallingPlatforms.push(trap);
           result.updatable.push(trap);
           result.all.push(trap);
         }
+        // The def is one trapdoor; the tiles are how it is built. A trigger
+        // naming this def's id springs the whole span at once, so the floor
+        // goes as one piece rather than one column at a time.
+        triggerable.set(def.id, { trigger: () => span.forEach((tile) => tile.trigger()) });
         break;
       }
 
@@ -294,6 +302,7 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[]): BuiltTraps {
       }
 
       case 'spike-bank': {
+        const bank: SpikeBankTrap[] = [];
         for (let i = 0; i < def.width; i++) {
           const { x } = tileCenter(def.col + i, def.lethalRow);
           const trap = new SpikeBankTrap(scene, {
@@ -305,10 +314,16 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[]): BuiltTraps {
             initialIdleMs: def.initialIdleMs,
             loop: def.loop,
           });
+          bank.push(trap);
           result.updatable.push(trap);
           result.lethalHazards.push(trap);
           result.all.push(trap);
         }
+        // Same shape as the trapdoor above: the def is one bank, the tiles
+        // are how it is built, and a trigger naming the def fires the whole
+        // span together (`loop: false` turns it into a one-shot ambush that
+        // springs where the player walks rather than on a clock).
+        triggerable.set(def.id, { trigger: () => bank.forEach((spike) => spike.trigger()) });
         break;
       }
 

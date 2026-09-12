@@ -151,7 +151,7 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     groundRow: 22,
     gaps: [[17, 21]],
     spikeColumns: [9, 10],
-    // The campaign's tallest climb: six tiers from the ground to row 4, the
+    // The campaign's tallest climb: six tiers from the ground to row 5, the
     // full height of the screen, with the exit at the top. Every hazard on
     // it has been met before and none of them is new — the finale is about
     // doing all of it in one run, not about one last surprise. The row-10
@@ -164,11 +164,15 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       { col: 24, row: 13, width: 5 },
       { col: 33, row: 10, width: 4 },
       { col: 26, row: 7, width: 5 },
-      { col: 32, row: 4, width: 6 },
+      // Row 5, not row 4. The exit door is drawn 50px tall from the surface
+      // it stands on, so a row-4 landing pushed its top 10px off the screen
+      // — the campaign's last door was the one door you could not see all
+      // of. This is still the highest tier in the game.
+      { col: 32, row: 5, width: 6 },
     ],
     playerStartCol: 2,
     exitCol: 34,
-    exitRow: 4,
+    exitRow: 5,
     traps: [
       { type: 'spike-bank', id: 'sbank-01', col: 13, width: 3, hiddenRow: 23, lethalRow: 21 },
       {

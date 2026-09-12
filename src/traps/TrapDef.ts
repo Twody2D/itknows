@@ -71,6 +71,17 @@ export type TrapDef =
       holdMs?: number;
       fallSpeed?: number;
       respawnMs?: number;
+      /**
+       * `true` turns this stretch of floor into an armed trapdoor: it no
+       * longer reacts to being stood on, and instead goes when a `trigger`
+       * def naming its `id` fires. Point that trigger at the ground a
+       * column or two *before* the floor and the trap springs ahead of a
+       * running player instead of under a standing one — see
+       * `FallingPlatformTrap` and sector 01's `TRAPDOOR_LEAD`.
+       */
+      armed?: boolean;
+      /** Armed mode: how long it flashes and shakes before it stops holding. Floored at `MIN_WARNING_MS`. */
+      warnMs?: number;
     }
   | {
       type: 'moving-platform';

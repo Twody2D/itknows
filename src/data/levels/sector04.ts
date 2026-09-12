@@ -32,32 +32,56 @@ const AMBUSH_TIMING = { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 
 /** Columns between an ambush trigger's left edge and its spike's column — `moveSpeed × warningMs` from the trigger's centre (see `sector01.ts`). */
 const AMBUSH_TRIGGER_LEAD = 6;
 
+/** Sector 01's trapdoor contract, unchanged — see `sector01.ts` for why these two numbers are what they are. */
+const TRAPDOOR_WARN_MS = 350;
+const TRAPDOOR_LEAD = 4;
+
 export const SECTOR_04_LEVELS: LevelDef[] = [
   {
     id: 'sector-04-level-01',
     name: 'GHOST FLOOR',
     width: 48,
     groundRow: 22,
-    gaps: [],
+    // The run-up restates the sector's thesis in the one language the
+    // player already speaks fluently after sector 01: a trapdoor, on flat
+    // ground, before anything else happens. Every fake above it is the same
+    // sentence said about a ledge instead of a floor.
+    gaps: [[12, 14]],
     spikeColumns: [],
+    // The climb turns back on itself at the top for the same reason sector
+    // 01's does: a straight staircase at this pitch parks the exit in the
+    // top-right corner behind the pause button. Folding it inwards also
+    // puts the last fake directly overhead at the moment the real route
+    // asks the player to go left, which is the best version of this level's
+    // question.
     platforms: [
-      { col: 10, row: 19, width: 4 },
-      { col: 14, row: 16, width: 4 },
-      { col: 21, row: 13, width: 4 },
-      { col: 28, row: 10, width: 4 },
-      { col: 35, row: 7, width: 6 },
+      { col: 17, row: 19, width: 4 },
+      { col: 21, row: 16, width: 4 },
+      { col: 28, row: 13, width: 4 },
+      { col: 21, row: 10, width: 4 },
+      { col: 28, row: 7, width: 4 },
     ],
     playerStartCol: 2,
-    exitCol: 37,
+    exitCol: 29,
     exitRow: 7,
     traps: [
+      { type: 'falling-platform', id: 'flp-01', col: 12, row: 22, width: 3, armed: true, warnMs: TRAPDOOR_WARN_MS },
+      {
+        type: 'trigger',
+        id: 'flp-01-trigger',
+        col: 12 - TRAPDOOR_LEAD,
+        row: 19,
+        width: TRAPDOOR_LEAD,
+        height: 3,
+        targetId: 'flp-01',
+      },
       // Each fake sits one hop further right than the real tier at the same
       // height — the tempting shortcut, every time. Ordinary ground is under
       // all three, so the first lesson costs a climb; by the third the
       // player is reading the tiles instead of trusting them.
-      { type: 'fake-platform', id: 'fakep-01', col: 21, row: 16, width: 4 },
-      { type: 'fake-platform', id: 'fakep-02', col: 28, row: 13, width: 4 },
-      { type: 'fake-platform', id: 'fakep-03', col: 35, row: 10, width: 4 },
+      { type: 'fake-platform', id: 'fakep-01', col: 28, row: 16, width: 4 },
+      { type: 'fake-platform', id: 'fakep-02', col: 35, row: 13, width: 4 },
+      { type: 'fake-platform', id: 'fakep-03', col: 28, row: 10, width: 4 },
     ],
   },
   {

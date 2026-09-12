@@ -68,15 +68,20 @@ const HUNTED = base('sector-05-level-01');
  */
 export const LEVEL_VARIANTS: Record<string, { gentle?: LevelDef; bold?: LevelDef; troll?: LevelDef }> = {
   [DROP.id]: {
-    // A longer hold before the floor goes is a wider window to cross it;
-    // a shorter one still clears `MIN_WARNING_MS` by a margin.
-    gentle: retune(DROP, 'flp-03', { holdMs: 600 }),
-    bold: retune(DROP, 'flp-03', { holdMs: 300 }),
-    // The level's last pit is six columns — 60px against a 57.9px jump —
-    // specifically so the collapsing floor over it cannot be refused. After
-    // a sector of "the only way across is the thing that falls", this
-    // narrows it by one column, and the whole crossing can simply be jumped.
-    troll: { ...retune(DROP, 'flp-03', { width: 5 }), gaps: [[12, 13], [22, 24], [33, 37]] },
+    // How long the paired trapdoors at the end flash before they stop
+    // holding. Longer is more time to read the flash and jump; shorter
+    // never goes below `MIN_WARNING_MS`, which `FallingPlatformTrap`
+    // enforces at construction rather than trusting this file.
+    gentle: retune(retune(DROP, 'flp-03', { warnMs: 500 }), 'flp-04', { warnMs: 500 }),
+    bold: retune(retune(DROP, 'flp-03', { warnMs: 260 }), 'flp-04', { warnMs: 260 }),
+    // The habit this level builds is "the floor goes the instant the marker
+    // lights, so jump on the marker". Here the very first trapdoor holds
+    // for more than a second instead — the player who has learned to jump
+    // blind takes off early and lands on ground that was never going
+    // anywhere yet. It adds no danger (a longer hold is strictly safer),
+    // which is what keeps `troll` a surprise rather than a difficulty spike
+    // (master-prompt §15).
+    troll: retune(DROP, 'flp-01', { warnMs: 1300 }),
   },
   [PATROL.id]: {
     gentle: retune(PATROL, 'mspike-01', { travelMs: 4000 }),

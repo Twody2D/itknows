@@ -3,17 +3,21 @@ import type { LevelDef } from '@/gameplay/LevelDef';
 /**
  * SECTOR 01 — SYSTEM BOOT. The ground is not your friend.
  *
- * Teaching order, one new idea per level, each one physical enough to read
- * without being explained: something drops you, something chases across your
- * path, something takes the floor away and puts it back somewhere else. Only
- * once all three are known does the sector ask for height.
+ * EVERY HAZARD HERE SPRINGS. Direct request from the project owner, twice,
+ * after watching the reference game in `ref/`: a floor that sinks slowly
+ * under your feet asks nothing of you — you can simply keep running and it
+ * never catches you, so it may as well not be there. What the sector runs
+ * on instead is a trap that fires *at* you: you cross a line, the floor a
+ * couple of columns ahead of you flashes red and drops out, and if you do
+ * nothing about it you fall. Doing nothing is the failure state; that is
+ * the whole design of this sector.
  *
- *   01 BOOT    — move, jump, and one thing that kills you and is remembered
- *   02 DROP    — the floor gives way under your feet
- *   03 PATROL  — a spike that moves across your path
+ *   01 BOOT    — move, jump, and the first floor that springs
+ *   02 DROP    — four trapdoors, nothing else on the screen
+ *   03 PATROL  — one spike that never hides, one that waits for you
  *   04 SHIFT   — the hole in the floor moves
  *   05 ASCENT  — up, and the exit is up there too
- *   06 BOOT COMPLETE — all four at once
+ *   06 BOOT COMPLETE — all of it at once
  *
  * ONE SCREEN. Every level here is `LEVEL_WIDTH_TILES` wide and the camera
  * never moves (`LevelDef`, `GameplayScene.setupCameras`), so the player sees
@@ -21,30 +25,47 @@ import type { LevelDef } from '@/gameplay/LevelDef';
  * executed second — which is why a hazard can kill on first contact and
  * still be fair.
  *
- * FIRST MANDATORY DYNAMIC HAZARD (`sector-01-level-01`, `mspike-01`, right
- * after the first gap). Direct request from the project owner, refined twice
- * in the asking: the campaign needed a moment, near the very start, where
- * the player actually dies to something and remembers the spot — not just
- * static geometry you eyeball once and never think about again — and
- * specifically wanted it *invisible* until it ambushes, not another slow
- * visible patrol.
+ * WHY A SPRUNG TRAP IS STILL HONEST (CLAUDE.md #4.2/#4.5). Two numbers do
+ * all the work, and every placement in this file is derived from them
+ * rather than eyeballed:
  *
- * `ambush: true` (`TrapDef.ts`/`AmbushSpikeTrap.ts`) is not the ordinary
- * `moving-spike`: invisible while idle, then it visibly drops fast and lands
- * lethal. What makes "invisible until it ambushes" still honest under
- * CLAUDE.md #4.2 (≥250ms visible warning before anything can kill you) is
- * where the line between "visible" and "lethal" falls: the entire fall —
- * from the moment it appears to the moment it lands — *is* the warning phase
- * (`timing.warningMs: 500`, double the `MIN_WARNING_MS` floor); `isLethal()`
- * only turns true once `active` begins, timed to start as the drop finishes.
+ *   - `TRAPDOOR_WARN_MS` (350ms) is how long a trapdoor shakes and flashes
+ *     red while still carrying everything on it. That is the telegraph, and
+ *     it is 100ms past the `MIN_WARNING_MS` floor.
+ *   - `TRAPDOOR_LEAD` (4 columns) is how far before the trapdoor its
+ *     trigger sits, and it is the reaction window written as geometry: at
+ *     `moveSpeed` (110px/s) those 40px take ~360ms to run, so a player who
+ *     crosses the line has more than `MIN_REACTION_WINDOW_MS` of solid
+ *     ground left under them in which to decide.
  *
- * TRIGGERED BY POSITION, NOT BY A TIMER. Its trigger sits exactly
- * `AMBUSH_TRIGGER_LEAD` columns before the landing column — 55px from the
- * trigger's centre, which is `moveSpeed` (110px/s) times `warningMs`
- * (500ms) — so a player who crosses it and keeps running at normal speed
- * with no reaction arrives exactly as it lands. Stopping during the visible
- * fall is what survives it. That offset is the contract; moving the spike
- * means moving the trigger with it.
+ * THE FLOOR IS GONE BEFORE THEY ARRIVE, NOT WHILE THEY STAND ON IT, and
+ * that is deliberate — it is the only version of this trap that actually
+ * kills. Springing it underfoot was tried first and measured live: a
+ * running player crosses three columns in ~250ms, free fall moves them
+ * barely 8px in that time, and they step onto solid ground on the far side
+ * having wobbled and survived. Timed this way instead, they run into a hole
+ * that opened a stride ahead of them, and 150ms into the pit they are
+ * already below its lip with its far wall in front of them.
+ *
+ * WHICH LEAVES TWO HONEST ANSWERS, both worth the full window: stop, or
+ * jump from the edge — three columns is 30px against a 57.9px jump, so the
+ * jump is not a precision act once it is taken from the right place.
+ *
+ * `LevelValidator` deliberately counts no armed trapdoor as a surface, so
+ * the solver proves each level passable with all of them already gone.
+ * Falling is a mistake the player can see coming and fix; it is never a
+ * dead end (CLAUDE.md #4.3/#4.4).
+ *
+ * THE FIRST MANDATORY HAZARD (`sector-01-level-01`, `mspike-01`) stays what
+ * the owner asked for earlier: a spike that is *invisible* until it
+ * ambushes, not another slow visible patrol. `ambush: true`
+ * (`AmbushSpikeTrap`) keeps that honest the same way — the entire visible
+ * fall is the warning phase (`warningMs: 500`, double the floor) and
+ * `isLethal()` only turns true as it lands. Its trigger sits
+ * `AMBUSH_TRIGGER_LEAD` columns ahead for the same reason the trapdoors'
+ * do: 55px is `moveSpeed` × `warningMs`, so a player who crosses it and
+ * keeps running arrives exactly as the spike lands. That offset is a
+ * contract — moving the spike means moving the trigger with it.
  */
 
 /** The ambush spike's honest cycle — see the file doc comment. */
@@ -53,21 +74,56 @@ const AMBUSH_TIMING = { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 
 /** Columns between an ambush trigger's left edge and its spike's column — `moveSpeed × warningMs` measured from the trigger's centre. */
 const AMBUSH_TRIGGER_LEAD = 6;
 
+/** How long a trapdoor flashes and shakes while still holding — the telegraph. */
+const TRAPDOOR_WARN_MS = 350;
+
+/** Columns between a trapdoor's trigger and the trapdoor itself — see the file doc comment. */
+const TRAPDOOR_LEAD = 4;
+
+/**
+ * One trapdoor: the armed floor plus the trigger that springs it, always
+ * built together so the contract above cannot drift apart in an edit.
+ * `col`/`width` describe the floor; the pit underneath it is declared in
+ * the level's own `gaps`, because that is geometry the solver reads.
+ */
+function trapdoor(id: string, col: number, width: number, row = 22): [
+  Extract<NonNullable<LevelDef['traps']>[number], { type: 'falling-platform' }>,
+  Extract<NonNullable<LevelDef['traps']>[number], { type: 'trigger' }>,
+] {
+  return [
+    { type: 'falling-platform', id, col, row, width, armed: true, warnMs: TRAPDOOR_WARN_MS },
+    {
+      type: 'trigger',
+      id: `${id}-trigger`,
+      col: col - TRAPDOOR_LEAD,
+      row: row - 3,
+      width: TRAPDOOR_LEAD,
+      height: 3,
+      targetId: id,
+      // Visible: the faint line on the ground is the one tell that this
+      // stretch of floor is wired, and after the first level the player
+      // reads it. Hiding it would make the trap unlearnable rather than
+      // hard — the ambush spike in level 01 is the single exception the
+      // campaign allows itself.
+      visible: true,
+    },
+  ];
+}
+
 export const SECTOR_01_LEVELS: LevelDef[] = [
   {
     id: 'sector-01-level-01',
     name: 'BOOT',
     width: 48,
     groundRow: 22,
-    // One gap, wide enough to need a real jump and narrow enough that a
-    // held run-and-jump clears it without thinking. The tutorial hints
-    // (`TutorialHints`, wired to this level id in `GameplayScene`) land in
-    // the flat run before it with nothing competing for attention.
-    gaps: [[16, 18]],
-    // The level's second beat, and an ordinary one: a static pair on
-    // obviously solid ground with room to land either side, after the
-    // ambush has already taught that the floor is not automatically safe.
-    spikeColumns: [36, 37],
+    // Read left to right, this is the sector in miniature: a plain pit that
+    // teaches the jump, an invisible spike that teaches stopping, and a
+    // trapdoor that teaches that floor is a claim, not a fact.
+    gaps: [
+      [14, 16],
+      [34, 36],
+    ],
+    spikeColumns: [],
     platforms: [],
     playerStartCol: 2,
     exitCol: 43,
@@ -76,9 +132,9 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         type: 'moving-spike',
         id: 'mspike-01',
         ambush: true,
-        fromCol: 28,
+        fromCol: 26,
         fromRow: 11,
-        toCol: 28,
+        toCol: 26,
         toRow: 21,
         timing: AMBUSH_TIMING,
         loop: false,
@@ -91,13 +147,17 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       {
         type: 'trigger',
         id: 'mspike-01-trigger',
-        col: 28 - AMBUSH_TRIGGER_LEAD,
+        col: 26 - AMBUSH_TRIGGER_LEAD,
         row: 19,
         width: 2,
         height: 3,
         targetId: 'mspike-01',
         visible: false,
       },
+      // The sector's main idea, met once, at its plainest: a long clear
+      // run-up, nothing else on screen, and the whole flash visible before
+      // the floor goes.
+      ...trapdoor('flp-01', 34, 3),
     ],
   },
   {
@@ -105,29 +165,36 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     name: 'DROP',
     width: 48,
     groundRow: 22,
-    // Three stretches of floor that are not floor. Each one is an ordinary
-    // ground tile until it is stood on, then it shakes for 350ms — well
-    // past the `MIN_WARNING_MS` floor — and falls away into the pit it was
-    // covering.
+    // FOUR TRAPDOORS AND NOTHING ELSE. No spikes, no patrols, no climb —
+    // the level is one idea repeated until it is a reflex, which is what
+    // the owner asked for after the old "floor sinks slowly underfoot"
+    // version turned out to be something a running player never even
+    // noticed.
     //
-    // The ramp is built into the widths. The first two are narrow enough to
-    // jump outright, so a cautious player can refuse them and a curious one
-    // can find out what they do for free. The third is six columns — 60px
-    // against a 57.9px jump — so it cannot be refused, and by then the
-    // player knows exactly what standing still on it costs.
+    // The ramp is in the spacing, not in the widths — every trapdoor in
+    // the campaign is three columns for the reason in the file doc comment
+    // (it is what keeps jumping on the flash a working answer). The first
+    // two stand alone with long flat runs either side, so there is room to
+    // panic and recover. The last two are a pair with a four-column landing
+    // strip between them, which is exactly one trigger wide: clearing the
+    // first pit puts the player down on the second one's line, and the
+    // floor ahead opens while they are still absorbing the landing. That is
+    // the moment the sector is built around.
     gaps: [
-      [12, 13],
+      [12, 14],
       [22, 24],
-      [33, 38],
+      [32, 34],
+      [39, 41],
     ],
     spikeColumns: [],
     platforms: [],
     playerStartCol: 2,
     exitCol: 43,
     traps: [
-      { type: 'falling-platform', id: 'flp-01', col: 12, row: 22, width: 2 },
-      { type: 'falling-platform', id: 'flp-02', col: 22, row: 22, width: 3 },
-      { type: 'falling-platform', id: 'flp-03', col: 33, row: 22, width: 6 },
+      ...trapdoor('flp-01', 12, 3),
+      ...trapdoor('flp-02', 22, 3),
+      ...trapdoor('flp-03', 32, 3),
+      ...trapdoor('flp-04', 39, 3),
     ],
   },
   {
@@ -136,12 +203,12 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     width: 48,
     groundRow: 22,
     gaps: [],
-    spikeColumns: [9, 10],
-    // Two honest routes across the same stretch, which is what gives
+    spikeColumns: [],
+    // Two honest routes across the patrol's stretch, which is what gives
     // `DifficultyDirector` something to observe and vary later (CLAUDE.md
-    // #6 — "персональнее, а не сложнее"): time the patrol and walk under
-    // it, or take the two ledges over it. Neither is strictly better; the
-    // ground is shorter, the ledges are safer.
+    // #6 — "персональнее, а не сложнее"): time it and walk under, or take
+    // the two ledges over it. Neither is strictly better; the ground is
+    // shorter, the ledges are safer.
     platforms: [
       { col: 16, row: 19, width: 5 },
       { col: 26, row: 19, width: 5 },
@@ -149,10 +216,10 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     playerStartCol: 2,
     exitCol: 43,
     traps: [
-      // Always visible, never hurrying — the honest opposite of level 01's
-      // ambush, and the pairing is the point: one hazard that hides and one
-      // that never does, so "watch it and go" is learned right after "stop
-      // when something falls".
+      // Always visible, never hurrying — the honest opposite of the bank
+      // waiting at the end of the level, and the pairing is the point: one
+      // spike you watch and walk past, one that is not there until you
+      // walk into where it will be.
       {
         type: 'moving-spike',
         id: 'mspike-01',
@@ -161,6 +228,30 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         toCol: 32,
         toRow: 21,
         travelMs: 3000,
+      },
+      // Spikes that punch up out of the floor when the player crosses the
+      // line six columns earlier — `loop: false`, so it never fires on a
+      // clock, only on approach. The 500ms warning is `moveSpeed × lead`
+      // again: run straight at it and it is lethal exactly as you arrive.
+      // Stopping, or jumping the three-column span, both clear it.
+      {
+        type: 'spike-bank',
+        id: 'sbank-01',
+        col: 38,
+        width: 3,
+        hiddenRow: 23,
+        lethalRow: 21,
+        timing: AMBUSH_TIMING,
+        loop: false,
+      },
+      {
+        type: 'trigger',
+        id: 'sbank-01-trigger',
+        col: 38 - AMBUSH_TRIGGER_LEAD,
+        row: 19,
+        width: 2,
+        height: 3,
+        targetId: 'sbank-01',
       },
     ],
   },
@@ -173,25 +264,34 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     // column slab sliding along it: the floor is mostly there, and the gap
     // in it walks from one end to the other. It is the same
     // `moving-platform` every bridge uses, sized so that what reads is the
-    // hole rather than the bridge — the player is not waiting for transport,
-    // they are being asked to stand where the floor currently is.
+    // hole rather than the bridge — the player is not waiting for
+    // transport, they are being asked to stand where the floor currently
+    // is.
     //
-    // Deliberately unjumpable end to end (the pit is 200px against a 57.9px
-    // jump) so the slab cannot be skipped, and deliberately slow: the whole
-    // sweep takes three seconds, which is long enough to watch it once
-    // before stepping on.
-    gaps: [[14, 33]],
-    spikeColumns: [8, 9],
+    // Deliberately unjumpable end to end (200px against a 57.9px jump) so
+    // the slab cannot be skipped, and deliberately slow: the whole sweep
+    // takes three seconds, long enough to watch it once before stepping on.
+    //
+    // The trapdoor on the approach is what stops that watching from being
+    // free. It springs while the player is still walking up to the pit, so
+    // the first read of the moving hole happens from the far side of a
+    // hole that just appeared.
+    gaps: [
+      [10, 12],
+      [16, 35],
+    ],
+    spikeColumns: [],
     platforms: [],
     playerStartCol: 2,
     exitCol: 43,
     traps: [
+      ...trapdoor('flp-01', 10, 3),
       {
         type: 'moving-platform',
         id: 'movp-01',
-        fromCol: 14,
+        fromCol: 16,
         fromRow: 22,
-        toCol: 20,
+        toCol: 22,
         toRow: 22,
         width: 14,
         travelMs: 3000,
@@ -203,30 +303,40 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     name: 'ASCENT',
     width: 48,
     groundRow: 22,
-    gaps: [],
-    // Directly under the middle of the climb. Falling off a tier costs the
-    // climb; falling off it *here* costs the attempt. Visible from the
-    // spawn point, and the player steers in the air, so it is always a
-    // choice rather than a punishment for being high up.
-    spikeColumns: [20, 21],
+    // The run-up is wired. Everything the player has learned about floors
+    // applies on the ground; none of it applies once they are on the
+    // ladder, which is the point of putting the trapdoor first.
+    gaps: [[12, 14]],
+    // Directly under the gap the climb zig-zags across. Falling off a tier
+    // costs the climb; falling off it *here* costs the attempt. Visible
+    // from the spawn point, and the player steers in the air, so it is
+    // always a choice rather than a punishment for being high up.
+    spikeColumns: [24, 25],
     // The sector's vertical lesson, and the shape every later climb reuses:
     // three rows of rise per hop (30px against a 34.7px ceiling on a
     // full-held jump) and three empty columns across (30px against the
     // 40.6px that same jump covers while gaining three rows). Verified live
     // — the take-off window is about 100ms wide, which is committing to the
     // jump rather than hitting a frame.
+    //
+    // It zig-zags rather than marching right for a reason the screen makes
+    // obvious: a straight staircase at this pitch runs out of level and
+    // parks the exit in the top-right corner, under the pause button.
+    // Turning back on itself keeps the whole climb, and the door, in the
+    // middle of the screen where they can be read.
     platforms: [
-      { col: 10, row: 19, width: 4 },
-      { col: 17, row: 16, width: 4 },
-      { col: 24, row: 13, width: 4 },
-      { col: 31, row: 10, width: 4 },
-      { col: 38, row: 7, width: 5 },
+      { col: 20, row: 19, width: 4 },
+      { col: 27, row: 16, width: 4 },
+      { col: 20, row: 13, width: 4 },
+      { col: 27, row: 10, width: 4 },
+      { col: 20, row: 7, width: 4 },
     ],
     playerStartCol: 2,
-    exitCol: 40,
+    exitCol: 21,
     // First exit off the ground in the campaign: the level's whole question
     // becomes "how do I get up there", asked before the player moves.
     exitRow: 7,
+    traps: [...trapdoor('flp-01', 12, 3)],
   },
   {
     id: 'sector-01-level-06',
@@ -234,22 +344,26 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     width: 48,
     groundRow: 22,
     // The sector's four ideas in one screen and in the order they were
-    // taught: a sliding floor to cross, a pit under the climb where the
-    // floor gives way, a patrol guarding the first tier, and the exit at
-    // the top so none of it can be outrun along the ground.
+    // taught: a sliding floor to cross, a patrol to time, a trapdoor that
+    // springs on the approach, and the climb to the exit on the far side of
+    // it — so the trapdoor cannot be walked around, only dealt with. The
+    // climb turns back over the pit it just crossed, which is what puts the
+    // exit in the middle of the screen instead of hard against the wall,
+    // and what stops the first tier from being reachable off the near
+    // ground (five columns at a three-row rise is 50px against a 40.6px
+    // reach — the solver checks this, it is not a guess).
     gaps: [
       [16, 21],
       [35, 37],
     ],
     spikeColumns: [10, 11],
     platforms: [
-      { col: 26, row: 19, width: 5 },
-      { col: 33, row: 16, width: 5 },
-      { col: 40, row: 13, width: 6 },
+      { col: 40, row: 19, width: 4 },
+      { col: 33, row: 16, width: 4 },
     ],
     playerStartCol: 2,
-    exitCol: 42,
-    exitRow: 13,
+    exitCol: 34,
+    exitRow: 16,
     traps: [
       {
         type: 'moving-platform',
@@ -261,16 +375,16 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         width: 4,
         travelMs: 2400,
       },
-      { type: 'falling-platform', id: 'flp-01', col: 35, row: 22, width: 3 },
       {
         type: 'moving-spike',
         id: 'mspike-01',
-        fromCol: 27,
-        fromRow: 18,
-        toCol: 33,
-        toRow: 18,
+        fromCol: 24,
+        fromRow: 21,
+        toCol: 32,
+        toRow: 21,
         travelMs: 2000,
       },
+      ...trapdoor('flp-01', 35, 3),
     ],
   },
 ];
