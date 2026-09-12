@@ -161,6 +161,12 @@ export class GameplayScene extends Phaser.Scene {
     this.ghostRecorder.reset();
     EventBus.emit('level:loaded', { levelId: this.levelDef.id, variantId: this.variantId });
     MusicSequencer.start();
+    // The game now opens straight into a level rather than the menu
+    // (`BootScene`), so this is where "loaded and actually playable" happens
+    // on a cold start. Idempotent inside the service — only the first call of
+    // the session reaches the SDK, whether it comes from here or the menu
+    // (CLAUDE.md #8).
+    YandexGamesService.notifyLoadingReady();
     YandexGamesService.notifyGameplayStart();
     this.events.on(Phaser.Scenes.Events.RESUME, this.handleResume, this);
 
