@@ -85,16 +85,23 @@ export class GameplayScene extends Phaser.Scene {
   private behaviorTracker!: BehaviorTracker;
   private variantId!: string;
   /**
-   * Sentinel until the first `update()` tick: a scene's own `this.time.now`
-   * reads 0 during `create()` — its per-scene clock hasn't stepped yet, even
-   * on a scene reused via `restart()`/`start()` after the game has been
-   * running a while — so capturing it here instead of in `create()` is the
-   * only way this (and `attemptElapsedMs` in `handlePlayerDeath`) reads
-   * correctly on a session's very first level. Found live while verifying
-   * the ghost recorder: its first sample landed at `t ≈ this.time.now` for
-   * that one case instead of near 0.
+   * How long this attempt has actually been played, accumulated from
+   * `update()`'s own delta rather than measured against a start timestamp.
+   *
+   * It has to be an accumulator, because every clock that could stand in
+   * for one here keeps running while the scene is paused: `update`'s
+   * `time` argument is the *game* loop's, so a minute spent reading the
+   * pause card came back on the HUD the instant play resumed (owner:
+   * "время, которое слева сверху, не останавливает счёт во время паузы").
+   * A paused scene simply isn't ticked, so a sum of deltas cannot count
+   * time the player didn't play — the same claim `GameState`'s wall clock
+   * makes by subtracting `pausedMs`, and the two now agree.
+   *
+   * Starting at 0 in `create()` also drops an old trap: a scene's own
+   * `this.time.now` reads 0 during `create()`, so a timestamp captured
+   * there made the session's very first level time from page load.
    */
-  private attemptStartMs = -1;
+  private attemptElapsedMs = 0;
   private hesitationCommented = false;
   private readonly ghostRecorder = new GhostRecorder();
   private ghostSprite: GhostSprite | null = null;
@@ -157,7 +164,7 @@ export class GameplayScene extends Phaser.Scene {
     this.behaviorTracker = new BehaviorTracker();
     // Real capture happens on the first `update()` tick — see the field's
     // doc comment for why `this.time.now` can't be trusted here.
-    this.attemptStartMs = -1;
+    this.attemptElapsedMs = 0;
     this.ghostRecorder.reset();
     EventBus.emit('level:loaded', { levelId: this.levelDef.id, variantId: this.variantId });
     MusicSequencer.start();
@@ -400,7 +407,7 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   override update(time: number, delta: number): void {
-    if (this.attemptStartMs < 0) this.attemptStartMs = time;
+    this.attemptElapsedMs += delta;
 
     if (this.player.isAlive() && this.player.y > this.level.worldHeight + 40) {
       this.player.kill('fall');
@@ -411,7 +418,7 @@ export class GameplayScene extends Phaser.Scene {
     this.carryOnMovingPlatforms();
     this.tutorialHints?.update();
 
-    const attemptElapsedMs = time - this.attemptStartMs;
+    const attemptElapsedMs = this.attemptElapsedMs;
     this.behaviorTracker.sample(time, delta, this.inputState, this.player.isAlive());
     if (this.player.isAlive()) {
       this.ghostRecorder.sample(attemptElapsedMs, this.player.x, this.player.y, this.player.flipX);
@@ -644,7 +651,7 @@ export class GameplayScene extends Phaser.Scene {
     this.trailFx?.onPlayerDeath(this);
     playSfx('death');
 
-    const attemptElapsedMs = this.time.now - this.attemptStartMs;
+    const attemptElapsedMs = this.attemptElapsedMs;
     const trapId = payload.cause === 'trap' ? this.lastTriggeredTrapId : null;
     SystemMemory.registerDeath(this.levelDef.id, payload.cause, trapId);
     PlayerProfile.integrate(this.behaviorTracker.finish(payload.cause, false));

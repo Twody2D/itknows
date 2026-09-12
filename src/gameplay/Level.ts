@@ -228,6 +228,15 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[], levelSeed: number, gro
             // отличалась по внешнему виду с обычной землёй").
             texture: groundTopKey(levelSeed, def.col + i),
             asFloor: def.row === groundRow,
+            // A trapdoor in the ground row brings its own sub-surface rock:
+            // the runs either side stop at its columns, so without this the
+            // level draws a black shaft under a floor that still reads as
+            // solid — the tell the owner spotted straight away ("ловушки
+            // всё равно видно").
+            shaftDepthPx:
+              def.armed && def.row === groundRow
+                ? (LEVEL_HEIGHT_TILES - groundRow - 1) * TILE_SIZE
+                : undefined,
           });
           span.push(trap);
           result.fallingPlatforms.push(trap);

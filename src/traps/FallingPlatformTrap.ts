@@ -52,6 +52,23 @@ export interface FallingPlatformConfig {
    * so it is never allowed to be shorter than the honesty invariant.
    */
   warnMs?: number | undefined;
+  /**
+   * Height in pixels of the sub-surface rock to draw underneath this slab,
+   * for a trapdoor sitting in the ground row.
+   *
+   * `Level.ts` paints that rock per contiguous *run* of ground, and a
+   * trapdoor's columns are a gap in the level's geometry — so the run
+   * stopped short on either side and the level showed a black shaft the
+   * full height of the screen under a floor that still looked solid
+   * (owner, playing: "ловушки всё равно видно"). Measured on DROP: the
+   * strip below the floor read rgb(11,11,20) as rock and rgb(5,5,10) at
+   * exactly cols 12-15, 22-25, 32-35 and 39-42 — the four trapdoors,
+   * legible from across the level before anything had been triggered.
+   *
+   * The rock is hidden the moment the slab starts to fall, so the shaft
+   * opens as the floor sinks into it.
+   */
+  shaftDepthPx?: number | undefined;
 }
 
 type State = 'armed' | 'warning' | 'solid' | 'falling' | 'gone';
@@ -90,6 +107,7 @@ export class FallingPlatformTrap {
   readonly id: string;
   readonly gameObject: Phaser.Physics.Arcade.Sprite;
   private readonly rim: Phaser.GameObjects.Rectangle | null;
+  private readonly shaft: Phaser.GameObjects.TileSprite | null;
   private readonly body: Phaser.Physics.Arcade.Body;
 
   private state: State;
@@ -136,6 +154,25 @@ export class FallingPlatformTrap {
           .rectangle(config.x, config.y - TILE_SIZE / 2, TILE_SIZE, RIM_HEIGHT, PALETTE.cyan, 0.85)
           .setOrigin(0.5, 0)
       : null;
+
+    // Behind everything drawn at the default depth (the slab included, so
+    // it sinks *in front of* the rock for the frame the two overlap), but
+    // in front of the backdrop and the side walls at -4..-6. Tile-aligned
+    // to the same grid as the runs either side, so the texture's phase
+    // matches theirs and the seam is invisible.
+    this.shaft =
+      config.shaftDepthPx && config.shaftDepthPx > 0
+        ? scene.add
+            .tileSprite(
+              config.x - TILE_SIZE / 2,
+              config.y + TILE_SIZE / 2,
+              TILE_SIZE,
+              config.shaftDepthPx,
+              'tile-ground-fill',
+            )
+            .setOrigin(0, 0)
+            .setDepth(-1)
+        : null;
   }
 
   notifyStandingOn(): void {
@@ -144,6 +181,7 @@ export class FallingPlatformTrap {
     if (this.state !== 'solid') return;
     this.state = 'falling';
     this.timerMs = 0;
+    this.shaft?.setVisible(false);
     this.body.setVelocityY(this.fallSpeed);
   }
 
@@ -178,6 +216,7 @@ export class FallingPlatformTrap {
         this.state = 'falling';
         this.timerMs = 0;
         this.gameObject.clearTint();
+        this.shaft?.setVisible(false);
         this.body.setVelocityY(this.fallSpeed);
       }
       return;
@@ -202,6 +241,7 @@ export class FallingPlatformTrap {
   }
 
   destroy(): void {
+    this.shaft?.destroy();
     this.rim?.destroy();
     this.gameObject.destroy();
   }
