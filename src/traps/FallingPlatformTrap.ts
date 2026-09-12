@@ -179,10 +179,15 @@ export class FallingPlatformTrap {
     // An armed trapdoor ignores being stood on entirely — that is the
     // point of it. It waits for its trigger.
     if (this.state !== 'solid') return;
-    this.state = 'falling';
+    // Shake and flash first, THEN go. It used to start sinking on contact,
+    // which made the sink itself the telegraph — and a sinking floor you
+    // can still jump off is barely a trap at all: CRUMBLE was cleared by
+    // walking across it (owner: "сектор Crumble слишком лёгкий и проходится
+    // очень просто"). Now the tile announces itself for `warnMs` while it
+    // is still solid footing, and once it actually lets go there is no
+    // pushing off it. The honest window is that warning, not the fall.
+    this.state = 'warning';
     this.timerMs = 0;
-    this.shaft?.setVisible(false);
-    this.body.setVelocityY(this.fallSpeed);
   }
 
   /** `Triggerable` — fired by a `trigger` zone placed ahead of this floor. */
@@ -190,6 +195,19 @@ export class FallingPlatformTrap {
     if (this.state !== 'armed') return;
     this.state = 'warning';
     this.timerMs = 0;
+  }
+
+  /**
+   * True once the floor has actually let go — it still carries the player
+   * for `holdMs`, but it is no longer something to jump from.
+   *
+   * `GameplayScene` feeds this to `Player.notifyFootingCollapsed()`, which
+   * is what makes the trap cost something: "земля когда падала — от неё
+   * нельзя оттолкнуться" (owner). The escape is the warning phase before
+   * this, which is `warnMs` long and never shorter than `MIN_WARNING_MS`.
+   */
+  isCollapsing(): boolean {
+    return this.state === 'falling';
   }
 
   isSolid(): boolean {

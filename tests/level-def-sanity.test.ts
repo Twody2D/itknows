@@ -8,7 +8,7 @@ import { LEVEL_HEIGHT_TILES, exitRowOf } from '@/gameplay/LevelDef';
 import type { LevelDef } from '@/gameplay/LevelDef';
 import { MAX_JUMP_RISE_PX, REACH_AT_SAME_HEIGHT_PX } from '@/gameplay/jumpPhysics';
 import { LEVEL_WIDTH_TILES, TILE_SIZE } from '@/config/display';
-import { MIN_REACTION_WINDOW_MS, PHYSICS } from '@/config/physics';
+import { MIN_REACTION_WINDOW_MS, PHYSICS, PLAYER_HURT_BOX_HEIGHT } from '@/config/physics';
 
 /**
  * Cheap structural sanity checks. This is not the reachability solver
@@ -212,5 +212,47 @@ describe.each([
 
     const unreachable = [...rows].filter((r) => !reached.has(r));
     expect(unreachable, `rows unreachable from groundRow ${level.groundRow}: ${unreachable.join(', ')}`).toEqual([]);
+  });
+  it('never parks an always-lethal spike at chest height over a walkable surface', () => {
+    // A `moving-spike` without `ambush` is lethal from the moment it
+    // exists — no warning phase, the motion is the telegraph. So where it
+    // sits relative to the floor underneath it decides what the player can
+    // do about it, and there are only two honest answers:
+    //
+    //   - one row above the surface, standing on it: an obstacle to jump,
+    //     which is what `PATROL` teaches in sector 01; or
+    //   - clear of a standing player's hurt box entirely: scenery.
+    //
+    // In between is the case this test exists to forbid. `HUNTED` had one
+    // three rows up, which is too high to be jumped comfortably and too low
+    // to stand under — and because lethality was read off a box around the
+    // player's shins it did nothing at all, passing visibly through the
+    // android's chest (owner: "движущийся шип проходит прямо через меня, но
+    // я живой"). With the hurt box covering the android, that placement is
+    // a wall in the middle of a corridor, so it must not come back.
+    const surfaceClearanceTiles = PLAYER_HURT_BOX_HEIGHT / TILE_SIZE;
+    const offenders: string[] = [];
+    const surfaces = [
+      { row: level.groundRow, from: 0, to: level.width - 1 },
+      ...level.platforms.map((p) => ({ row: p.row, from: p.col, to: p.col + p.width - 1 })),
+    ];
+
+    for (const trap of level.traps ?? []) {
+      if (trap.type !== 'moving-spike' || trap.ambush) continue;
+      const lowRow = Math.max(trap.fromRow, trap.toRow);
+      const fromCol = Math.min(trap.fromCol, trap.toCol);
+      const toCol = Math.max(trap.fromCol, trap.toCol);
+
+      for (const surface of surfaces) {
+        if (surface.row <= lowRow) continue;
+        if (toCol < surface.from || fromCol > surface.to) continue;
+        const gapTiles = surface.row - lowRow;
+        if (gapTiles === 1) continue;
+        if (gapTiles >= surfaceClearanceTiles + 1) continue;
+        offenders.push(`${trap.id}: row ${lowRow} is ${gapTiles} tiles over a surface at row ${surface.row}`);
+      }
+    }
+
+    expect(offenders, offenders.join('; ')).toEqual([]);
   });
 });

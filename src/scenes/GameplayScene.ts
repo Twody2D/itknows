@@ -116,6 +116,10 @@ export class GameplayScene extends Phaser.Scene {
   /** Best-effort "which trap probably did this" — `Player.kill()` only carries a cause, not a trap id (see BehaviorTracker's doc comment for the same limitation). */
   private lastTriggeredTrapId: string | null = null;
 
+  /** Scratch rectangles for `sweepLethalContact` — reused, never reallocated (CLAUDE.md #9). */
+  private readonly hurtRect = new Phaser.Geom.Rectangle();
+  private readonly hazardRect = new Phaser.Geom.Rectangle();
+
   private fx!: FxManager;
   /** id → hazard game object, built once per level so warning-pulse can find the right visual from `trap:armed`'s id-only payload. */
   private hazardById = new Map<string, Phaser.GameObjects.GameObject & { alpha: number }>();
@@ -200,9 +204,6 @@ export class GameplayScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.level.platformsGroup, undefined, (playerObj, platformObj) =>
       this.isLandingOnPlatform(playerObj as Player, platformObj as Phaser.Physics.Arcade.Sprite),
     );
-    this.physics.add.overlap(this.player, this.level.spikesGroup, () => {
-      this.player.kill('spike');
-    });
     this.physics.add.overlap(this.player, this.level.exitZone, () => {
       this.onExitReached();
     });
@@ -324,12 +325,6 @@ export class GameplayScene extends Phaser.Scene {
   private setupTraps(): void {
     const traps = this.level.traps;
 
-    for (const hazard of traps.lethalHazards) {
-      this.physics.add.overlap(this.player, hazard.gameObject, () => {
-        if (hazard.isLethal()) this.player.kill('trap');
-      });
-    }
-
     for (const platform of traps.disappearingPlatforms) {
       this.physics.add.collider(
         this.player,
@@ -344,7 +339,13 @@ export class GameplayScene extends Phaser.Scene {
       this.physics.add.collider(
         this.player,
         platform.gameObject,
-        () => platform.notifyStandingOn(),
+        () => {
+          platform.notifyStandingOn();
+          // Riding a floor that has already let go is not footing: no jump
+          // off it, no coyote time after it. The escape was the warning
+          // phase, and it has been and gone.
+          if (platform.isCollapsing()) this.player.notifyFootingCollapsed();
+        },
         (playerObj, platformObj) =>
           platform.isSolid() && this.isLandingOnPlatform(playerObj as Player, platformObj as Phaser.Physics.Arcade.Sprite),
       );
@@ -416,6 +417,7 @@ export class GameplayScene extends Phaser.Scene {
     for (const trap of this.level.traps.updatable) trap.update(time, delta);
     for (const pursuer of this.level.traps.pursuers) pursuer.update(this.player.x, delta);
     this.carryOnMovingPlatforms();
+    this.sweepLethalContact();
     this.tutorialHints?.update();
 
     const attemptElapsedMs = this.attemptElapsedMs;
@@ -446,6 +448,46 @@ export class GameplayScene extends Phaser.Scene {
     if (shownSeconds !== this.hudLastShownSeconds) {
       this.hudLastShownSeconds = shownSeconds;
       this.hudTimeText.setPixelText(formatMmSs(attemptElapsedMs));
+    }
+  }
+
+  /**
+   * Kills the player when a live hazard touches the android's visible core.
+   *
+   * This used to be two `physics.add.overlap` registrations against the
+   * player's own body — and that body is a 6x12 box at the feet, sized for
+   * ledges and gap widths, not for the 24x36 android drawn around it. The
+   * result was a character whose head and torso could not be hurt at all:
+   * the owner sent a screenshot of a moving spike buried in the android's
+   * chest with the android walking on. `Player.hurtBounds` is the shape
+   * that should decide this, so the sweep is done here by hand.
+   *
+   * Hazards are a handful per level and every rectangle is reused, so this
+   * costs a few AABB tests a frame and allocates nothing.
+   */
+  private sweepLethalContact(): void {
+    if (!this.player.isAlive()) return;
+    const hurt = this.player.hurtBounds(this.hurtRect);
+
+    for (const spike of this.level.spikesGroup.getChildren()) {
+      const body = (spike as Phaser.Physics.Arcade.Sprite).body as Phaser.Physics.Arcade.StaticBody | null;
+      if (!body || !body.enable) continue;
+      if (Phaser.Geom.Rectangle.Overlaps(hurt, this.hazardRect.setTo(body.x, body.y, body.width, body.height))) {
+        this.player.kill('spike');
+        return;
+      }
+    }
+
+    for (const hazard of this.level.traps.lethalHazards) {
+      if (!hazard.isLethal()) continue;
+      const body = (hazard.gameObject as Phaser.GameObjects.GameObject & {
+        body: Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody | null;
+      }).body;
+      if (!body || !body.enable) continue;
+      if (Phaser.Geom.Rectangle.Overlaps(hurt, this.hazardRect.setTo(body.x, body.y, body.width, body.height))) {
+        this.player.kill('trap');
+        return;
+      }
     }
   }
 

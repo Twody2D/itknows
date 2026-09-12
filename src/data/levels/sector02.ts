@@ -24,23 +24,38 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
     width: 48,
     groundRow: 22,
     gaps: [],
-    spikeColumns: [],
-    platforms: [
-      { col: 10, row: 19, width: 4 },
-      { col: 35, row: 7, width: 6 },
-    ],
+    // UNDER THE TOP HALF OF THE CLIMB, not under all of it. The level used
+    // to drop a failed climb onto clean ground, walk the player back, and
+    // let them try again from the same spot at no cost at all — which the
+    // owner played and called exactly what it was ("сектор Crumble слишком
+    // лёгкий и проходится очень просто"). Now the first two ledges are
+    // still free to fail, and the last two are not.
+    //
+    // They sit under the far edges of `dp-03` and `dp-04` — the tiles the
+    // route actually stands on — and the player steers in the air, so a
+    // fall is a landing to aim rather than a sentence (the same rule
+    // `ASCENT` already plays by).
+    spikeColumns: [23, 24, 29, 30],
+    // Only the top is solid now. The launch pad at row 19 was a free rung
+    // in the middle of the ladder: the climb was three crumbling ledges
+    // with a rest stop, and a rest stop is the one thing a crumbling climb
+    // must not have.
+    platforms: [{ col: 34, row: 7, width: 6 }],
     playerStartCol: 2,
-    exitCol: 37,
+    exitCol: 36,
     exitRow: 7,
     traps: [
-      // The middle of the climb is made of ledges that crumble on contact,
-      // so the ladder can only be taken in one unbroken run. Failing it
-      // drops the player onto clean ground with nothing underneath — the
-      // cost of a mistake is the climb, not the attempt. That is what makes
-      // this the right place to learn the mechanic rather than sector 05.
-      { type: 'disappearing-platform', id: 'dp-01', col: 17, row: 16, width: 3 },
-      { type: 'disappearing-platform', id: 'dp-02', col: 23, row: 13, width: 3 },
-      { type: 'disappearing-platform', id: 'dp-03', col: 29, row: 10, width: 3 },
+      // FOUR LEDGES, NO REST. The whole ladder from the ground to the top
+      // is made of floor that crumbles on contact, so it can only be taken
+      // in one unbroken run — 350ms of visible flicker per rung, which is
+      // the telegraph and the entire budget for deciding where to go next
+      // (CLAUDE.md #4.2). Four columns between the ledges at a three-row
+      // rise is the campaign's standard hop; what is new here is that there
+      // is nowhere to stop and read the next one.
+      { type: 'disappearing-platform', id: 'dp-01', col: 10, row: 19, width: 3 },
+      { type: 'disappearing-platform', id: 'dp-02', col: 16, row: 16, width: 3 },
+      { type: 'disappearing-platform', id: 'dp-03', col: 22, row: 13, width: 3 },
+      { type: 'disappearing-platform', id: 'dp-04', col: 28, row: 10, width: 3 },
     ],
   },
   {

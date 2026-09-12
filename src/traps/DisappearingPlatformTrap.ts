@@ -28,6 +28,7 @@ export class DisappearingPlatformTrap {
   private readonly crumbleMs: number;
   private readonly goneMs: number;
   private readonly originalAlpha = 1;
+  private span: readonly DisappearingPlatformTrap[] = [this];
 
   constructor(scene: Phaser.Scene, config: DisappearingPlatformConfig) {
     this.id = config.id;
@@ -37,8 +38,22 @@ export class DisappearingPlatformTrap {
     this.gameObject = scene.physics.add.staticSprite(config.x, config.y, 'tile-ground');
   }
 
+  /**
+   * Every tile of the same ledge, so contact with any one of them takes the
+   * whole ledge with it — see `Level.ts`, where the span is linked. A tile
+   * is in its own span list; `startCrumbling` is what breaks the recursion.
+   */
+  linkSpan(span: readonly DisappearingPlatformTrap[]): void {
+    this.span = span;
+  }
+
   /** Called by the level's collider process callback on first contact from above. */
   notifyStandingOn(): void {
+    if (this.state !== 'solid') return;
+    for (const tile of this.span) tile.startCrumbling();
+  }
+
+  private startCrumbling(): void {
     if (this.state !== 'solid') return;
     this.state = 'crumbling';
     this.timerMs = 0;

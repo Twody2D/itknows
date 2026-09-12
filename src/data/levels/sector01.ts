@@ -329,12 +329,21 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       // SOMETHING COMES DOWN WHILE YOU ARE CLIMBING. The level was a clean
       // staircase and nothing else, which the owner found flat ("ascent
       // недостаточно игривый, можно сделать, чтобы шип сверху упал, когда я
-      // забирался наверх"). Landing on the third tier arms a spike that
+      // забирался наверх"). Landing on the second tier arms a spike that
       // drops onto the *next* one — visible for the whole 500ms fall, and
       // lethal only once it has landed, so what it costs is the jump the
       // player was about to make, not the jump they are in.
       //
-      // `activeMs: 1200` is the actual puzzle: it sits there, on the tier
+      // COLUMN 23, NOT 21: the tier is `col 20 width 4`, and a player
+      // arriving from the tier on the right lands on its far edge — 40.6px
+      // of reach at a three-row rise puts them at column 23 and no further.
+      // At column 21 the spike came down on the two columns of that ledge
+      // nobody ever stands on, which is why it read as unrelated to the
+      // player ("шип падает независимо от того, где я" — owner). On column
+      // 23 it lands on the exact tile the next hop needs, in full view,
+      // while the player is still standing safely on the tier below.
+      //
+      // `activeMs: 1200` is the actual puzzle: it sits there, on the tile
       // the route needs, long enough that waiting is a real decision on a
       // ledge four rows above a spike bed. Then it withdraws and the climb
       // continues.
@@ -342,9 +351,9 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         type: 'moving-spike',
         id: 'mspike-01',
         ambush: true,
-        fromCol: 21,
+        fromCol: 23,
         fromRow: 8,
-        toCol: 21,
+        toCol: 23,
         toRow: 12,
         timing: { idleMs: 900, warningMs: 500, activeMs: 1200, cooldownMs: 400 },
         loop: false,

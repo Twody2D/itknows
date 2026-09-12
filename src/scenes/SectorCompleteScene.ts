@@ -41,6 +41,9 @@ const RIGHT_COLUMN_X = 488;
 const RIGHT_COLUMN_MIN_W = 86;
 const RIGHT_COLUMN_MIN_WIDTH = RIGHT_COLUMN_X + RIGHT_COLUMN_MIN_W + 8;
 
+/** How long the result screen takes to arrive — one duration for the panels, the buttons and the text layer alike. */
+const REVEAL_MS = 260;
+
 /**
  * The one natural meta-break in the campaign (master-prompt §14/§27): a
  * sector just ended, so this is where a version bump gets an actual
@@ -123,38 +126,33 @@ export class SectorCompleteScene extends Phaser.Scene {
   }
 
   /**
-   * Fades every block in with a small upward slide, staggered so the eye
-   * lands on TIME first — the buttons fade in last but are clickable
-   * immediately, no input buffer (see class doc comment). The labels sit
-   * outside the display list, so they come up together on their own layer
-   * over the same window rather than sliding block by block.
+   * ONE MOTION FOR THE WHOLE SCREEN: every block, every button and the text
+   * layer fade up together over `REVEAL_MS`, and nothing slides.
+   *
+   * It used to stagger the blocks 60ms apart with a 6px rise and hold the
+   * buttons back to 420ms — a nice idea that the screen could not actually
+   * perform, because every word on it is DOM text on a layer of its own
+   * (`DomTextOverlay`) and that layer can only fade as one piece. So the
+   * readouts were legible from the first frame while their panels were
+   * still arriving underneath them, and then the buttons slid in on their
+   * own beat after everything else had settled. The owner read exactly
+   * that off the screen: "текст появляется сразу, а кнопки выезжают".
+   *
+   * A staggered reveal is only worth having if the text can be part of it.
+   * It cannot, so the screen arrives as one thing instead — which is also
+   * the honest description of what it is. The buttons are clickable from
+   * the first frame regardless, fade or no fade (see class doc comment).
    */
   private playRevealAnimation(blocks: Phaser.GameObjects.GameObject[], buttons: Phaser.GameObjects.GameObject[]): void {
-    const withAlpha = blocks as unknown as Array<{ alpha: number; y: number }>;
-    for (const block of withAlpha) {
-      const originalY = block.y;
-      block.alpha = 0;
-      block.y = originalY + 6;
-    }
+    const targets = [...blocks, ...buttons] as unknown as Array<{ alpha: number }>;
+    for (const target of targets) target.alpha = 0;
     this.tweens.add({
-      targets: withAlpha,
+      targets,
       alpha: 1,
-      y: '-=6',
-      duration: 220,
-      ease: 'Sine.easeOut',
-      delay: this.tweens.stagger(60, {}),
-    });
-
-    for (const btn of buttons) (btn as unknown as { alpha: number }).alpha = 0;
-    this.tweens.add({
-      targets: buttons,
-      alpha: 1,
-      duration: 220,
-      delay: 420,
+      duration: REVEAL_MS,
       ease: 'Sine.easeOut',
     });
-
-    this.domText.fadeInLayer(520);
+    this.domText.fadeInLayer(REVEAL_MS);
   }
 
   // ---- type ------------------------------------------------------------

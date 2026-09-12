@@ -47,7 +47,15 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       // are things the player already knows how to solve — what is new is
       // that hesitating in front of them now has a price.
       { type: 'pursuer', id: 'pursuer-01', col: 0, row: 21, speedFactor: 0.6 },
-      { type: 'moving-spike', id: 'mspike-01', fromCol: 34, fromRow: 19, toCol: 40, toRow: 19, travelMs: 2400 },
+      // ON THE FLOOR, not hovering two rows above it. At row 19 this spike
+      // sat exactly at the android's chest — visibly through it — and could
+      // not be stood under, jumped over comfortably, or ignored; it only
+      // ever passed through the player because lethality was read off a box
+      // around their shins (`Player.hurtBounds`). Now that it can actually
+      // hit, it belongs where the sector has taught the player to read it:
+      // a slow patrol along the ground, the shape of `PATROL` in sector 01,
+      // cleared by one jump.
+      { type: 'moving-spike', id: 'mspike-01', fromCol: 34, fromRow: 21, toCol: 40, toRow: 21, travelMs: 2400 },
     ],
   },
   {

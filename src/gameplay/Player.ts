@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { PHYSICS } from '@/config/physics';
+import { PHYSICS, PLAYER_HURT_BOX_HEIGHT, PLAYER_HURT_BOX_WIDTH } from '@/config/physics';
 import type { InputState } from '@/utils/input/InputState';
 import type { PlayerAnimState } from './PlayerAnimState';
 import { EventBus } from '@/core/EventBus';
@@ -8,6 +8,7 @@ import { InventoryService } from '@/services/InventoryService';
 import { playerTexturePrefix } from '@/data/shop/skinVisuals';
 
 type LifeState = 'alive' | 'dead' | 'victory';
+
 
 /**
  * Movement controller for the android. Coyote time and jump buffering exist
@@ -21,6 +22,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private facing: 1 | -1 = 1;
 
   private lastGroundedAtMs = -Infinity;
+  /** Raised by the scene for one frame while the android's footing is a floor that has already given way — see `notifyFootingCollapsed`. */
+  private footingCollapsed = false;
   private lastJumpPressedAtMs = -Infinity;
   private jumpCutApplied = false;
 
@@ -53,6 +56,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // box, not from the box itself growing (CLAUDE.md #5).
     this.body.setSize(6, 12);
     this.body.setOffset(9, 24);
+    // ...and lethality is read off `hurtBounds()` instead, so a spike that
+    // visibly hits the android kills it. See `PLAYER_HURT_BOX_WIDTH`.
     this.body.setMaxVelocity(PHYSICS.moveSpeed * 3, PHYSICS.maxFallSpeed);
     // World bounds are wide enough vertically to fall through a pit (death is
     // triggered by a Y check before the bound would stop it) but the level's
@@ -65,6 +70,35 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   isAlive(): boolean {
     return this.lifeState === 'alive';
+  }
+
+  /**
+   * The android's core in world space, written into `out` so the per-frame
+   * hazard sweep allocates nothing (CLAUDE.md #9).
+   *
+   * Taken from the sprite's own position rather than the collision body's,
+   * which makes the test agree with the frame the player actually saw: the
+   * sprite is where the renderer drew the android last frame, so "it went
+   * through me" and "it killed me" describe the same pixels. Origin is
+   * (0.5, 1), so `y` is the feet.
+   */
+  hurtBounds(out: Phaser.Geom.Rectangle): Phaser.Geom.Rectangle {
+    return out.setTo(this.x - PLAYER_HURT_BOX_WIDTH / 2, this.y - PLAYER_HURT_BOX_HEIGHT, PLAYER_HURT_BOX_WIDTH, PLAYER_HURT_BOX_HEIGHT);
+  }
+
+  /**
+   * "The floor you are standing on is falling" — so it stops counting as
+   * ground: no jump off it, and no coyote time once it drops away either
+   * (the coyote window is cleared outright, not just left to expire).
+   *
+   * A collapsing floor that could still be jumped from was the whole reason
+   * a crumbling floor asked nothing of the player. The decision is moved
+   * earlier instead of removed: the tile shakes and flashes for its full
+   * warning while it is still solid, and that is when leaving is free.
+   */
+  notifyFootingCollapsed(): void {
+    this.footingCollapsed = true;
+    this.lastGroundedAtMs = -Infinity;
   }
 
   kill(cause: DeathCause): void {
@@ -89,8 +123,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.lifeState !== 'alive') return;
 
     const dt = delta / 1000;
-    const onGround = this.body.blocked.down || this.body.touching.down;
+    const onGround = (this.body.blocked.down || this.body.touching.down) && !this.footingCollapsed;
     const nowMs = time;
+    // Consumed once per frame: the scene raises it from the falling-floor
+    // collider, which runs in the physics step after this.
+    this.footingCollapsed = false;
 
     if (onGround) this.lastGroundedAtMs = nowMs;
     if (this.inputState.jumpJustPressed()) this.lastJumpPressedAtMs = nowMs;

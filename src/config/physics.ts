@@ -39,6 +39,23 @@ export const SPIKE_HITBOX_HEIGHT = 3;
 export const SPIKE_HITBOX_OFFSET_X = 3;
 export const SPIKE_HITBOX_OFFSET_Y = 7;
 
+/**
+ * The android's HURT BOX — what a hazard must touch to kill — in sprite
+ * pixels, against the 24x36 frame `PLAYER_SPRITE.ts` draws.
+ *
+ * NOT the collision body, which is 6x12 at the feet and stays that way:
+ * every gap width in the campaign is tuned in absolute pixels against it
+ * (`Player.ts`). Lethality used to be read off that same box, so only the
+ * android's legs could be hurt and a spike could pass through its head and
+ * torso untouched — the owner sent a screenshot of exactly that. This box
+ * is head + torso + legs minus 2px of forgiveness on every side; the arms
+ * stay outside it, because a swinging arm clipping a spike is not what
+ * anyone reads as being hit (CLAUDE.md #5).
+ */
+export const PLAYER_HURT_BOX_WIDTH = 12;
+/** 32 of the sprite's 36 rows: the top 4 are the head's 2px cap plus the 2px it bobs. */
+export const PLAYER_HURT_BOX_HEIGHT = 32;
+
 /** Minimum time a lethal trap must telegraph before it can kill (CLAUDE.md #4.2). */
 export const MIN_WARNING_MS = 250;
 /** Minimum reaction window between a visible signal and required input (CLAUDE.md #4.5). */

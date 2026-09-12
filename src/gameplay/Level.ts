@@ -194,6 +194,7 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[], levelSeed: number, gro
       }
 
       case 'disappearing-platform': {
+        const ledge: DisappearingPlatformTrap[] = [];
         for (let i = 0; i < def.width; i++) {
           const { x, y } = tileCenter(def.col + i, def.row);
           const trap = new DisappearingPlatformTrap(scene, {
@@ -203,10 +204,20 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[], levelSeed: number, gro
             crumbleMs: def.crumbleMs,
             goneMs: def.goneMs,
           });
+          ledge.push(trap);
           result.disappearingPlatforms.push(trap);
           result.updatable.push(trap);
           result.all.push(trap);
         }
+        // THE LEDGE CRUMBLES AS ONE, like the trapdoor span below. Each
+        // tile used to keep its own timer, so a three-wide ledge was three
+        // independent floors: land on the first, walk to the second while
+        // it flickers, and the crumble delay was effectively tripled. That
+        // is not a ledge giving way, it is a conveyor — and it is a good
+        // part of why CRUMBLE could be walked up ("слишком лёгкий и
+        // проходится очень просто" — owner). Standing anywhere on it now
+        // starts the whole thing going.
+        for (const tile of ledge) tile.linkSpan(ledge);
         break;
       }
 
