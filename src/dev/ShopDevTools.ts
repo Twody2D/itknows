@@ -64,6 +64,11 @@ export const ShopDevTools = {
     InventoryService.unlock(category, id);
   },
 
+  /** Equips an already-owned cosmetic — the same call the shop's own button makes, reachable without driving the UI. */
+  equip(category: InventoryCategory, id: string): boolean {
+    return InventoryService.equip(category, id);
+  },
+
   /** Resets credits/inventory/processed-purchase-tokens only — level progress is untouched. */
   resetInventory(): void {
     SaveService.resetShopState();

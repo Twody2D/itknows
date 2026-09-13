@@ -118,6 +118,8 @@ export class GameplayScene extends Phaser.Scene {
 
   /** Scratch rectangles for `sweepLethalContact` — reused, never reallocated (CLAUDE.md #9). */
   private readonly hurtRect = new Phaser.Geom.Rectangle();
+  /** Reused by `sweepZoneContacts` so it allocates nothing (CLAUDE.md #9). */
+  private readonly bodyRect = new Phaser.Geom.Rectangle();
   private readonly hazardRect = new Phaser.Geom.Rectangle();
 
   private fx!: FxManager;
@@ -204,10 +206,6 @@ export class GameplayScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.level.platformsGroup, undefined, (playerObj, platformObj) =>
       this.isLandingOnPlatform(playerObj as Player, platformObj as Phaser.Physics.Arcade.Sprite),
     );
-    this.physics.add.overlap(this.player, this.level.exitZone, () => {
-      this.onExitReached();
-    });
-
     this.setupTraps();
 
     this.fx = new FxManager(this);
@@ -355,13 +353,9 @@ export class GameplayScene extends Phaser.Scene {
       this.physics.add.collider(this.player, gate.gameObject, undefined, () => !gate.isOpen());
     }
 
-    for (const trigger of traps.triggers) {
-      this.physics.add.overlap(this.player, trigger.gameObject, () => trigger.fire());
-    }
-
-    for (const fakeExit of traps.fakeExits) {
-      this.physics.add.overlap(this.player, fakeExit.zone, () => fakeExit.reject());
-    }
+    // Triggers, the exit and fake exits are NOT registered as physics
+    // overlaps — they are swept by hand in `sweepZoneContacts`. See
+    // `TriggerTrap.bounds`.
   }
 
   private setupInput(): void {
@@ -412,6 +406,7 @@ export class GameplayScene extends Phaser.Scene {
     for (const pursuer of this.level.traps.pursuers) pursuer.update(this.player.x, delta);
     this.carryOnMovingPlatforms();
     this.sweepCollapsedFooting();
+    this.sweepZoneContacts();
     this.sweepLethalContact();
     this.tutorialHints?.update();
 
@@ -471,6 +466,38 @@ export class GameplayScene extends Phaser.Scene {
       if (feet < body.y - 8 || feet > body.y + 26) continue;
       this.player.notifyFootingCollapsed();
       return;
+    }
+  }
+
+  /**
+   * Fires the level's non-physical detectors — trigger switches, the exit
+   * door, decoy doors — against the android's collision body.
+   *
+   * None of them is a physics overlap any more, and none of them may become
+   * one. Arcade sets `touching.down` on the player for an overlap-only
+   * vertical contact just as it does for a real landing, and `Player` reads
+   * that flag as ground: a tall trigger band in front of a pit turned into
+   * a staircase a tapping player could climb through the air. The full
+   * account is on `TriggerTrap.bounds`.
+   *
+   * The body, not `hurtBounds()`, is deliberate: every band in the campaign
+   * is placed against the 6x12 collision box (`ambush.ts`), and widening
+   * what counts as contact here would fire every one of them earlier than
+   * it was measured to.
+   */
+  private sweepZoneContacts(): void {
+    if (!this.player.isAlive()) return;
+    const body = this.player.body;
+    const feet = this.bodyRect.setTo(body.x, body.y, body.width, body.height);
+
+    for (const trigger of this.level.traps.triggers) {
+      if (Phaser.Geom.Rectangle.Overlaps(feet, trigger.bounds)) trigger.fire();
+    }
+    for (const fakeExit of this.level.traps.fakeExits) {
+      if (Phaser.Geom.Rectangle.Overlaps(feet, fakeExit.zone)) fakeExit.reject();
+    }
+    if (!this.resolving && Phaser.Geom.Rectangle.Overlaps(feet, this.level.exitZone)) {
+      this.onExitReached();
     }
   }
 
@@ -746,9 +773,9 @@ export class GameplayScene extends Phaser.Scene {
    */
   private progressToExit(x: number, y: number): number {
     const exit = this.level.exitZone;
-    const fromSpawn = Phaser.Math.Distance.Between(this.level.spawn.x, this.level.spawn.y, exit.x, exit.y);
+    const fromSpawn = Phaser.Math.Distance.Between(this.level.spawn.x, this.level.spawn.y, exit.centerX, exit.centerY);
     if (fromSpawn <= 0) return 1;
-    const remaining = Phaser.Math.Distance.Between(x, y, exit.x, exit.y);
+    const remaining = Phaser.Math.Distance.Between(x, y, exit.centerX, exit.centerY);
     return Phaser.Math.Clamp(1 - remaining / fromSpawn, 0, 1);
   }
 

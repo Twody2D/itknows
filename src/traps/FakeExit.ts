@@ -18,7 +18,9 @@ export class FakeExit {
   readonly type = 'fake-exit';
   readonly id: string;
   readonly gameObject: Phaser.GameObjects.Image;
-  readonly zone: Phaser.GameObjects.Zone;
+  /** A plain rectangle swept by hand, never a physics body — see `TriggerTrap.bounds` for why an overlap zone under the player's feet is a trampoline. */
+  readonly zone: Phaser.Geom.Rectangle;
+  private rejecting: Phaser.Tweens.Tween | null = null;
 
   constructor(scene: Phaser.Scene, config: FakeExitConfig) {
     this.id = config.id;
@@ -26,13 +28,16 @@ export class FakeExit {
 
     const width = TILE_SIZE * 2;
     const height = TILE_SIZE * 3;
-    this.zone = scene.add.zone(config.x, config.y, width, height);
-    scene.physics.add.existing(this.zone, true);
+    this.zone = new Phaser.Geom.Rectangle(config.x - width / 2, config.y - height / 2, width, height);
   }
 
-  /** Called by the scene's overlap handler — visual refusal only, never lethal. */
+  /** Called by the scene's contact sweep — visual refusal only, never lethal. */
   reject(): void {
-    this.gameObject.scene.tweens.add({
+    // The sweep calls this every frame the player stands in the doorway, so
+    // the refusal has to be one bump per visit, not a tween stacked per
+    // frame.
+    if (this.rejecting?.isPlaying()) return;
+    this.rejecting = this.gameObject.scene.tweens.add({
       targets: this.gameObject,
       alpha: { from: 1, to: 0.4 },
       yoyo: true,
@@ -43,6 +48,5 @@ export class FakeExit {
 
   destroy(): void {
     this.gameObject.destroy();
-    this.zone.destroy();
   }
 }

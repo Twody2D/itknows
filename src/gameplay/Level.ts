@@ -60,7 +60,8 @@ export interface BuiltLevel {
   groundGroup: Phaser.Physics.Arcade.StaticGroup;
   spikesGroup: Phaser.Physics.Arcade.StaticGroup;
   platformsGroup: Phaser.Physics.Arcade.StaticGroup;
-  exitZone: Phaser.GameObjects.Zone;
+  /** The door's catch area as a plain rectangle, swept by hand in `GameplayScene` — never a physics body (`TriggerTrap.bounds` explains why one under the player's feet acts as a trampoline). */
+  exitZone: Phaser.Geom.Rectangle;
   exitSprite: Phaser.GameObjects.Image;
   spawn: { x: number; y: number };
   worldWidth: number;
@@ -613,8 +614,7 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
     repeat: -1,
     ease: 'Sine.easeInOut',
   });
-  const exitZone = scene.add.zone(exitX, exitY, exitWidth, exitHeight);
-  scene.physics.add.existing(exitZone, true);
+  const exitZone = new Phaser.Geom.Rectangle(exitX - exitWidth / 2, exitY - exitHeight / 2, exitWidth, exitHeight);
 
   const spawn = {
     x: def.playerStartCol * TILE_SIZE + TILE_SIZE / 2,

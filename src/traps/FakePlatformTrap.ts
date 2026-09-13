@@ -36,7 +36,11 @@ export class FakePlatformTrap {
     this.gameObject = scene.add.image(config.x, config.y, 'tile-fake-platform');
     this.flicker = scene.tweens.add({
       targets: this.gameObject,
-      alpha: { from: 0.85, to: 0.25 },
+      // Shallow on purpose. A deeper pulse takes the slab off the screen at
+      // the bottom of every cycle, and a thing that is not there half the
+      // time cannot be recognised as a platform — which is the whole job of
+      // this trap's art (`drawFakePlatformTile`).
+      alpha: { from: 1, to: 0.55 },
       duration: 380,
       yoyo: true,
       repeat: -1,

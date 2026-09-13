@@ -47,6 +47,9 @@ export class MainMenuScene extends Phaser.Scene {
   private relayout!: RelayoutHandle;
   /** True while this scene has launched an overlay over itself — see `openOverlay`. */
   private overlayOpen = false;
+  /** Held so the showcase can be resynced when the shop closes — see `syncShowcase`. */
+  private characterSprite: Phaser.GameObjects.Sprite | undefined;
+  private creditsLabel: PixelLabel | undefined;
   /** Which controls SYSTEM has already remarked on — one line per control per visit, so it never nags. */
   private commentedOn = new Set<MenuCommentKind>();
   private commentHandler = (payload: { text: string; category: string }): void => {
@@ -69,6 +72,8 @@ export class MainMenuScene extends Phaser.Scene {
     // the scene destroyed on shutdown, and which SYSTEM's comment handler
     // would then try to write into.
     this.systemLineLabel = undefined;
+    this.characterSprite = undefined;
+    this.creditsLabel = undefined;
     this.cameras.main.setBackgroundColor(PALETTE.bgVoid);
     fadeIn(this);
 
@@ -132,6 +137,7 @@ export class MainMenuScene extends Phaser.Scene {
         this.overlayOpen = false;
         this.domText.setLayerVisible(true);
         this.input.enabled = true;
+        this.syncShowcase();
         // If the window was resized while the overlay covered this screen, it
         // is still laid out for the old width — rebuild now that it shows.
         this.relayout.flush();
@@ -248,6 +254,31 @@ export class MainMenuScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Repaints what the showcase asserts about the player's inventory.
+   *
+   * The shop is an overlay, so this scene is never rebuilt around it — it
+   * is built once, in `create`, and simply uncovered again. Both things it
+   * shows are snapshots taken at that moment: the equipped skin and the
+   * credit balance. Equip a different android, close the shop, and the
+   * pedestal still showed the old one ("нажимаешь назад в главное меню и
+   * там облик не меняется в предпросмотре") — and buying anything left a
+   * stale balance next to it for exactly the same reason.
+   */
+  private syncShowcase(): void {
+    const sprite = this.characterSprite;
+    if (sprite?.active) {
+      const prefix = playerTexturePrefix(InventoryService.getEquipped('character'));
+      // `play` alone would keep the old texture until the animation's first
+      // frame change, so the pedestal flashes the previous skin.
+      sprite.setTexture(`${prefix}-idle-0`);
+      sprite.play(`${prefix}-idle`, true);
+    }
+
+    const credits = this.creditsLabel;
+    if (credits?.active) credits.setPixelText(String(CurrencyService.getBalance()));
+  }
+
   private buildCharacter(): void {
     const { cx, footY, scale } = MENU_LAYOUT.character;
     // Shows the skin the player actually owns and has equipped — the reason
@@ -255,6 +286,7 @@ export class MainMenuScene extends Phaser.Scene {
     const prefix = playerTexturePrefix(InventoryService.getEquipped('character'));
     const sprite = this.add.sprite(cx, footY, `${prefix}-idle-0`).setOrigin(0.5, 1).setScale(scale);
     sprite.play(`${prefix}-idle`);
+    this.characterSprite = sprite;
   }
 
   private buildPedestal(g: Phaser.GameObjects.Graphics): void {
@@ -325,6 +357,7 @@ export class MainMenuScene extends Phaser.Scene {
       scale: 2,
     });
     balance.setOrigin(0, 0.5);
+    this.creditsLabel = balance;
   }
 
   private buildLogo(): void {

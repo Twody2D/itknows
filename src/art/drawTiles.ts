@@ -132,32 +132,43 @@ export function drawSpikeTile(ctx: CanvasRenderingContext2D): void {
 
 /**
  * A fake platform: unmistakably the same *object* as `drawPlatformSlab`,
- * unmistakably not solid. It is drawn as that slab, then hollowed out —
- * the body is see-through, the bright cyan lip that says "stand here" is
- * broken into dashes, and the underside is missing entirely.
+ * unmistakably not solid. Same body, same unbroken lip, same footprint —
+ * the tell is that the lip is SYSTEM's violet instead of structural cyan,
+ * a scanline runs through the body, and the whole tile breathes
+ * (`FakePlatformTrap`).
  *
- * The earlier version shared no shape with a real platform at all (a dark
- * box with two orange ticks on top), which made it unreadable rather than
- * deceptive — the owner's reaction on seeing one was "не понял, что за
- * платформы". A decoy only works if it is recognisably the thing it is
- * imitating; the tell is what is wrong with it, not that it is unfamiliar
- * (master-prompt §14 — "имеет понятный визуальный сигнал").
+ * Two earlier versions failed the same way, and the failure is worth
+ * keeping written down: both made the decoy *unlike* a platform (first a
+ * dark box with orange ticks, then a see-through body with a dashed lip),
+ * and each time the owner's reaction was to ask what the thing was. A decoy
+ * only works if it is recognisably the thing it imitates; the tell has to
+ * be what is WRONG with it, not that it is unfamiliar (master-prompt §14 —
+ * "имеет понятный визуальный сигнал").
  */
 export function drawFakePlatformTile(ctx: CanvasRenderingContext2D): void {
   ctx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
-  // The slab's own body, at less than half opacity: the background reads
-  // straight through it, which no real platform ever does.
-  ctx.fillStyle = hexToCss(PALETTE.metalMid, 0.4);
+  // SAME SILHOUETTE AS A REAL SLAB — solid body, unbroken lip. A decoy only
+  // works if the player recognises it as a platform in the first place, and
+  // the previous tile did not clear that bar: its body was drawn at 0.4
+  // alpha and its lip was broken into two 3px dashes, then the flicker tween
+  // multiplied the whole thing down to 0.1-0.34. What reached the screen was
+  // a dotted line on the background, which is exactly what the owner
+  // reported seeing — twice — and why he asked what it even was ("так и не
+  // понял что за платформа на скриншоте, на которую даже встать нельзя").
+  ctx.fillStyle = hexToCss(PALETTE.metalMid, 0.7);
   ctx.fillRect(0, 1, TILE_SIZE, TILE_SIZE - 2);
-  // The "safe to stand" lip, broken. A real slab's is one unbroken line.
-  ctx.fillStyle = hexToCss(PALETTE.cyanDim, 0.55);
-  ctx.fillRect(0, 0, 3, 1);
-  ctx.fillRect(5, 0, 3, 1);
-  // A warm hairline just under the lip — the same colour the level uses at
-  // the lip of a real hole, for the same reason.
-  ctx.fillStyle = hexToCss(PALETTE.dangerAlt, 0.35);
-  ctx.fillRect(0, 1, 3, 1);
-  ctx.fillRect(5, 1, 3, 1);
+  ctx.fillStyle = hexToCss(PALETTE.metalEdge, 0.5);
+  ctx.fillRect(0, TILE_SIZE - 1, TILE_SIZE, 1);
+  // The one tell, and it is a word the game already uses everywhere else:
+  // structure is cyan, SYSTEM is violet. A real slab's lip is always cyan
+  // (`drawPlatformSlab`), so a violet lip says "SYSTEM is showing you this,
+  // it is not holding you up" without a tutorial line.
+  ctx.fillStyle = hexToCss(PALETTE.system, 0.9);
+  ctx.fillRect(0, 0, TILE_SIZE, 1);
+  // A scanline across the body — the same "this is a projection" grammar as
+  // the violet lip, readable even when the tile is at its dimmest.
+  ctx.fillStyle = hexToCss(PALETTE.system, 0.3);
+  ctx.fillRect(0, 4, TILE_SIZE, 1);
 }
 
 /** A mechanical platform tile — cyan trim signals "this one moves". */
