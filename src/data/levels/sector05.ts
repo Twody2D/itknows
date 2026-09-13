@@ -184,7 +184,16 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     platforms: [
       { col: 24, row: 19, width: 5 },
       { col: 32, row: 16, width: 5 },
-      { col: 24, row: 13, width: 5 },
+      // Columns 26-30, not 24-28. The climb used to hang on `dp-01`, the
+      // one crumbling ledge in the level: from here the row-10 tier was
+      // 50px away at a three-row rise against 40.6px of reach, so the only
+      // route ran across a ledge that dissolves in 350ms and then stays
+      // gone for a second and a half. Miss it and the whole climb starts
+      // again from the ground — which is what "system core непроходимый
+      // уровень" (owner) actually feels like from the inside. Shifted
+      // right, the tier above is a plain 20px hop and `dp-01` goes back to
+      // being the shortcut it should have been.
+      { col: 26, row: 13, width: 5 },
       { col: 33, row: 10, width: 4 },
       { col: 26, row: 7, width: 5 },
       // Row 5, not row 4. The exit door is drawn 50px tall from the surface
@@ -199,7 +208,10 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     traps: [
 
       ...dropSpike('dspike-01', 13, 21, 22),
-      { type: 'spike-bank', id: 'sbank-01', col: 13, width: 3, hiddenRow: 23, lethalRow: 21 },
+      // Moved off columns 13-15, where it shared its tiles with the drop
+      // spike above. Under the foot of the climb instead, where it is the
+      // last thing between the player and the first tier.
+      { type: 'spike-bank', id: 'sbank-01', col: 24, width: 3, hiddenRow: 23, lethalRow: 21 },
       {
         type: 'moving-platform',
         id: 'movp-01',
@@ -213,7 +225,15 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       { type: 'laser', id: 'laser-01', col: 30, topRow: 17, bottomRow: 21 },
       { type: 'orbit-spike', id: 'orbit-01', pivotCol: 30, pivotRow: 14, radiusTiles: 1.75, periodMs: 1800 },
       { type: 'disappearing-platform', id: 'dp-01', col: 28, row: 10, width: 3 },
-      { type: 'swinging-spike', id: 'swing-01', pivotCol: 28, pivotRow: 3, lengthTiles: 3, maxAngleDeg: 44, periodMs: 1600 },
+      // Pivoted at 31/row 4, not 28/row 3. At the old placement the bob
+      // swept columns 26.4-30.6 at y 53-68 — which is the whole of the
+      // row-7 tier, at exactly the height of a player standing on it. The
+      // tier is mandatory and five columns wide, so there was nowhere on it
+      // to stand and wait at any moment of the swing. Now the arc hangs
+      // below that tier (y 70-88) and over the left half of the row-10 one:
+      // the perch at columns 35-36 is safe, the tier above is safe, and the
+      // hop between them is the thing being timed.
+      { type: 'swinging-spike', id: 'swing-01', pivotCol: 31, pivotRow: 4, lengthTiles: 4, maxAngleDeg: 44, periodMs: 1600 },
     ],
   },
 ];

@@ -84,7 +84,10 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     exitCol: 43,
     traps: [
 
-      ...dropSpike('dspike-01', 31, 21, 22),
+      // Column 35, not 31: at 31 it landed inside `ef-02`'s live plate, two
+      // hazards sharing tiles again. Between the second plate and the laser
+      // is the one stretch of this level that was safe by construction.
+      ...dropSpike('dspike-01', 35, 21, 22),
       // Two live plates with a spike pair marooned between them: the safe
       // ground in the middle is real but small, so crossing is two
       // decisions rather than one long dash. A floor that looks identical
@@ -112,7 +115,12 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     exitRow: 13,
     traps: [
 
-      ...floorSpikes('sbank-01', 18, 3, 22),
+      // Moved clear of the platform overhead. A trigger band is five tiles
+      // tall now — it has to be, to catch a player jumping across it
+      // (`APPROACH_BAND_TILES`) — and at the old column it reached up into
+      // the ledge above, so simply standing on that ledge spent the trap
+      // on nobody.
+      ...floorSpikes('sbank-01', 8, 3, 22),
       // A one-way circuit, which is exactly what makes it harder to read
       // than sector 01's patrol. A ping-pong teaches "it comes straight
       // back"; this comes back around the other side, so the safe moment
@@ -194,7 +202,12 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     exitRow: 10,
     traps: [
 
-      ...dropSpike('dspike-01', 12, 21, 22),
+      // Moved clear of the platform overhead. A trigger band is five tiles
+      // tall now — it has to be, to catch a player jumping across it
+      // (`APPROACH_BAND_TILES`) — and at the old column it reached up into
+      // the ledge above, so simply standing on that ledge spent the trap
+      // on nobody.
+      ...dropSpike('dspike-01', 7, 21, 22),
       // A ladder that crumbles under a machine that slams down on it: the
       // tier cannot be waited on and cannot be rushed either, which is the
       // first time the campaign asks for both at once.
@@ -241,7 +254,12 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     exitRow: 13,
     traps: [
 
-      ...dropSpike('dspike-01', 38, 21, 22),
+      // Moved clear of the platform overhead. A trigger band is five tiles
+      // tall now — it has to be, to catch a player jumping across it
+      // (`APPROACH_BAND_TILES`) — and at the old column it reached up into
+      // the ledge above, so simply standing on that ledge spent the trap
+      // on nobody.
+      ...dropSpike('dspike-01', 44, 21, 22),
       // Cross a pit on stones that fall, climb past a ledge that is not
       // there, and do both under a spike that never stops. Nothing new is
       // introduced — the sector's four ideas are simply asked together.

@@ -1,4 +1,7 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
+import { TILE_SIZE } from '@/config/display';
+import { MAX_JUMP_RISE_PX } from '@/gameplay/jumpPhysics';
+import { PLAYER_BODY_HEIGHT } from '@/config/physics';
 
 type Trap = NonNullable<LevelDef['traps']>[number];
 type Of<T extends Trap['type']> = Extract<Trap, { type: T }>;
@@ -29,32 +32,80 @@ type Of<T extends Trap['type']> = Extract<Trap, { type: T }>;
  * thing is lethal exactly as you arrive.
  */
 
-/** Idle → warning → active → cooldown for a one-shot ambush. `warningMs` is double the honesty floor. */
-export const AMBUSH_TIMING = { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 } as const;
-
-/** Columns between an ambush trigger's left edge and its hazard — `moveSpeed × warningMs`, ≈55px. */
-export const AMBUSH_TRIGGER_LEAD = 6;
+/**
+ * Idle → warning → active → cooldown for a one-shot ambush.
+ *
+ * `warningMs` was 500 and is 320. At 500 the thing had finished falling (or
+ * finished rising out of the floor) a good 90ms before the player got
+ * there, so what they met was a hazard already standing still and plainly
+ * visible — "заранее видно шипы, которые вылезут снизу, слишком большое
+ * окно для реакции, очень просто уклониться" (owner). At 320, paired with
+ * the lead below, it becomes lethal in the frame they arrive.
+ *
+ * Still above `MIN_WARNING_MS` (250), and a spike bank spends most of 320ms
+ * barely clearing the floor before it snaps (`SpikeBankTrap`'s Quint easing)
+ * — so what is on screen is a floor that cracks and then hits, rather than
+ * a set of spikes rising into view at reading speed.
+ */
+export const AMBUSH_TIMING = { idleMs: 900, warningMs: 320, activeMs: 300, cooldownMs: 250 } as const;
 
 /**
- * Columns between a trapdoor's trigger and the pit.
+ * Columns between an ambush trigger's left edge and its hazard.
  *
- * This is the ONLY thing between the player and the hole now: the floor
- * used to flash and shake for 350ms before letting go, and the owner had
- * that removed (see `FallingPlatformTrap`). The pit therefore opens the
- * instant the line is crossed, four columns out — 40px, about 360ms of
- * run-up at `moveSpeed`, all of it with the hole already open and visible.
- * Shortening this would make the trap unreadable rather than merely
- * unannounced, so `tests/level-def-sanity.test.ts` holds it to
- * `MIN_REACTION_WINDOW_MS`.
+ * Three, not six, and it is `warningMs` written as distance: the trigger is
+ * `lead × 10 + 5` px from the hazard's centre, which at `moveSpeed`
+ * (110px/s) is 318ms of running — so a player who crosses the line and
+ * keeps going arrives in the same frame the hazard turns lethal, with
+ * nothing standing there waiting for them beforehand. It is also still just
+ * over `MIN_REACTION_WINDOW_MS`, so stopping remains a real answer.
  */
-export const TRAPDOOR_LEAD = 4;
+export const AMBUSH_TRIGGER_LEAD = 3;
+
+/**
+ * Columns between a trapdoor's trigger and the pit: ONE — the last solid
+ * tile before the edge.
+ *
+ * At four this was ~360ms of running with the hole already open ahead, and
+ * the owner read that as the trap announcing itself from across the room:
+ * "тригеры слишком далеко от ямы, слишком большое окно для реакции, должно
+ * быть прям на краюшке". At one, the floor goes as the player's own foot
+ * reaches the lip — about 90ms, which is under `MIN_REACTION_WINDOW_MS` and
+ * is deliberately so. Recorded with the rest of his falling-floor decision
+ * in CLAUDE.md #4.
+ *
+ * What still holds: the pit is never wider than a jump from its own edge
+ * (checked in `tests/level-def-sanity.test.ts`), and `LevelValidator`
+ * counts no trapdoor as a surface at all, so the level is passable with
+ * every one of them already open. Being caught costs the attempt, never the
+ * run.
+ */
+export const TRAPDOOR_LEAD = 1;
 
 /** How long a shifting pit takes to reach its new position — it has to finish before the player's take-off. */
 export const PIT_SHIFT_MS = 420;
 
 /**
- * A trigger zone covering the band a player occupies while running along a
- * surface at `surfaceRow`: three rows tall, ending at the surface.
+ * How tall a trigger band has to be to catch a player who is JUMPING across
+ * it rather than running through it.
+ *
+ * Three tiles was not enough and this was a real bug: the band reached 30px
+ * above the floor, and a player at the top of a full jump has their
+ * collision body between 34.7px and 46.7px up (`MAX_JUMP_RISE_PX` plus
+ * `PLAYER_BODY_HEIGHT`). They passed clean over the switch — an overlap
+ * zone is tested against the collision body, not the drawn android. The owner found it
+ * from the other end — "триггеры на проваливающийся пол иногда не
+ * срабатывают сразу, и я могу пробежать пол, и только потом он провалится":
+ * the trap missing its cue on the jump, and then firing on some later pass
+ * through the same columns.
+ *
+ * Derived rather than picked, so it cannot drift away from the jump it has
+ * to cover if the physics are ever retuned.
+ */
+const APPROACH_BAND_TILES = Math.ceil((MAX_JUMP_RISE_PX + PLAYER_BODY_HEIGHT) / TILE_SIZE);
+
+/**
+ * A trigger zone covering everywhere a player can be while crossing these
+ * columns — on foot or in the air — ending at the surface they run along.
  *
  * Approaching from the left is the default (`width` columns ending where
  * the hazard is); `from: 'right'` mirrors it for a hazard approached the
@@ -75,9 +126,9 @@ export function approach(
     type: 'trigger',
     id,
     col: from === 'left' ? hazardCol - lead : hazardCol + 1,
-    row: surfaceRow - 3,
+    row: surfaceRow - APPROACH_BAND_TILES,
     width: lead,
-    height: 3,
+    height: APPROACH_BAND_TILES,
     targetId,
   };
 }

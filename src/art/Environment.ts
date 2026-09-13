@@ -318,15 +318,24 @@ export function buildEnvironmentLayers(
  * transform-only tween (angle), never a per-frame redraw (CLAUDE.md #9).
  */
 function buildSystemNode(scene: Phaser.Scene, x: number, y: number, seed: number): void {
+  // BACKGROUND VALUES, not foreground ones. At full `system` violet and
+  // 0.7/0.9 alpha this was the brightest saturated thing on the screen
+  // after the exit door, sitting at eye level on the skyline — and it read
+  // as something to walk into: "непонятно, для чего нужен фиолетовый
+  // портал" (owner). Nothing in this game is a portal except the exit, so
+  // the fix is to stop it competing: the dim tone, half the alpha, and no
+  // hard bright core. It still sweeps, which is the whole characterisation
+  // — THE SYSTEM watching from a distance — but now at the value of the
+  // skyline it is mounted on.
   const node = scene.add.graphics().setDepth(-18).setScrollFactor(0.15, 0.05);
-  node.lineStyle(1, PALETTE.system, 0.7);
+  node.lineStyle(1, PALETTE.systemDim, 0.45);
   node.strokeCircle(x, y, 3);
-  node.fillStyle(PALETTE.system, 0.9);
+  node.fillStyle(PALETTE.systemDim, 0.5);
   node.fillRect(x - 1, y - 1, 2, 2);
 
   // Drawn in local space around (0,0) so the pivot set below is the triangle's apex.
   const beam = scene.add.graphics().setDepth(-19).setScrollFactor(0.15, 0.05);
-  beam.fillStyle(PALETTE.systemDim, 0.35);
+  beam.fillStyle(PALETTE.systemDim, 0.16);
   beam.fillTriangle(0, 0, -4, 60, 4, 60);
   beam.setPosition(x, y);
 

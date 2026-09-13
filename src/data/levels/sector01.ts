@@ -252,13 +252,16 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         width: 14,
         travelMs: 3000,
       },
-      // Fourteen columns of lead, so the trigger band reaches back across
-      // the bridge: the slab has to have finished moving while the player
-      // is still riding, with the whole of the far bank in front of them.
-      // Caught any later they would be committed to the jump, and a pit
-      // that moves under someone already in the air is not a trap, it is a
-      // coin toss (CLAUDE.md #4.2/#4.5).
-      ...shiftingPit('sp-01', 39, 36, 3, 22, { lead: 14 }),
+      // Six columns of lead, not fourteen. At fourteen the band reached
+      // right back across the bridge, so the hole finished moving while the
+      // player was still halfway along the ride with their eyes on the far
+      // bank — the trap happened, correctly and invisibly, somewhere they
+      // were not looking, which is a large part of why the owner reported
+      // never having met it. Six is 545ms of approach against a 420ms
+      // shift: still finished before the take-off, and now close enough to
+      // watch. Any shorter and the hole would move under someone already in
+      // the air, which is a coin toss rather than a trap.
+      ...shiftingPit('sp-01', 39, 36, 3, 22, { lead: 6 }),
     ],
   },
   {

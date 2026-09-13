@@ -59,3 +59,34 @@ describe('LevelFactory variant resolution', () => {
     expect(level.id).toBe('sector-01-level-01');
   });
 });
+
+describe('variants change how fast a hazard moves, never whether it fires', () => {
+  // A variant exists to make a level feel personal between attempts
+  // (CLAUDE.md #4.1/#6). It may retune a speed, a period, a phase length —
+  // anything the player can watch happening. It may NOT reach a property
+  // that decides whether the hazard happens at all, because a trap that
+  // visibly does not fire is indistinguishable from a broken one.
+  //
+  // DROP taught this the hard way: its `troll` held the first trapdoor for
+  // 1300ms, which is the floor staying solid while the player runs across
+  // the pit it was supposed to open. Reasoned as "strictly safer" when it
+  // was written; reported by the owner as a bug the first time he met it.
+  const SUPPRESSING_FIELDS = ['holdMs', 'armed', 'loop'] as const;
+
+  for (const { levelId, variantId, def } of flatVariants) {
+    if (variantId === 'standard') continue;
+    it(`${levelId} (${variantId}) keeps every trap firing`, () => {
+      const base = getLevel(levelId);
+      for (const trap of def.traps ?? []) {
+        const original = (base.traps ?? []).find((t) => t.id === trap.id);
+        expect(original, `${trap.id} exists only in the variant`).toBeDefined();
+        for (const field of SUPPRESSING_FIELDS) {
+          expect(
+            (trap as Record<string, unknown>)[field],
+            `${levelId}/${variantId} retunes ${trap.id}.${field}, which decides whether the trap fires at all`,
+          ).toEqual((original as Record<string, unknown>)[field]);
+        }
+      }
+    });
+  }
+});

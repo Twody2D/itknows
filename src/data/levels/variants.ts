@@ -37,7 +37,6 @@ function retune(level: LevelDef, trapId: string, edit: Record<string, unknown>):
   return { ...level, traps };
 }
 
-const DROP = base('sector-01-level-02');
 const PATROL = base('sector-01-level-03');
 const SHIFT = base('sector-01-level-04');
 const PENDULUM = base('sector-02-level-02');
@@ -67,31 +66,25 @@ const HUNTED = base('sector-05-level-01');
  * ever be a redundant surprise, never an unfair one.
  */
 export const LEVEL_VARIANTS: Record<string, { gentle?: LevelDef; bold?: LevelDef; troll?: LevelDef }> = {
-  [DROP.id]: {
-    // `holdMs` is how long a sprung trapdoor stays put before it drops, and
-    // it is the only axis this trap has left: the `warnMs` these variants
-    // used to retune was the flash-and-shake phase, which no longer exists
-    // (`FallingPlatformTrap`).
-    //
-    // IT CAN ONLY BE TUNED UPWARD. The trigger sits `TRAPDOOR_LEAD` columns
-    // ahead of the pit, so the run-up with the hole already open is the
-    // whole of the player's reading time; a hold eats into it from the
-    // front. At 900ms the last two pits open well after a runner is past —
-    // strictly safer, which is what `gentle` has to mean. Shortening it is
-    // not available (zero already is the base) and lengthening it *part
-    // way* would quietly cut the reading time below
-    // `MIN_REACTION_WINDOW_MS`, so there is no honest `bold` here: DROP is
-    // four identical trapdoors, and the only thing left to make harder is
-    // geometry, which a variant may never touch.
-    gentle: retune(retune(DROP, 'flp-03', { holdMs: 900 }), 'flp-04', { holdMs: 900 }),
-    // The habit this level builds is "cross the line and the floor ahead is
-    // already gone". Here the very first trapdoor waits more than a second
-    // instead — the player who has learned to jump on the trigger takes off
-    // early and lands on ground that was never going anywhere yet. It adds
-    // no danger (a longer hold is strictly safer), which is what keeps
-    // `troll` a surprise rather than a difficulty spike (master-prompt §15).
-    troll: retune(DROP, 'flp-01', { holdMs: 1300 }),
-  },
+  // DROP HAS NO VARIANTS, and that is the finding rather than an omission.
+  //
+  // It is four identical trapdoors, so the only property a variant could
+  // reach is `holdMs` — how long a sprung floor stays put before it drops.
+  // Tuning it up was reasoned to be "strictly safer" and therefore a fine
+  // `gentle`, with a 1300ms `troll` on the first pit as the showcase for
+  // subverting a learned habit. Both were wrong in the same way, and the
+  // owner found it by playing: "триггеры на проваливающийся пол иногда не
+  // срабатывают сразу, и я могу пробежать пол, и только потом он
+  // провалится". Measured on the troll variant — the player crosses the pit
+  // at columns 12-14 on floor that has not moved, keeps running to column
+  // 25, and only there does it let go.
+  //
+  // That is the variant working exactly as written, and it is still a bug,
+  // because a trap that visibly does not fire is indistinguishable from a
+  // broken one. A variant may change how fast a hazard moves; it may not
+  // change whether it happens. Every other entry in this file retunes
+  // `travelMs`, `periodMs` or a phase timing — speeds of things that are on
+  // screen doing something — which is the line this one crossed.
   [PATROL.id]: {
     gentle: retune(PATROL, 'mspike-01', { travelMs: 4000 }),
     bold: retune(PATROL, 'mspike-01', { travelMs: 2100 }),

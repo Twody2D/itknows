@@ -1,5 +1,11 @@
 import Phaser from 'phaser';
-import { PHYSICS, PLAYER_HURT_BOX_HEIGHT, PLAYER_HURT_BOX_WIDTH } from '@/config/physics';
+import {
+  PHYSICS,
+  PLAYER_BODY_HEIGHT,
+  PLAYER_BODY_WIDTH,
+  PLAYER_HURT_BOX_HEIGHT,
+  PLAYER_HURT_BOX_WIDTH,
+} from '@/config/physics';
 import type { InputState } from '@/utils/input/InputState';
 import type { PlayerAnimState } from './PlayerAnimState';
 import { EventBus } from '@/core/EventBus';
@@ -54,7 +60,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     // run straight across it at speed with no jump at all. Forgiving-hitbox
     // margin now comes entirely from the sprite being much bigger than the
     // box, not from the box itself growing (CLAUDE.md #5).
-    this.body.setSize(6, 12);
+    this.body.setSize(PLAYER_BODY_WIDTH, PLAYER_BODY_HEIGHT);
     this.body.setOffset(9, 24);
     // ...and lethality is read off `hurtBounds()` instead, so a spike that
     // visibly hits the android kills it. See `PLAYER_HURT_BOX_WIDTH`.

@@ -98,7 +98,12 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
 
       // The home straight past the last swing looked like the reward for
       // reading three of them. It is a bank instead.
-      ...floorSpikes('sbank-01', 37, 3, 22),
+      // Moved clear of the platform overhead. A trigger band is five tiles
+      // tall now — it has to be, to catch a player jumping across it
+      // (`APPROACH_BAND_TILES`) — and at the old column it reached up into
+      // the ledge above, so simply standing on that ledge spent the trap
+      // on nobody.
+      ...floorSpikes('sbank-01', 40, 3, 22),
       // A swing visibly decelerates to turn around at each extreme, and the
       // deceleration is the read: the safe moment is when the spike is
       // farthest away, not a fixed beat. Three of them at different periods
@@ -137,9 +142,18 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
       // jump is always available and only ever at the wrong moment. The
       // steady sweep is its own telegraph (`TrapDef.ts`) — no warning phase
       // needed, and crossable first try by anyone watching.
-      { type: 'orbit-spike', id: 'orbit-01', pivotCol: 17, pivotRow: 18, radiusTiles: 1.75, periodMs: 2400 },
-      { type: 'orbit-spike', id: 'orbit-02', pivotCol: 26, pivotRow: 15, radiusTiles: 1.75, periodMs: 2000 },
-      { type: 'orbit-spike', id: 'orbit-03', pivotCol: 35, pivotRow: 12, radiusTiles: 1.75, periodMs: 2800 },
+      // RADIUS 3, NOT 1.75. Each orbit is pivoted over the gap between two
+      // tiers, and at 1.75 the whole circle fitted inside that gap: it swept
+      // empty air between the ledges and could not touch anyone standing on
+      // either of them — "я стою на платформе, и он до меня не доезжает"
+      // (owner). At 3 the circle's left and right extremes reach the facing
+      // edges of both ledges (measured: at the upper ledge's edge the spike
+      // passes at y 156-162 against a stander's 128-160 box, and at the
+      // lower one at 165-171 against 158-190), so standing at the lip is a
+      // timed decision and the middle of each ledge is still a safe perch.
+      { type: 'orbit-spike', id: 'orbit-01', pivotCol: 17, pivotRow: 18, radiusTiles: 3, periodMs: 2400 },
+      { type: 'orbit-spike', id: 'orbit-02', pivotCol: 26, pivotRow: 15, radiusTiles: 3, periodMs: 2000 },
+      { type: 'orbit-spike', id: 'orbit-03', pivotCol: 35, pivotRow: 12, radiusTiles: 3, periodMs: 2800 },
     ],
   },
   {
@@ -195,31 +209,47 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
     // hole. `LevelValidator` models the ride as a real edge between its two
     // ends, so "solvable" here means solvable *by riding it*.
     gaps: [[17, 33]],
-    spikeColumns: [10, 11],
+    // Moved off the boarding tile. At 10-11 they sat inside the pendulum's
+    // own sweep, which is the mistake PENDULUM was just fixed for: two
+    // hazards sharing a tile are each fair alone and unreadable together.
+    spikeColumns: [6, 7],
     platforms: [{ col: 38, row: 19, width: 5 }],
     playerStartCol: 2,
     exitCol: 40,
     exitRow: 19,
     traps: [
-
       // The far side of the bridge, where the player relaxes.
       ...floorSpikes('sbank-01', 35, 3, 22),
+      // ROW 21, NOT 19, AND IT STARTS AT THE PIT'S EDGE. This is why the
+      // level was impassable ("уровень bridge непроходимый" — owner): the
+      // slab used to ride three rows above the boarding ground, and a jump
+      // from the ground tops out 34.7px up, which clears the slab's surface
+      // by four and a half pixels. Landing on it meant catching a two-frame
+      // window at the apex of a blind vertical jump, onto a three-tile slab
+      // that was already sliding away — and `LevelValidator` never noticed,
+      // because it models the ride as an edge between the slab's two ends
+      // and has nothing to say about boarding it.
+      //
+      // One row up is a step, not a stunt: the player walks to the lip at
+      // column 16 and hops ten pixels onto a slab waiting right there. It
+      // is still a mechanical platform rather than floor (`asFloor` is only
+      // for the ground row), so it still reads as transport.
       {
         type: 'moving-platform',
         id: 'movp-01',
-        fromCol: 15,
-        fromRow: 19,
-        toCol: 32,
-        toRow: 19,
-        width: 3,
+        fromCol: 17,
+        fromRow: 21,
+        toCol: 30,
+        toRow: 21,
+        width: 4,
         travelMs: 3400,
       },
       // On solid ground at the boarding end, never over the ride: a hazard
       // the player cannot steer away from while it is lethal would break
       // CLAUDE.md #4.5's reaction window no matter how long its warning ran.
-      // This is the toll for getting on, taken somewhere it is possible to
-      // wait.
-      { type: 'swinging-spike', id: 'swing-01', pivotCol: 13, pivotRow: 15, lengthTiles: 4, maxAngleDeg: 40, periodMs: 1800 },
+      // Pivoted at 11 so its arc stops well short of the lip at 16 — the
+      // toll is paid on the approach, and waiting to board is safe.
+      { type: 'swinging-spike', id: 'swing-01', pivotCol: 11, pivotRow: 15, lengthTiles: 4, maxAngleDeg: 40, periodMs: 1800 },
     ],
   },
   {
@@ -241,7 +271,12 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
     exitRow: 13,
     traps: [
 
-      ...dropSpike('dspike-01', 27, 21, 22),
+      // Moved clear of the platform overhead. A trigger band is five tiles
+      // tall now — it has to be, to catch a player jumping across it
+      // (`APPROACH_BAND_TILES`) — and at the old column it reached up into
+      // the ledge above, so simply standing on that ledge spent the trap
+      // on nobody.
+      ...dropSpike('dspike-01', 13, 21, 22),
       {
         type: 'moving-platform',
         id: 'movp-01',

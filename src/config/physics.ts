@@ -40,6 +40,16 @@ export const SPIKE_HITBOX_OFFSET_X = 3;
 export const SPIKE_HITBOX_OFFSET_Y = 7;
 
 /**
+ * The android's COLLISION body, in sprite pixels — what lands on ledges,
+ * what a gap has to be measured against, and what an overlap zone has to
+ * contain to notice the player. Every gap width in the campaign is tuned in
+ * absolute pixels against this exact box, which is why it stays small while
+ * the drawn android is 24x36 around it (`Player.ts`).
+ */
+export const PLAYER_BODY_WIDTH = 6;
+export const PLAYER_BODY_HEIGHT = 12;
+
+/**
  * The android's HURT BOX — what a hazard must touch to kill — in sprite
  * pixels, against the 24x36 frame `PLAYER_SPRITE.ts` draws.
  *

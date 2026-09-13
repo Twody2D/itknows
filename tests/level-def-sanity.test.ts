@@ -8,7 +8,8 @@ import { LEVEL_HEIGHT_TILES, exitRowOf } from '@/gameplay/LevelDef';
 import type { LevelDef } from '@/gameplay/LevelDef';
 import { MAX_JUMP_RISE_PX, REACH_AT_SAME_HEIGHT_PX } from '@/gameplay/jumpPhysics';
 import { LEVEL_WIDTH_TILES, TILE_SIZE } from '@/config/display';
-import { MIN_REACTION_WINDOW_MS, PHYSICS, PLAYER_HURT_BOX_HEIGHT } from '@/config/physics';
+import { PLAYER_HURT_BOX_HEIGHT } from '@/config/physics';
+import { TRAPDOOR_LEAD } from '@/data/levels/ambush';
 
 /**
  * Cheap structural sanity checks. This is not the reachability solver
@@ -135,17 +136,29 @@ describe.each([
     }
   });
 
-  it('gives a trapdoor a real reaction window, and a pit that can be jumped from its edge', () => {
-    // The two honesty invariants a sprung floor has to satisfy, checked as
-    // geometry because that is what they are (CLAUDE.md #4.5/#4.3).
+  it('springs a trapdoor at the lip of its pit, and leaves a pit that can be jumped from that lip', () => {
+    // WHAT IS LEFT OF THE TRAPDOOR CONTRACT, and it is deliberately less
+    // than it was. This used to also require the run-up from trigger to pit
+    // to exceed `MIN_REACTION_WINDOW_MS` — four columns, ~360ms — and the
+    // owner asked for the opposite twice: no warning phase at all, and then
+    // "тригеры слишком далеко от ямы, слишком большое окно для реакции,
+    // должно быть прям на краюшке". `TRAPDOOR_LEAD` is one column now, so
+    // the window is ~90ms and CLAUDE.md #4.5 does not hold for this trap.
+    // That is recorded in CLAUDE.md #4 as his decision; the assertion is
+    // dropped here rather than quietly loosened, so the file does not claim
+    // to be checking something it is not.
     //
-    // 1. The run-up from the trigger to the pit is the window in which the
-    //    player still has ground under them and can act on what they just
-    //    saw. Walking it must take longer than `MIN_REACTION_WINDOW_MS`.
-    // 2. The pit must be jumpable from its own edge, which is also
+    // These two still hold, and they are what keep the level finishable:
+    //
+    // 1. The trigger sits AT the lip — exactly `TRAPDOOR_LEAD` columns back
+    //    — so the floor goes in front of the player rather than under a
+    //    player who has already gone past it, which was the other half of
+    //    the same complaint ("иногда они срабатывают, когда я уже
+    //    пробежал").
+    // 2. The pit is jumpable from its own edge, which is also
     //    `LevelValidator`'s rule: the solver counts no armed trapdoor as a
     //    surface, so springing the trap costs an attempt rather than
-    //    stranding anyone.
+    //    stranding anyone (CLAUDE.md #4.3/#4.4).
     const triggers = (level.traps ?? []).filter((t): t is Extract<typeof t, { type: 'trigger' }> => t.type === 'trigger');
     for (const trap of level.traps ?? []) {
       if (trap.type !== 'falling-platform' || !trap.armed) continue;
@@ -153,10 +166,7 @@ describe.each([
       expect(pit, `${trap.id} does not cover a declared pit`).toBeDefined();
       const [from, to] = pit!;
       const trigger = triggers.find((t) => t.targetId === trap.id)!;
-      const runUpMs = ((from - trigger.col) * TILE_SIZE * 1000) / PHYSICS.moveSpeed;
-      expect(Math.round(runUpMs), `${trap.id} fires too late to be reacted to`).toBeGreaterThanOrEqual(
-        MIN_REACTION_WINDOW_MS,
-      );
+      expect(from - trigger.col, `${trap.id} does not spring at the lip of its pit`).toBe(TRAPDOOR_LEAD);
       expect((to - from + 1) * TILE_SIZE, `the pit under ${trap.id} cannot be jumped`).toBeLessThanOrEqual(
         REACH_AT_SAME_HEIGHT_PX,
       );
@@ -314,5 +324,40 @@ describe.each([
   it('gives every trap definition its own id', () => {
     const ids = (level.traps ?? []).map((trap) => trap.id);
     expect(ids, 'duplicate trap ids').toEqual([...new Set(ids)]);
+  });
+  it('keeps a ground-level trigger band out from under the ledges above it', () => {
+    // A trigger band is tall — five tiles — because it has to catch a player
+    // who JUMPS the columns it covers rather than running through them
+    // (`APPROACH_BAND_TILES`; at three tiles they sailed clean over the
+    // switch, which is the bug behind "триггеры на проваливающийся пол
+    // иногда не срабатывают сразу").
+    //
+    // The cost of that height is this: a band standing on the ground now
+    // reaches 50px up, and if a ledge happens to sit in that airspace, then
+    // walking along the LEDGE fires the trap on the ground below — spending
+    // a one-shot on nobody, which from the player's side is a trap that
+    // simply did not work. Six of them were sitting like that.
+    //
+    // Only ground-level bands are checked. A band that belongs to a ledge
+    // partway up a climb is placed by hand against that climb's own
+    // geometry, and is allowed to reach the tier above it — that is often
+    // the point.
+    const problems: string[] = [];
+    for (const trap of level.traps ?? []) {
+      if (trap.type !== 'trigger') continue;
+      if (trap.row + trap.height !== level.groundRow) continue;
+      const bandCols = new Set(Array.from({ length: trap.width }, (_, i) => trap.col + i));
+      const bandRows = new Set(Array.from({ length: trap.height }, (_, i) => trap.row + i));
+      for (const platform of level.platforms) {
+        const sharesColumn = Array.from({ length: platform.width }, (_, i) => platform.col + i).some((col) =>
+          bandCols.has(col),
+        );
+        const holdsAStander = bandRows.has(platform.row - 1) || bandRows.has(platform.row - 2);
+        if (sharesColumn && holdsAStander) {
+          problems.push(`${trap.id} reaches into the platform at row ${platform.row}`);
+        }
+      }
+    }
+    expect(problems, problems.join('; ')).toEqual([]);
   });
 });

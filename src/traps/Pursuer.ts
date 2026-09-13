@@ -40,11 +40,13 @@ export class Pursuer {
   private readonly body: Phaser.Physics.Arcade.Body;
   private readonly speed: number;
   private waitMs: number;
+  private readonly totalWaitMs: number;
 
   constructor(scene: Phaser.Scene, config: PursuerConfig) {
     this.id = config.id;
     this.speed = PHYSICS.moveSpeed * (config.speedFactor ?? 0.7);
     this.waitMs = config.startDelayMs ?? 2000;
+    this.totalWaitMs = Math.max(this.waitMs, 1);
 
     this.gameObject = scene.physics.add.sprite(config.x, config.y, 'trap-pursuer');
     this.body = this.gameObject.body as Phaser.Physics.Arcade.Body;
@@ -59,11 +61,21 @@ export class Pursuer {
   update(targetX: number, deltaMs = 0): void {
     if (this.waitMs > 0) {
       this.waitMs -= deltaMs;
-      // Visibly idling, not frozen out of existence: it hovers in place,
-      // in frame, so the player can see what is about to come after them.
       this.body.setVelocityX(0);
+      // IT HAS TO LOOK LIKE A COUNTDOWN, not like nothing. Hovering
+      // motionless at the far edge of the screen for two seconds is
+      // indistinguishable from being broken — the owner watched it and
+      // reported the wait as endless. So it spins up instead: the drone
+      // swells and brightens as its hold runs out, and is at full size and
+      // full opacity in the frame it starts moving. Two cheap setters on
+      // one object, no tween to cancel on restart.
+      const charge = 1 - Math.max(this.waitMs, 0) / this.totalWaitMs;
+      this.gameObject.setScale(0.55 + 0.45 * charge);
+      this.gameObject.setAlpha(0.45 + 0.55 * charge);
       return;
     }
+    this.gameObject.setScale(1);
+    this.gameObject.setAlpha(1);
 
     const dx = targetX - this.gameObject.x;
     if (Math.abs(dx) < 2) {

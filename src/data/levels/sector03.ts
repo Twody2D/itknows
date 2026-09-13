@@ -1,5 +1,5 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
-import { dropSpike, floorSpikes } from './ambush';
+import { dropSpike, floorSpikes, shiftingPit } from './ambush';
 
 /**
  * SECTOR 03 — INDUSTRIAL CORE. Everything runs on a clock.
@@ -36,7 +36,15 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
     groundRow: 22,
     // The pit comes before the beam so the two never overlap: clear it,
     // land, and only then meet something that has to be waited out.
-    gaps: [[16, 19]],
+    // The second pit is the sector-01 shifting hole, brought back on open
+    // flat ground with a clear sightline. SHIFT introduced it at the far
+    // end of a bridge ride, which is a fine place for it and a terrible
+    // place to *see* it — the owner reported never having met the trap at
+    // all. Here there is nothing else to look at while it moves.
+    gaps: [
+      [16, 19],
+      [34, 39],
+    ],
     spikeColumns: [10, 11],
     platforms: [],
     playerStartCol: 2,
@@ -48,7 +56,14 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
       // wait — fired by walking into it, so the sector cannot be cleared by
       // patience alone (owner: "большинство уровней проходятся быстро с
       // первой попытки").
-      ...dropSpike('dspike-01', 27, 21, 22),{ type: 'laser', id: 'laser-01', col: 30, topRow: 16, bottomRow: 21 }],
+      ...dropSpike('dspike-01', 27, 21, 22),
+      { type: 'laser', id: 'laser-01', col: 30, topRow: 16, bottomRow: 21 },
+      // Reads as a hole at 34-36 with a ledge at 37-39 to land on; crossing
+      // the line at 26 slides the slab left, so the hole is at 37-39 by the
+      // time the jump is taken. Eight columns is 727ms of approach against
+      // a 420ms shift.
+      ...shiftingPit('sp-01', 37, 34, 3),
+    ],
   },
   {
     id: 'sector-03-level-02',
@@ -92,7 +107,12 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
     exitCol: 43,
     traps: [
 
-      ...dropSpike('dspike-01', 20, 21, 22),
+      // Moved clear of the platform overhead. A trigger band is five tiles
+      // tall now — it has to be, to catch a player jumping across it
+      // (`APPROACH_BAND_TILES`) — and at the old column it reached up into
+      // the ledge above, so simply standing on that ledge spent the trap
+      // on nobody.
+      ...dropSpike('dspike-01', 23, 21, 22),
       // A timing gate blocks but never kills, so this is the sector's one
       // safe place to drill the read: mistime it and you lose a beat, not
       // the attempt. It stands before the beam on purpose — same skill,
