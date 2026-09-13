@@ -14,11 +14,21 @@ describe.each(flatVariants)('validateLevel: $levelId ($variantId)', ({ def }) =>
   });
 });
 
+/**
+ * Traps are addressed by id, never by index. They used to be read as
+ * `traps[0]`, which quietly made every one of these tests a claim about
+ * authoring order as well as behaviour — and broke the moment a level
+ * gained an ambush at the front of its list.
+ */
+function trapById(def: ReturnType<typeof getLevel>, id: string): unknown {
+  return def.traps?.find((trap) => trap.id === id);
+}
+
 describe('LevelFactory variant resolution', () => {
   it('returns the base level for an unknown variantId', () => {
     const level = getLevel('sector-03-level-01', 'nonexistent');
     expect(level.id).toBe('sector-03-level-01');
-    expect(level.traps?.[0]).toMatchObject({ id: 'laser-01' });
+    expect(trapById(level, 'laser-01')).toMatchObject({ id: 'laser-01' });
   });
 
   it('returns the base level for "standard" or no variantId', () => {
@@ -32,7 +42,7 @@ describe('LevelFactory variant resolution', () => {
     // A variant may only change how an already-present hazard behaves
     // (`variants.ts`) — so the timing differs and everything the solver
     // proved reachable stays byte-for-byte identical.
-    expect(gentle.traps?.[0]).not.toEqual(base.traps?.[0]);
+    expect(trapById(gentle, 'laser-01')).not.toEqual(trapById(base, 'laser-01'));
     expect(gentle.platforms).toEqual(base.platforms);
     expect(gentle.gaps).toEqual(base.gaps);
     expect(gentle.playerStartCol).toBe(base.playerStartCol);
@@ -41,7 +51,7 @@ describe('LevelFactory variant resolution', () => {
 
   it('resolves a real bold variant for a level that has one', () => {
     const bold = getLevel('sector-03-level-01', 'bold');
-    expect(bold.traps?.[0]).toMatchObject({ type: 'laser' });
+    expect(trapById(bold, 'laser-01')).toMatchObject({ type: 'laser' });
   });
 
   it('falls back to the base level for a level with no variants at all', () => {

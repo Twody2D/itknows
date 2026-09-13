@@ -1,4 +1,5 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
+import { dropSpike, floorSpikes } from './ambush';
 
 /**
  * SECTOR 02 — NEON GRID. Nothing holds still.
@@ -45,6 +46,24 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
     exitCol: 36,
     exitRow: 7,
     traps: [
+
+      // THE LADDER IS NOT THE WHOLE LEVEL ANY MORE. It was: four rungs, hop
+      // hop hop, done — "быстренько запрыгиваешь наверх и всё, это весь
+      // уровень, никакой ловушки" (owner). Both ends of the climb are now
+      // defended, and both are answered by stopping, which is the one thing
+      // a crumbling ladder never lets you do halfway up.
+      //
+      // The first rung: walking at it from the ground arms a bank that
+      // punches up through the ledge. The rung has not been touched yet, so
+      // it is not going anywhere — wait, and the climb is on. Run at it and
+      // the climb ends before it starts.
+      ...floorSpikes('sbank-01', 10, 3, 19, { triggerRow: 22 }),
+      // The last rung: landing on it drops a spike onto the top platform
+      // between the player and the door, and leaves it there for over a
+      // second. The top is solid ground, so waiting costs nothing — but
+      // only if the climb is finished before reading the situation, which
+      // is the opposite of how the rest of the level has to be played.
+      ...dropSpike('dspike-01', 35, 6, 10, { lead: 7, activeMs: 1100 }),
       // FOUR LEDGES, NO REST. The whole ladder from the ground to the top
       // is made of floor that crumbles on contact, so it can only be taken
       // in one unbroken run — 350ms of visible flicker per rung, which is
@@ -64,11 +83,22 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
     width: 48,
     groundRow: 22,
     gaps: [[24, 27]],
-    spikeColumns: [16, 17],
+    // NO GROUND SPIKES UNDER THE SWINGS. Columns 16-17 sat directly beneath
+    // `swing-02`, so the one place the pendulum forced the player to stand
+    // still and wait was also the one place standing still killed them —
+    // two hazards sharing a tile, each fair on its own and unreadable
+    // together (owner: "Pendulum трудно пройти, потому что шипы по
+    // середине"). The level's demand is timing three arcs; the floor under
+    // them is where that timing gets done.
+    spikeColumns: [],
     platforms: [{ col: 32, row: 19, width: 5 }],
     playerStartCol: 2,
     exitCol: 43,
     traps: [
+
+      // The home straight past the last swing looked like the reward for
+      // reading three of them. It is a bank instead.
+      ...floorSpikes('sbank-01', 37, 3, 22),
       // A swing visibly decelerates to turn around at each extreme, and the
       // deceleration is the read: the safe moment is when the spike is
       // farthest away, not a fixed beat. Three of them at different periods
@@ -96,6 +126,11 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
     exitCol: 39,
     exitRow: 10,
     traps: [
+
+      // Nothing in this level used to spring: three orbits on fixed clocks,
+      // readable from the spawn, cleared first try by anyone patient. The
+      // walk to the first tier now costs attention too.
+      ...floorSpikes('sbank-01', 10, 3, 22),
       // The opposite read to the pendulum, which is why it follows it
       // directly: a fixed arm at constant speed, never slowing, never
       // reversing. Each one is parked on the gap between two tiers, so the
@@ -136,6 +171,9 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
     playerStartCol: 2,
     exitCol: 43,
     traps: [
+
+      // Surviving the stones is not the end of the level any more.
+      ...dropSpike('dspike-01', 39, 21, 22),
       // Slotted between the slabs with no seam anywhere: 17..31 is one
       // unbroken walkway, so running it flat out works — three columns take
       // 270ms and a stone holds for 320ms. Stop or hesitate on one and it
@@ -163,6 +201,9 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
     exitCol: 40,
     exitRow: 19,
     traps: [
+
+      // The far side of the bridge, where the player relaxes.
+      ...floorSpikes('sbank-01', 35, 3, 22),
       {
         type: 'moving-platform',
         id: 'movp-01',
@@ -199,6 +240,8 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
     exitCol: 40,
     exitRow: 13,
     traps: [
+
+      ...dropSpike('dspike-01', 27, 21, 22),
       {
         type: 'moving-platform',
         id: 'movp-01',

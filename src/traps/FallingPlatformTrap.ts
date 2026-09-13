@@ -8,12 +8,14 @@ export interface FallingPlatformConfig {
   x: number;
   y: number;
   /**
-   * How long the platform keeps carrying the player while it sinks, before
-   * collision drops out from under them — the telegraph. Contact starts the
-   * sink immediately (no idle shake beforehand); this window is what makes
-   * that honest (CLAUDE.md #4.2/#4.5 — `MIN_WARNING_MS`/`MIN_REACTION_WINDOW_MS`).
+   * How long the slab keeps carrying the player after it lets go, before
+   * collision drops out from under them. NOT the telegraph any more — the
+   * warning phase before it is (see `warnMs`) — so it is short: just long
+   * enough that the floor is visibly taking the player with it rather than
+   * blinking out under their feet.
    */
   holdMs?: number | undefined;
+  /** Speed at the instant the floor lets go, px/s. It accelerates from here — see `FALL_ACCEL`. */
   fallSpeed?: number | undefined;
   /**
    * Texture for the slab. Passed in by `Level.ts` so a trapdoor can be
@@ -77,6 +79,20 @@ type State = 'armed' | 'warning' | 'solid' | 'falling' | 'gone';
 const RIM_HEIGHT = 2;
 
 /**
+ * Downward acceleration of a slab that has let go, px/s².
+ *
+ * It used to fall at a flat 100px/s, chosen back when the slab had to keep
+ * the player standing on it long enough to carry them past the lip of the
+ * pit. That is no longer its job — a collapsing floor is not something you
+ * can push off any more (`isCollapsing`), so the fall does not have to be
+ * slow to be fatal, and being slow made it read as a lift: "сделай так,
+ * чтобы земля быстрее падала вниз, чтобы не было эффекта, что я вниз еду на
+ * лифте" (owner). A shade above the world's own 900 so the floor pulls away
+ * from the player rather than lowering them.
+ */
+const FALL_ACCEL = 1100;
+
+/**
  * Two floors in one trap, selected by `armed`.
  *
  * Unarmed (the original): solid ground until the player steps on it, then
@@ -124,23 +140,20 @@ export class FallingPlatformTrap {
     this.originX = config.x;
     this.originY = config.y;
     this.armed = config.armed ?? false;
-    // AN ARMED TRAPDOOR TAKES THE PLAYER WITH IT, and these two numbers are
-    // what make that happen rather than a near miss. Dropping collision the
-    // instant it springs does not work: a running player covers the last
-    // columns of the floor in ~100ms, free fall moves them barely 5px in
-    // that time, and they step off the far edge having visibly wobbled and
-    // survived (measured live — the trap fired correctly and killed
-    // nobody). A fast sinking floor does not work either; it simply leaves
-    // from under them, which is the same thing.
+    // THE FLOOR RIPS AWAY; it does not descend. Both of these used to be
+    // tuned around carrying the player gently down past the lip of the pit,
+    // because back then they could still jump off and the slow ride was the
+    // only thing that made the trap fatal. Since a collapsing floor stopped
+    // being jumpable (`isCollapsing`), the ride buys nothing and cost the
+    // moment its whole feel: a floor sinking at 100px/s for half a second
+    // is a lift, which is exactly what the owner called it.
     //
-    // So it sinks *slower* than gravity would take them: 100px/s keeps the
-    // player standing on it, riding it down, for the whole 520ms. By the
-    // end they are 52px below the lip of the pit — past a 34.7px jump, so
-    // there is no way back out — and the floor stops holding. Jumping off
-    // early still works for most of the ride, which is the skill the trap
-    // rewards on the attempts after the first one.
-    this.holdMs = config.holdMs ?? (this.armed ? 520 : 320);
-    this.fallSpeed = config.fallSpeed ?? (this.armed ? 100 : 180);
+    // So: a short shove, then `FALL_ACCEL`. `holdMs` is only there so the
+    // first frames read as the floor taking the player with it — by the end
+    // of it the slab is already moving faster than they are and leaves on
+    // its own.
+    this.holdMs = config.holdMs ?? (this.armed ? 180 : 160);
+    this.fallSpeed = config.fallSpeed ?? 120;
     this.warnMs = Math.max(config.warnMs ?? 350, MIN_WARNING_MS);
     this.state = this.armed ? 'armed' : 'solid';
 
@@ -235,7 +248,7 @@ export class FallingPlatformTrap {
         this.timerMs = 0;
         this.gameObject.clearTint();
         this.shaft?.setVisible(false);
-        this.body.setVelocityY(this.fallSpeed);
+        this.startFalling();
       }
       return;
     }
@@ -249,9 +262,15 @@ export class FallingPlatformTrap {
         this.timerMs = 0;
         this.gameObject.setVisible(false);
         this.rim?.setVisible(false);
+        this.body.setAccelerationY(0);
         this.body.setVelocityY(0);
       }
     }
+  }
+
+  private startFalling(): void {
+    this.body.setVelocityY(this.fallSpeed);
+    this.body.setAccelerationY(FALL_ACCEL);
   }
 
   private syncRim(): void {

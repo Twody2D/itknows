@@ -1,4 +1,12 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
+import {
+  AMBUSH_TIMING,
+  AMBUSH_TRIGGER_LEAD,
+  dropSpike,
+  floorSpikes,
+  shiftingPit,
+  trapdoor,
+} from './ambush';
 
 /**
  * SECTOR 01 — SYSTEM BOOT. The ground is not your friend.
@@ -67,42 +75,6 @@ import type { LevelDef } from '@/gameplay/LevelDef';
  * keeps running arrives exactly as the spike lands. That offset is a
  * contract — moving the spike means moving the trigger with it.
  */
-
-/** The ambush spike's honest cycle — see the file doc comment. */
-const AMBUSH_TIMING = { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 } as const;
-
-/** Columns between an ambush trigger's left edge and its spike's column — `moveSpeed × warningMs` measured from the trigger's centre. */
-const AMBUSH_TRIGGER_LEAD = 6;
-
-/** How long a trapdoor flashes and shakes while still holding — the telegraph. */
-const TRAPDOOR_WARN_MS = 350;
-
-/** Columns between a trapdoor's trigger and the trapdoor itself — see the file doc comment. */
-const TRAPDOOR_LEAD = 4;
-
-/**
- * One trapdoor: the armed floor plus the trigger that springs it, always
- * built together so the contract above cannot drift apart in an edit.
- * `col`/`width` describe the floor; the pit underneath it is declared in
- * the level's own `gaps`, because that is geometry the solver reads.
- */
-function trapdoor(id: string, col: number, width: number, row = 22): [
-  Extract<NonNullable<LevelDef['traps']>[number], { type: 'falling-platform' }>,
-  Extract<NonNullable<LevelDef['traps']>[number], { type: 'trigger' }>,
-] {
-  return [
-    { type: 'falling-platform', id, col, row, width, armed: true, warnMs: TRAPDOOR_WARN_MS },
-    {
-      type: 'trigger',
-      id: `${id}-trigger`,
-      col: col - TRAPDOOR_LEAD,
-      row: row - 3,
-      width: TRAPDOOR_LEAD,
-      height: 3,
-      targetId: id,
-    },
-  ];
-}
 
 export const SECTOR_01_LEVELS: LevelDef[] = [
   {
@@ -222,25 +194,10 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       // clock, only on approach. The 500ms warning is `moveSpeed × lead`
       // again: run straight at it and it is lethal exactly as you arrive.
       // Stopping, or jumping the three-column span, both clear it.
-      {
-        type: 'spike-bank',
-        id: 'sbank-01',
-        col: 38,
-        width: 3,
-        hiddenRow: 23,
-        lethalRow: 21,
-        timing: AMBUSH_TIMING,
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'sbank-01-trigger',
-        col: 38 - AMBUSH_TRIGGER_LEAD,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'sbank-01',
-      },
+      ...floorSpikes('sbank-01', 38, 3, 22),
+      // And one more the other way round: the walk back from the patrol
+      // spike, which until now was the safe half of the level.
+      ...dropSpike('dspike-01', 24, 21, 22),
     ],
   },
   {
@@ -256,7 +213,7 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     // transport, they are being asked to stand where the floor currently
     // is.
     //
-    // Deliberately unjumpable end to end (200px against a 57.9px jump) so
+    // Deliberately unjumpable end to end (180px against a 57.9px jump) so
     // the slab cannot be skipped, and deliberately slow: the whole sweep
     // takes three seconds, long enough to watch it once before stepping on.
     //
@@ -264,9 +221,20 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     // free. It springs while the player is still walking up to the pit, so
     // the first read of the moving hole happens from the far side of a
     // hole that just appeared.
+    //
+    // AND THEN IT MOVES ONCE, ON PURPOSE, AT YOU. Past the bridge there is
+    // a second pit with a three-column slab parked over its right half, so
+    // what the player reads on approach is a hole to jump and a ledge to
+    // land on. Crossing the bridge arms it: the slab slides left, filling
+    // the hole and opening the landing — "видишь дырку, перепрыгиваешь её,
+    // а она в этот момент передвигается на место, куда ты прыгал" (owner).
+    // It finishes moving while they are still riding the bridge with the
+    // take-off several columns away, which is the whole reason it is
+    // allowed to exist (see `shiftingPit`).
     gaps: [
       [10, 12],
-      [16, 35],
+      [16, 33],
+      [36, 41],
     ],
     spikeColumns: [],
     platforms: [],
@@ -279,11 +247,18 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         id: 'movp-01',
         fromCol: 16,
         fromRow: 22,
-        toCol: 22,
+        toCol: 20,
         toRow: 22,
         width: 14,
         travelMs: 3000,
       },
+      // Fourteen columns of lead, so the trigger band reaches back across
+      // the bridge: the slab has to have finished moving while the player
+      // is still riding, with the whole of the far bank in front of them.
+      // Caught any later they would be committed to the jump, and a pit
+      // that moves under someone already in the air is not a trap, it is a
+      // coin toss (CLAUDE.md #4.2/#4.5).
+      ...shiftingPit('sp-01', 39, 36, 3, 22, { lead: 14 }),
     ],
   },
   {

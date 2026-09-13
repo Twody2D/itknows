@@ -286,9 +286,11 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[], levelSeed: number, gro
           // is drawn as floor, with the same bright lip every run of ground
           // carries. Anywhere else it stays a mechanical slab.
           asFloor: def.fromRow === groundRow && def.toRow === groundRow,
+          armed: def.armed,
         });
         result.movingPlatforms.push(trap);
         result.all.push(trap);
+        if (def.armed) triggerable.set(def.id, trap);
         break;
       }
 

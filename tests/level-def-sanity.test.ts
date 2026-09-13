@@ -255,4 +255,64 @@ describe.each([
 
     expect(offenders, offenders.join('; ')).toEqual([]);
   });
+  it('places every sprung trap somewhere the player can actually meet it', () => {
+    // The campaign's surprise traps are all built from `ambush.ts`, and
+    // their geometry is derived rather than eyeballed — but the columns
+    // they are given still have to be real ground. This catches the
+    // authoring mistakes that make an ambush silently do nothing, or do
+    // something unanswerable:
+    //
+    //   - a bank rising out of a hole, or standing on the exit;
+    //   - a spike landing in a pit, or on top of a static spike;
+    //   - a trigger band that lies entirely inside a pit, so it only fires
+    //     when a jump arc happens to clip it and never for a player who
+    //     walks up and stops (AMBUSH's third spike was exactly this);
+    //   - a trigger that reaches the spawn column, so it fires before the
+    //     player has moved and the trap reads as random.
+    const problems: string[] = [];
+    const groundCols = (col: number): boolean => !isInAnyGap(col, level.gaps);
+    const bandOnGround = (trap: { row: number; height: number }): boolean =>
+      trap.row + trap.height - 1 === level.groundRow - 1;
+
+    for (const trap of level.traps ?? []) {
+      if (trap.type === 'spike-bank' && trap.lethalRow === level.groundRow - 1) {
+        for (let i = 0; i < trap.width; i++) {
+          const col = trap.col + i;
+          if (!groundCols(col)) problems.push(`${trap.id}: rises out of the pit at column ${col}`);
+          if (col === level.exitCol) problems.push(`${trap.id}: stands on the exit column`);
+        }
+      }
+
+      if (trap.type === 'moving-spike' && trap.ambush) {
+        if (trap.toRow === level.groundRow - 1 && !groundCols(trap.toCol)) {
+          problems.push(`${trap.id}: lands in the pit at column ${trap.toCol}`);
+        }
+        if (trap.toCol === level.exitCol) problems.push(`${trap.id}: lands on the exit column`);
+        if (level.spikeColumns.includes(trap.toCol)) {
+          problems.push(`${trap.id}: lands on a static spike at column ${trap.toCol}`);
+        }
+      }
+
+      if (trap.type === 'trigger') {
+        const cols = Array.from({ length: trap.width }, (_, i) => trap.col + i);
+        if (cols.some((col) => col < 0 || col >= level.width)) {
+          problems.push(`${trap.id}: reaches off the level`);
+        }
+        if (!(level.traps ?? []).some((other) => other.id === trap.targetId)) {
+          problems.push(`${trap.id}: targets ${trap.targetId}, which does not exist`);
+        }
+        if (bandOnGround(trap)) {
+          if (cols.every((col) => !groundCols(col))) problems.push(`${trap.id}: lies entirely inside a pit`);
+          if (cols.some((col) => col <= level.playerStartCol)) problems.push(`${trap.id}: reaches the spawn column`);
+        }
+      }
+    }
+
+    expect(problems, problems.join('; ')).toEqual([]);
+  });
+
+  it('gives every trap definition its own id', () => {
+    const ids = (level.traps ?? []).map((trap) => trap.id);
+    expect(ids, 'duplicate trap ids').toEqual([...new Set(ids)]);
+  });
 });

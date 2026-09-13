@@ -74,12 +74,19 @@ export class SpikeBankTrap extends Trap {
         this.gameObject.setAlpha(0);
         break;
       case 'warning':
+        // IT SITS, THEN PUNCHES. Visible for the whole of `warningMs` — the
+        // telegraph is untouched and still the full window — but `Quint.easeIn`
+        // spends the first three quarters of it barely clearing the floor and
+        // the last quarter covering most of the rise, so the spikes snap up
+        // instead of gliding ("шипы, движущиеся из земли, должны двигаться
+        // быстрее" — owner). A linear rise made a lethal thing look like it
+        // was being winched.
         this.moveTween = this.scene.tweens.add({
           targets: this.gameObject,
           y: this.yLethal,
           alpha: { from: 1, to: 1 },
           duration: this.timing.warningMs,
-          ease: 'Sine.easeIn',
+          ease: 'Quint.easeIn',
         });
         break;
       case 'active':
@@ -89,10 +96,13 @@ export class SpikeBankTrap extends Trap {
         this.gameObject.setAlpha(1);
         break;
       case 'cooldown':
+        // All the way back to invisible, matching `idle` — a bank left at
+        // alpha 0.35 was the standing tell the owner asked to have removed,
+        // and it reappeared here on every retraction.
         this.moveTween = this.scene.tweens.add({
           targets: this.gameObject,
           y: this.yHidden,
-          alpha: 0.35,
+          alpha: 0,
           duration: this.timing.cooldownMs,
           ease: 'Sine.easeOut',
         });

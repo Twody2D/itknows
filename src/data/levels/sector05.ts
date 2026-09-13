@@ -1,4 +1,5 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
+import { dropSpike, floorSpikes } from './ambush';
 
 /**
  * SECTOR 05 — SYSTEM CORE. Waiting now costs something.
@@ -42,6 +43,8 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     playerStartCol: 7,
     exitCol: 43,
     traps: [
+
+      ...floorSpikes('sbank-01', 26, 3, 22),
       // Slower than the player by a wide margin and starting three columns
       // behind them: a clock, not a predator. Every spike pair and the pit
       // are things the player already knows how to solve — what is new is
@@ -74,6 +77,8 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     playerStartCol: 4,
     exitCol: 43,
     traps: [
+
+      ...dropSpike('dspike-01', 40, 21, 22),
       { type: 'pursuer', id: 'pursuer-01', col: 0, row: 21, speedFactor: 0.55 },
       {
         type: 'moving-platform',
@@ -103,6 +108,8 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     exitCol: 36,
     exitRow: 13,
     traps: [
+
+      ...floorSpikes('sbank-01', 22, 3, 22),
       // Straight ahead on the ground, where every exit for four sectors has
       // been. The real one is above and to the right, lit, and visible from
       // the spawn — the level is a question about whether the player has
@@ -129,6 +136,8 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     exitCol: 40,
     exitRow: 10,
     traps: [
+
+      ...dropSpike('dspike-01', 16, 21, 22),
       { type: 'spike-bank', id: 'sbank-01', col: 16, width: 3, hiddenRow: 23, lethalRow: 21 },
       { type: 'laser', id: 'laser-01', col: 28, topRow: 17, bottomRow: 21, initialIdleMs: 700 },
       { type: 'orbit-spike', id: 'orbit-01', pivotCol: 28, pivotRow: 15, radiusTiles: 1.75, periodMs: 1900 },
@@ -146,6 +155,8 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     playerStartCol: 4,
     exitCol: 43,
     traps: [
+
+      ...floorSpikes('sbank-01', 34, 3, 22),
       // The pursuer against the sector's timed hazards rather than against
       // plain geometry: every beam here is a wait, and the wait is now
       // being charged for. The ground between them is still wide enough to
@@ -186,6 +197,8 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     exitCol: 34,
     exitRow: 5,
     traps: [
+
+      ...dropSpike('dspike-01', 13, 21, 22),
       { type: 'spike-bank', id: 'sbank-01', col: 13, width: 3, hiddenRow: 23, lethalRow: 21 },
       {
         type: 'moving-platform',

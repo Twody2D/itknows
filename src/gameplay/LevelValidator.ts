@@ -75,8 +75,17 @@ function platformSegments(def: LevelDef): { segments: Segment[]; rides: Array<[S
         toCol: trap.toCol + trap.width - 1,
         row: trap.toRow,
       };
-      segments.push(start, end);
-      rides.push([start, end]);
+      if (trap.armed) {
+        // A shifting pit makes one trip and stays. Only where it ENDS is
+        // real footing, the same worst case `falling-platform` is held to:
+        // the level has to work after the hole has moved, so being caught
+        // by it is a mistake the player could have read rather than a dead
+        // end (CLAUDE.md #4.3/#4.4).
+        segments.push(end);
+      } else {
+        segments.push(start, end);
+        rides.push([start, end]);
+      }
     } else if (trap.type === 'falling-platform') {
       // Deliberately contributes no surface — armed or not. A falling floor
       // is floor that leaves and never comes back, so the level has to work

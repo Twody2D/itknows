@@ -1,4 +1,5 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
+import { dropSpike, floorSpikes, trapdoor } from './ambush';
 
 /**
  * SECTOR 04 — DATA DISTRICT. What you are looking at is not what is there.
@@ -27,14 +28,10 @@ import type { LevelDef } from '@/gameplay/LevelDef';
  */
 
 /** The ambush spike's honest cycle — identical to sector 01's, since it is the same device. */
-const AMBUSH_TIMING = { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 } as const;
 
 /** Columns between an ambush trigger's left edge and its spike's column — `moveSpeed × warningMs` from the trigger's centre (see `sector01.ts`). */
-const AMBUSH_TRIGGER_LEAD = 6;
 
 /** Sector 01's trapdoor contract, unchanged — see `sector01.ts` for why these two numbers are what they are. */
-const TRAPDOOR_WARN_MS = 350;
-const TRAPDOOR_LEAD = 4;
 
 export const SECTOR_04_LEVELS: LevelDef[] = [
   {
@@ -65,16 +62,7 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     exitCol: 29,
     exitRow: 7,
     traps: [
-      { type: 'falling-platform', id: 'flp-01', col: 12, row: 22, width: 3, armed: true, warnMs: TRAPDOOR_WARN_MS },
-      {
-        type: 'trigger',
-        id: 'flp-01-trigger',
-        col: 12 - TRAPDOOR_LEAD,
-        row: 19,
-        width: TRAPDOOR_LEAD,
-        height: 3,
-        targetId: 'flp-01',
-      },
+      ...trapdoor('flp-01', 12, 3),
       // Each fake sits one hop further right than the real tier at the same
       // height — the tempting shortcut, every time. Ordinary ground is under
       // all three, so the first lesson costs a climb; by the third the
@@ -95,6 +83,8 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     playerStartCol: 2,
     exitCol: 43,
     traps: [
+
+      ...dropSpike('dspike-01', 31, 21, 22),
       // Two live plates with a spike pair marooned between them: the safe
       // ground in the middle is real but small, so crossing is two
       // decisions rather than one long dash. A floor that looks identical
@@ -121,6 +111,8 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     exitCol: 30,
     exitRow: 13,
     traps: [
+
+      ...floorSpikes('sbank-01', 18, 3, 22),
       // A one-way circuit, which is exactly what makes it harder to read
       // than sector 01's patrol. A ping-pong teaches "it comes straight
       // back"; this comes back around the other side, so the safe moment
@@ -165,71 +157,25 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     playerStartCol: 2,
     exitCol: 43,
     traps: [
-      {
-        type: 'moving-spike',
-        id: 'mspike-01',
-        ambush: true,
-        fromCol: 14,
-        fromRow: 11,
-        toCol: 14,
-        toRow: 21,
-        timing: AMBUSH_TIMING,
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-01-trigger',
-        col: 14 - AMBUSH_TRIGGER_LEAD,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-01',
-      },
-      {
-        type: 'moving-spike',
-        id: 'mspike-02',
-        ambush: true,
-        fromCol: 24,
-        fromRow: 11,
-        toCol: 24,
-        toRow: 21,
-        timing: AMBUSH_TIMING,
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-02-trigger',
-        col: 24 - AMBUSH_TRIGGER_LEAD,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-02',
-      },
-      // The last one lands immediately after a pit, so stopping dead is not
-      // available — the player has to brake *before* the jump they have
-      // already committed to. The pit is visible from the spawn, and the
-      // trigger sits before it, so the decision is made with everything on
-      // screen.
-      {
-        type: 'moving-spike',
-        id: 'mspike-03',
-        ambush: true,
-        fromCol: 36,
-        fromRow: 11,
-        toCol: 36,
-        toRow: 21,
-        timing: AMBUSH_TIMING,
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-03-trigger',
-        col: 36 - AMBUSH_TRIGGER_LEAD,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-03',
-      },
+      ...dropSpike('mspike-01', 14, 21, 22),
+      ...dropSpike('mspike-02', 24, 21, 22),
+      // The last one lands immediately after the pit, so stopping dead is
+      // not available once the jump is taken — the player has to brake
+      // *before* committing to it.
+      //
+      // Ten columns of lead, not six, and a full second on the ground: at
+      // six the spike fell while the player was already two strides from
+      // the lip, which is not a decision, and it had retracted again before
+      // anyone could land on it. At ten they watch it drop for the whole
+      // approach and it is still there when a jump taken on momentum puts
+      // them on top of it.
+      //
+      // Its trigger also used to be a two-column line at 30-31 — inside the
+      // pit — so it fired only if a jump arc happened to clip it, and never
+      // at all for a player who walked up and stopped. Every ambush in the
+      // campaign now uses the shared `approach` band, which is the full
+      // lead wide and sits on the floor the player is actually running on.
+      ...dropSpike('mspike-03', 34, 21, 22, { lead: 10, activeMs: 1000 }),
     ],
   },
   {
@@ -247,6 +193,8 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     exitCol: 36,
     exitRow: 10,
     traps: [
+
+      ...dropSpike('dspike-01', 12, 21, 22),
       // A ladder that crumbles under a machine that slams down on it: the
       // tier cannot be waited on and cannot be rushed either, which is the
       // first time the campaign asks for both at once.
@@ -292,6 +240,8 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     exitCol: 36,
     exitRow: 13,
     traps: [
+
+      ...dropSpike('dspike-01', 38, 21, 22),
       // Cross a pit on stones that fall, climb past a ledge that is not
       // there, and do both under a spike that never stops. Nothing new is
       // introduced — the sector's four ideas are simply asked together.

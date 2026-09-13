@@ -1,4 +1,5 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
+import { dropSpike, floorSpikes } from './ambush';
 
 /**
  * SECTOR 03 — INDUSTRIAL CORE. Everything runs on a clock.
@@ -40,7 +41,14 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
     platforms: [],
     playerStartCol: 2,
     exitCol: 43,
-    traps: [{ type: 'laser', id: 'laser-01', col: 30, topRow: 16, bottomRow: 21 }],
+    traps: [
+
+      // Sector 03 is built out of clocks, and a clock is something you wait
+      // out. Every level in it now also carries one thing that does not
+      // wait — fired by walking into it, so the sector cannot be cleared by
+      // patience alone (owner: "большинство уровней проходятся быстро с
+      // первой попытки").
+      ...dropSpike('dspike-01', 27, 21, 22),{ type: 'laser', id: 'laser-01', col: 30, topRow: 16, bottomRow: 21 }],
   },
   {
     id: 'sector-03-level-02',
@@ -62,6 +70,8 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
     exitCol: 40,
     exitRow: 10,
     traps: [
+
+      ...floorSpikes('sbank-01', 31, 3, 22),
       // Same cycle, deliberately half a beat apart — there is no fixed
       // moment that clears both, so they have to be watched rather than
       // memorised. Both are independently honest at the default warning,
@@ -81,6 +91,8 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
     playerStartCol: 2,
     exitCol: 43,
     traps: [
+
+      ...dropSpike('dspike-01', 20, 21, 22),
       // A timing gate blocks but never kills, so this is the sector's one
       // safe place to drill the read: mistime it and you lose a beat, not
       // the attempt. It stands before the beam on purpose — same skill,
@@ -100,6 +112,9 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
     playerStartCol: 2,
     exitCol: 43,
     traps: [
+
+      // Three banks on a clock, and a fourth that is not on one.
+      ...floorSpikes('sbank-04', 31, 3, 22),
       // Three pistons with four clear columns of standing room between
       // them. Hidden inside the ground fill at row 23, lethal at row 21 —
       // the row the player actually walks through — so a piston that is up
@@ -144,6 +159,8 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
     exitCol: 38,
     exitRow: 16,
     traps: [
+
+      ...dropSpike('dspike-01', 24, 21, 22),
       // Walls grow sideways out of a fixed edge instead of up or down, so
       // unlike a piston they cannot be jumped over — the only answer is to
       // not be in the span. They close toward each other from opposite
@@ -191,6 +208,8 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
     exitCol: 26,
     exitRow: 10,
     traps: [
+
+      ...dropSpike('dspike-01', 13, 21, 22),
       {
         type: 'spike-bank',
         id: 'sbank-01',

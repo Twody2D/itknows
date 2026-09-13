@@ -91,6 +91,14 @@ export type TrapDef =
       toRow: number;
       width: number;
       travelMs: number;
+      /**
+       * A SHIFTING PIT rather than a sliding bridge: still until a `trigger`
+       * fires it, then one trip to `to` and it stays. See
+       * `MovingPlatformTrap` for the rule about where that trigger may sit
+       * — the hole has to finish moving while the player is still on their
+       * feet, never mid-jump.
+       */
+      armed?: boolean;
     }
   | { type: 'electric-floor'; id: string; col: number; row: number; width: number; timing?: TrapTiming }
   | {
