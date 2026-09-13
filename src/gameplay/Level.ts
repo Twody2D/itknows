@@ -232,7 +232,6 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[], levelSeed: number, gro
             holdMs: def.holdMs,
             fallSpeed: def.fallSpeed,
             armed: def.armed,
-            warnMs: def.warnMs,
             // The tile the ground on either side would have used at this
             // column, so the trapdoor is not a different-looking patch of
             // floor (owner: "сделай, чтобы яма, которая разрушается, не

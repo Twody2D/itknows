@@ -79,8 +79,6 @@ export type TrapDef =
        * `FallingPlatformTrap` and sector 01's `TRAPDOOR_LEAD`.
        */
       armed?: boolean;
-      /** Armed mode: how long it flashes and shakes before it stops holding. Floored at `MIN_WARNING_MS`. */
-      warnMs?: number;
     }
   | {
       type: 'moving-platform';

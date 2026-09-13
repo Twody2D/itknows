@@ -35,10 +35,18 @@ export const AMBUSH_TIMING = { idleMs: 900, warningMs: 500, activeMs: 300, coold
 /** Columns between an ambush trigger's left edge and its hazard — `moveSpeed × warningMs`, ≈55px. */
 export const AMBUSH_TRIGGER_LEAD = 6;
 
-/** How long a trapdoor flashes and shakes while still holding the player up. */
-export const TRAPDOOR_WARN_MS = 350;
-
-/** Columns between a trapdoor's trigger and the pit — 40px is ~360ms of run-up, past `MIN_REACTION_WINDOW_MS`. */
+/**
+ * Columns between a trapdoor's trigger and the pit.
+ *
+ * This is the ONLY thing between the player and the hole now: the floor
+ * used to flash and shake for 350ms before letting go, and the owner had
+ * that removed (see `FallingPlatformTrap`). The pit therefore opens the
+ * instant the line is crossed, four columns out — 40px, about 360ms of
+ * run-up at `moveSpeed`, all of it with the hole already open and visible.
+ * Shortening this would make the trap unreadable rather than merely
+ * unannounced, so `tests/level-def-sanity.test.ts` holds it to
+ * `MIN_REACTION_WINDOW_MS`.
+ */
 export const TRAPDOOR_LEAD = 4;
 
 /** How long a shifting pit takes to reach its new position — it has to finish before the player's take-off. */
@@ -144,7 +152,7 @@ export function trapdoor(
   row = 22,
 ): [Of<'falling-platform'>, Of<'trigger'>] {
   return [
-    { type: 'falling-platform', id, col, row, width, armed: true, warnMs: TRAPDOOR_WARN_MS },
+    { type: 'falling-platform', id, col, row, width, armed: true },
     approach(`${id}-trigger`, id, col, row, TRAPDOOR_LEAD),
   ];
 }

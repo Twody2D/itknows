@@ -68,20 +68,29 @@ const HUNTED = base('sector-05-level-01');
  */
 export const LEVEL_VARIANTS: Record<string, { gentle?: LevelDef; bold?: LevelDef; troll?: LevelDef }> = {
   [DROP.id]: {
-    // How long the paired trapdoors at the end flash before they stop
-    // holding. Longer is more time to read the flash and jump; shorter
-    // never goes below `MIN_WARNING_MS`, which `FallingPlatformTrap`
-    // enforces at construction rather than trusting this file.
-    gentle: retune(retune(DROP, 'flp-03', { warnMs: 500 }), 'flp-04', { warnMs: 500 }),
-    bold: retune(retune(DROP, 'flp-03', { warnMs: 260 }), 'flp-04', { warnMs: 260 }),
-    // The habit this level builds is "the floor goes the instant the marker
-    // lights, so jump on the marker". Here the very first trapdoor holds
-    // for more than a second instead — the player who has learned to jump
-    // blind takes off early and lands on ground that was never going
-    // anywhere yet. It adds no danger (a longer hold is strictly safer),
-    // which is what keeps `troll` a surprise rather than a difficulty spike
-    // (master-prompt §15).
-    troll: retune(DROP, 'flp-01', { warnMs: 1300 }),
+    // `holdMs` is how long a sprung trapdoor stays put before it drops, and
+    // it is the only axis this trap has left: the `warnMs` these variants
+    // used to retune was the flash-and-shake phase, which no longer exists
+    // (`FallingPlatformTrap`).
+    //
+    // IT CAN ONLY BE TUNED UPWARD. The trigger sits `TRAPDOOR_LEAD` columns
+    // ahead of the pit, so the run-up with the hole already open is the
+    // whole of the player's reading time; a hold eats into it from the
+    // front. At 900ms the last two pits open well after a runner is past —
+    // strictly safer, which is what `gentle` has to mean. Shortening it is
+    // not available (zero already is the base) and lengthening it *part
+    // way* would quietly cut the reading time below
+    // `MIN_REACTION_WINDOW_MS`, so there is no honest `bold` here: DROP is
+    // four identical trapdoors, and the only thing left to make harder is
+    // geometry, which a variant may never touch.
+    gentle: retune(retune(DROP, 'flp-03', { holdMs: 900 }), 'flp-04', { holdMs: 900 }),
+    // The habit this level builds is "cross the line and the floor ahead is
+    // already gone". Here the very first trapdoor waits more than a second
+    // instead — the player who has learned to jump on the trigger takes off
+    // early and lands on ground that was never going anywhere yet. It adds
+    // no danger (a longer hold is strictly safer), which is what keeps
+    // `troll` a surprise rather than a difficulty spike (master-prompt §15).
+    troll: retune(DROP, 'flp-01', { holdMs: 1300 }),
   },
   [PATROL.id]: {
     gentle: retune(PATROL, 'mspike-01', { travelMs: 4000 }),

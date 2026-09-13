@@ -1,18 +1,20 @@
 import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { TILE_SIZE } from '@/config/display';
-import { MIN_WARNING_MS } from '@/config/physics';
 
 export interface FallingPlatformConfig {
   id: string;
   x: number;
   y: number;
   /**
-   * How long the slab keeps carrying the player after it lets go, before
-   * collision drops out from under them. NOT the telegraph any more — the
-   * warning phase before it is (see `warnMs`) — so it is short: just long
-   * enough that the floor is visibly taking the player with it rather than
-   * blinking out under their feet.
+   * Frames of ordinary, unchanged, solid floor between contact and the
+   * drop — nothing is shown during it, the tile just still holds. Zero by
+   * default: the floor goes the instant it is touched.
+   *
+   * It is the only knob a `variant` has left on this trap, and the only
+   * thing between a running player and the pit, so where a level uses it
+   * it is sized in strides: at `moveSpeed` 110px/s, 320ms is three and a
+   * half tiles of crossing.
    */
   holdMs?: number | undefined;
   /** Speed at the instant the floor lets go, px/s. It accelerates from here — see `FALL_ACCEL`. */
@@ -48,13 +50,6 @@ export interface FallingPlatformConfig {
    */
   armed?: boolean | undefined;
   /**
-   * Armed mode only: how long the floor visibly shakes and flashes red
-   * after being triggered, before it stops holding anything. Floored at
-   * `MIN_WARNING_MS` (CLAUDE.md #4.2) — the flash is the whole telegraph,
-   * so it is never allowed to be shorter than the honesty invariant.
-   */
-  warnMs?: number | undefined;
-  /**
    * Height in pixels of the sub-surface rock to draw underneath this slab,
    * for a trapdoor sitting in the ground row.
    *
@@ -73,7 +68,7 @@ export interface FallingPlatformConfig {
   shaftDepthPx?: number | undefined;
 }
 
-type State = 'armed' | 'warning' | 'solid' | 'falling' | 'gone';
+type State = 'armed' | 'solid' | 'doomed' | 'falling' | 'gone';
 
 /** Width of the bright cyan lip `Level.ts` paints along every run of ground. */
 const RIM_HEIGHT = 2;
@@ -95,28 +90,40 @@ const FALL_ACCEL = 1100;
 /**
  * Two floors in one trap, selected by `armed`.
  *
- * Unarmed (the original): solid ground until the player steps on it, then
- * it immediately starts sinking under them, still carrying them for
- * `holdMs` before collision drops out.
+ * Unarmed: solid until the player stands on it, then it goes — at once,
+ * unless `holdMs` buys a beat of ordinary-looking floor first.
  *
  * Armed: a trapdoor that ignores being stood on and springs when its
- * `trigger` zone fires — placed a column or two earlier, so the floor
- * ahead of a running player flashes red, shakes for `warnMs`, and then is
- * not there.
+ * `trigger` zone fires a few columns earlier, so the pit opens in the floor
+ * ahead of a running player.
  *
- * NEITHER COMES BACK. They used to respawn after a couple of seconds, which
- * the owner called out as soon as he played it ("после того как земля упала
- * она появляется на том месте через пару секунд, так не должно быть") — and
- * he is right twice over: a floor that reassembles itself reads as a bug,
- * and it quietly turns a trap into a waiting game. `LevelValidator` counts
- * no falling floor as a surface at all, so every level is proved passable
- * with all of them already gone and nothing can strand the player
- * (CLAUDE.md #4.4).
+ * NOTHING IS SHOWN BEFORE EITHER OF THEM GOES. There used to be a warning
+ * phase — the tile shook and flashed red while still holding — and the
+ * owner asked for it gone: "давай сделаем так, чтобы платформы не
+ * предупреждали о падении, а сразу падали", and when told that trades away
+ * the telegraph CLAUDE.md #4.2 asks for, "делаем всё равно, всё равно на
+ * инвариант честности". His call on his own design rule, recorded as such
+ * in CLAUDE.md #4 — this comment is here so nobody later reads the missing
+ * telegraph as an oversight and quietly puts it back.
  *
- * It also carries its own cyan lip, because `Level.ts` paints that rim per
- * run of ground and a trapdoor is not part of one — without it the floor
- * would have a bright edge with a dull two-metre notch in it, which is
- * exactly the tell the trap must not have.
+ * WHAT DID NOT CHANGE is everything that keeps the game finishable. The
+ * trapdoor's trigger still sits `TRAPDOOR_LEAD` columns ahead of the pit,
+ * so the hole is open and in plain sight for the whole run-up — longer than
+ * before, in fact, because it used to spend that run-up still closed and
+ * flashing. And `LevelValidator` still counts no falling floor as a surface
+ * at all, so every level is proved passable with all of them already gone
+ * (CLAUDE.md #4.3/#4.4). Softlock stays impossible; only the warning went.
+ *
+ * NEITHER COMES BACK, either. They used to respawn after a couple of
+ * seconds, which the owner called out as soon as he played it ("после того
+ * как земля упала она появляется на том месте через пару секунд, так не
+ * должно быть") — a floor that reassembles itself reads as a bug, and it
+ * quietly turns a trap into a waiting game.
+ *
+ * A floor in the ground row carries its own cyan lip and its own
+ * sub-surface rock, because `Level.ts` paints both per contiguous run and a
+ * trapdoor is not part of one — without them it would be a bright edge with
+ * a notch in it over a black shaft, which is the one tell it must not have.
  */
 export class FallingPlatformTrap {
   readonly type = 'falling-platform';
@@ -133,7 +140,6 @@ export class FallingPlatformTrap {
   private readonly holdMs: number;
   private readonly fallSpeed: number;
   private readonly armed: boolean;
-  private readonly warnMs: number;
 
   constructor(scene: Phaser.Scene, config: FallingPlatformConfig) {
     this.id = config.id;
@@ -152,9 +158,8 @@ export class FallingPlatformTrap {
     // first frames read as the floor taking the player with it — by the end
     // of it the slab is already moving faster than they are and leaves on
     // its own.
-    this.holdMs = config.holdMs ?? (this.armed ? 180 : 160);
+    this.holdMs = Math.max(config.holdMs ?? 0, 0);
     this.fallSpeed = config.fallSpeed ?? 120;
-    this.warnMs = Math.max(config.warnMs ?? 350, MIN_WARNING_MS);
     this.state = this.armed ? 'armed' : 'solid';
 
     this.gameObject = scene.physics.add.sprite(config.x, config.y, config.texture ?? 'tile-ground');
@@ -192,79 +197,71 @@ export class FallingPlatformTrap {
     // An armed trapdoor ignores being stood on entirely — that is the
     // point of it. It waits for its trigger.
     if (this.state !== 'solid') return;
-    // Shake and flash first, THEN go. It used to start sinking on contact,
-    // which made the sink itself the telegraph — and a sinking floor you
-    // can still jump off is barely a trap at all: CRUMBLE was cleared by
-    // walking across it (owner: "сектор Crumble слишком лёгкий и проходится
-    // очень просто"). Now the tile announces itself for `warnMs` while it
-    // is still solid footing, and once it actually lets go there is no
-    // pushing off it. The honest window is that warning, not the fall.
-    this.state = 'warning';
-    this.timerMs = 0;
+    this.beginCollapse();
   }
 
   /** `Triggerable` — fired by a `trigger` zone placed ahead of this floor. */
   trigger(): void {
     if (this.state !== 'armed') return;
-    this.state = 'warning';
+    this.beginCollapse();
+  }
+
+  /** Straight to the drop, or `holdMs` of ordinary-looking floor first where a level asks for one. */
+  private beginCollapse(): void {
     this.timerMs = 0;
+    if (this.holdMs > 0) {
+      this.state = 'doomed';
+      return;
+    }
+    this.state = 'falling';
+    this.shaft?.setVisible(false);
+    this.startFalling();
   }
 
   /**
-   * True once the floor has actually let go — it still carries the player
-   * for `holdMs`, but it is no longer something to jump from.
-   *
-   * `GameplayScene` feeds this to `Player.notifyFootingCollapsed()`, which
-   * is what makes the trap cost something: "земля когда падала — от неё
-   * нельзя оттолкнуться" (owner). The escape is the warning phase before
-   * this, which is `warnMs` long and never shorter than `MIN_WARNING_MS`.
+   * True once the floor has let go. It is no longer solid at all by then,
+   * so the player is already falling — this exists to take their coyote
+   * time with it, which is what stops a vanished floor from still being
+   * something you can push off ("земля когда падала — от неё нельзя
+   * оттолкнуться", owner). `GameplayScene` sweeps for it each frame,
+   * because the collider that used to report it stops firing the instant
+   * the floor stops being solid.
    */
   isCollapsing(): boolean {
     return this.state === 'falling';
   }
 
   isSolid(): boolean {
-    if (this.state === 'armed' || this.state === 'solid' || this.state === 'warning') return true;
-    if (this.state === 'falling') return this.timerMs < this.holdMs;
-    return false;
+    return this.state === 'armed' || this.state === 'solid' || this.state === 'doomed';
   }
 
   update(_time: number, delta: number): void {
-    if (this.state === 'solid' || this.state === 'armed') return;
+    if (this.state === 'solid' || this.state === 'armed' || this.state === 'gone') return;
 
     this.timerMs += delta;
 
-    if (this.state === 'warning') {
-      // Shaking hard and flashing red, still carrying whatever is on it.
-      // Everything the player needs in order to jump is on screen for the
-      // whole of `warnMs` before the floor stops holding.
-      this.gameObject.x = this.originX + Math.sin(this.timerMs * 0.05) * 1.5;
-      const flash = Math.floor(this.timerMs / 80) % 2 === 0 ? PALETTE.danger : PALETTE.dangerAlt;
-      this.gameObject.setTint(flash);
-      this.rim?.setFillStyle(flash, 1);
-      this.syncRim();
-      if (this.timerMs >= this.warnMs) {
+    if (this.state === 'doomed') {
+      // Deliberately silent: no tint, no shake, no sink. The floor is as
+      // solid and as ordinary as it looks, right up to the frame it is not
+      // there at all.
+      if (this.timerMs >= this.holdMs) {
         this.state = 'falling';
         this.timerMs = 0;
-        this.gameObject.clearTint();
         this.shaft?.setVisible(false);
         this.startFalling();
       }
       return;
     }
 
-    if (this.state === 'falling') {
-      const wobble = Math.sin(this.timerMs * 0.08) * 1.2;
-      this.gameObject.x = this.originX + wobble;
-      this.syncRim();
-      if (this.gameObject.y - this.originY > 200) {
-        this.state = 'gone';
-        this.timerMs = 0;
-        this.gameObject.setVisible(false);
-        this.rim?.setVisible(false);
-        this.body.setAccelerationY(0);
-        this.body.setVelocityY(0);
-      }
+    this.gameObject.x = this.originX + Math.sin(this.timerMs * 0.08) * 1.2;
+    this.syncRim();
+    if (this.gameObject.y - this.originY > 200) {
+      this.state = 'gone';
+      this.timerMs = 0;
+      this.gameObject.setVisible(false);
+      this.rim?.setVisible(false);
+      this.body.setAccelerationY(0);
+      this.body.setVelocityY(0);
     }
   }
 

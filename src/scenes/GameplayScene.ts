@@ -339,13 +339,7 @@ export class GameplayScene extends Phaser.Scene {
       this.physics.add.collider(
         this.player,
         platform.gameObject,
-        () => {
-          platform.notifyStandingOn();
-          // Riding a floor that has already let go is not footing: no jump
-          // off it, no coyote time after it. The escape was the warning
-          // phase, and it has been and gone.
-          if (platform.isCollapsing()) this.player.notifyFootingCollapsed();
-        },
+        () => platform.notifyStandingOn(),
         (playerObj, platformObj) =>
           platform.isSolid() && this.isLandingOnPlatform(playerObj as Player, platformObj as Phaser.Physics.Arcade.Sprite),
       );
@@ -417,6 +411,7 @@ export class GameplayScene extends Phaser.Scene {
     for (const trap of this.level.traps.updatable) trap.update(time, delta);
     for (const pursuer of this.level.traps.pursuers) pursuer.update(this.player.x, delta);
     this.carryOnMovingPlatforms();
+    this.sweepCollapsedFooting();
     this.sweepLethalContact();
     this.tutorialHints?.update();
 
@@ -448,6 +443,34 @@ export class GameplayScene extends Phaser.Scene {
     if (shownSeconds !== this.hudLastShownSeconds) {
       this.hudLastShownSeconds = shownSeconds;
       this.hudTimeText.setPixelText(formatMmSs(attemptElapsedMs));
+    }
+  }
+
+  /**
+   * Takes the coyote window away from a player whose floor has just gone.
+   *
+   * A collapsing floor stops being solid the instant it lets go, which is
+   * the point — nothing sinks, nothing carries anyone down. But that also
+   * means the collider that used to report "you are standing on this" stops
+   * firing on the same frame, and the player is left with a full 100ms of
+   * coyote time to jump off a floor that is no longer there. That is
+   * exactly the push-off the owner had removed.
+   *
+   * So it is swept here instead: any falling platform that is on its way
+   * down and still directly under the android's feet cancels the window.
+   * The bracket is generous downward because the slab accelerates away
+   * faster than the player falls.
+   */
+  private sweepCollapsedFooting(): void {
+    if (!this.player.isAlive()) return;
+    const feet = this.player.y;
+    for (const platform of this.level.traps.fallingPlatforms) {
+      if (!platform.isCollapsing()) continue;
+      const body = platform.gameObject.body as Phaser.Physics.Arcade.Body;
+      if (this.player.x < body.x - 6 || this.player.x > body.x + body.width + 6) continue;
+      if (feet < body.y - 8 || feet > body.y + 26) continue;
+      this.player.notifyFootingCollapsed();
+      return;
     }
   }
 
