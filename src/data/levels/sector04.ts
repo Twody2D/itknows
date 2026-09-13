@@ -266,7 +266,13 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
       { type: 'falling-platform', id: 'flp-01', col: 19, row: 19, width: 3 },
       { type: 'falling-platform', id: 'flp-02', col: 26, row: 19, width: 3 },
       { type: 'disappearing-platform', id: 'dp-01', col: 29, row: 16, width: 3 },
-      { type: 'fake-platform', id: 'fakep-01', col: 26, row: 13, width: 4 },
+      // Columns 30-33, not 26-29: at 26 it hung over the pit, and a decoy
+      // drawn with the real slab's own texture may never stand over
+      // anything that can kill (`tests/level-def-sanity.test.ts`). Here it
+      // reads as the exit tier continuing to the left — the obvious hop up
+      // from `dp-01` — and falling through it drops the player on solid
+      // ground below the climb, which costs the tier and nothing else.
+      { type: 'fake-platform', id: 'fakep-01', col: 30, row: 13, width: 4 },
       { type: 'orbit-spike', id: 'orbit-01', pivotCol: 33, pivotRow: 16, radiusTiles: 1.75, periodMs: 2000 },
       { type: 'electric-floor', id: 'ef-01', col: 13, width: 4, row: 22 },
     ],

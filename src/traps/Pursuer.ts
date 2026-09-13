@@ -22,17 +22,25 @@ export interface PursuerConfig {
  * it's a countdown). Its constant visible motion toward the player is the
  * telegraph; always lethal on touch.
  *
- * IT WAITS BEFORE IT HUNTS. Capping the speed turned out not to be enough
- * on its own: the drone spawns a few columns behind the player and used to
- * set off on the first frame, so a player still reading the level lost
- * before they had moved ("уровни, где на меня летит красный шарик — у меня
- * есть время меньше секунды нажать бежать, иначе я умру"). `startDelayMs`
- * is the fix, and it is the same idea every other trap here already obeys:
- * the threat is visible for a beat before it can do anything. The default
- * of 2000ms is many times `MIN_REACTION_WINDOW_MS`, and the player covers
- * 220px in it — nearly half the screen of daylight before the chase is
- * even on.
+ * IT WAITS FOR THE PLAYER TO MOVE, not for a clock.
+ *
+ * This has now been wrong in both directions. Setting off on the first
+ * frame killed players who were still reading the level ("у меня есть время
+ * меньше секунды нажать бежать, иначе я умру"); a flat 2000ms hold fixed
+ * that and produced the opposite complaint, that the chase starts after it
+ * stops mattering ("красный шарик стоит афк первые пару секунд, я буквально
+ * уже убежал с зоны его действия и он только заработал").
+ *
+ * A fixed number cannot satisfy both, because the thing being waited for
+ * was never time — it was the player finishing reading the screen. So that
+ * is what is waited for: the drone holds while the player holds, and leaves
+ * the instant they commit to a direction (`MOVE_TO_START_PX` of travel from
+ * where they were standing). `startDelayMs` stays as the cap for a player
+ * who never moves at all, so a level cannot sit frozen forever.
  */
+/** How far the player must travel from their spawn before the chase is on — a step, not a twitch. */
+const MOVE_TO_START_PX = 12;
+
 export class Pursuer {
   readonly type = 'pursuer';
   readonly id: string;
@@ -41,6 +49,8 @@ export class Pursuer {
   private readonly speed: number;
   private waitMs: number;
   private readonly totalWaitMs: number;
+  /** Where the player was on the first frame — the baseline `MOVE_TO_START_PX` is measured from. */
+  private anchorX: number | null = null;
 
   constructor(scene: Phaser.Scene, config: PursuerConfig) {
     this.id = config.id;
@@ -59,6 +69,12 @@ export class Pursuer {
   }
 
   update(targetX: number, deltaMs = 0): void {
+    this.anchorX ??= targetX;
+    if (this.waitMs > 0 && Math.abs(targetX - this.anchorX) >= MOVE_TO_START_PX) {
+      // The player committed. Skip the rest of the hold rather than letting
+      // them walk away from a drone that has not started yet.
+      this.waitMs = 0;
+    }
     if (this.waitMs > 0) {
       this.waitMs -= deltaMs;
       this.body.setVelocityX(0);

@@ -321,6 +321,84 @@ describe.each([
     expect(problems, problems.join('; ')).toEqual([]);
   });
 
+  it('never hangs a fake platform over anything that can kill', () => {
+    // THE ONLY THING KEEPING A FAKE PLATFORM HONEST.
+    //
+    // Its tile is now byte-identical to a real slab, by the owner's direct
+    // instruction ("сделай тогда чтобы фантомные платформы выглядели точь в
+    // точь как обычные... иначе смысла нет"), recorded in CLAUDE.md #4. So
+    // the player cannot tell one from the other until they are already
+    // falling — and that is only fair while the fall costs them the climb
+    // and nothing else.
+    //
+    // Concretely: every column a decoy covers must have ordinary ground
+    // under it (no pit), no static spike, and no lethal trap parked in the
+    // drop. Fail this and the trap becomes an unavoidable, unsignalled
+    // kill, which is the one thing CLAUDE.md #4 never bends on.
+    const problems: string[] = [];
+    const gaps = level.gaps ?? [];
+    const spikes = new Set(level.spikeColumns ?? []);
+
+    for (const trap of level.traps ?? []) {
+      if (trap.type !== 'fake-platform') continue;
+      for (let i = 0; i < trap.width; i++) {
+        const col = trap.col + i;
+        if (isInAnyGap(col, gaps)) problems.push(`${trap.id}: column ${col} is over a pit`);
+        if (spikes.has(col)) problems.push(`${trap.id}: column ${col} drops onto a static spike`);
+        for (const other of level.traps ?? []) {
+          if (other === trap) continue;
+          const covers = (from: number, width: number): boolean => col >= from && col < from + width;
+          if (other.type === 'spike-bank' && covers(other.col, other.width)) problems.push(`${trap.id}: column ${col} drops onto ${other.id}`);
+          if (other.type === 'electric-floor' && covers(other.col, other.width)) problems.push(`${trap.id}: column ${col} drops onto ${other.id}`);
+        }
+      }
+    }
+
+    expect(problems, problems.join('; ')).toEqual([]);
+  });
+
+  it('never parks two hazards on the same tiles', () => {
+    // "Шипы друг на друга налазят" (owner, on PISTON ROW) — where a
+    // triggered floor bank was authored across columns 31-33 while the
+    // third piston already occupied 30-32. Two machines sharing tiles is
+    // not extra difficulty: neither one can be read, one of them is spent
+    // on a player who is already dead, and the trigger that fires the
+    // second looks broken because its hazard is hidden inside the first.
+    //
+    // Overlap is only a fault when it happens in BOTH axes — a laser
+    // crossing the rows above a patrol route is fine and common.
+    type Box = { id: string; cols: [number, number]; rows: [number, number] };
+    const boxes: Box[] = [];
+
+    for (const trap of level.traps ?? []) {
+      const span = (from: number, to: number): [number, number] => [Math.min(from, to), Math.max(from, to)];
+      if (trap.type === 'spike-bank') {
+        boxes.push({ id: trap.id, cols: [trap.col, trap.col + trap.width - 1], rows: span(trap.hiddenRow ?? trap.lethalRow ?? 0, trap.lethalRow ?? 0) });
+      } else if (trap.type === 'moving-spike') {
+        boxes.push({ id: trap.id, cols: span(trap.fromCol, trap.toCol), rows: span(trap.fromRow, trap.toRow) });
+      } else if (trap.type === 'laser' || trap.type === 'timing-gate') {
+        boxes.push({ id: trap.id, cols: [trap.col, trap.col], rows: span(trap.topRow, trap.bottomRow) });
+      } else if (trap.type === 'electric-floor') {
+        boxes.push({ id: trap.id, cols: [trap.col, trap.col + trap.width - 1], rows: [trap.row, trap.row] });
+      }
+    }
+
+    const problems: string[] = [];
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i] as Box;
+        const b = boxes[j] as Box;
+        const colsHit = a.cols[0] <= b.cols[1] && b.cols[0] <= a.cols[1];
+        const rowsHit = a.rows[0] <= b.rows[1] && b.rows[0] <= a.rows[1];
+        if (colsHit && rowsHit) {
+          problems.push(`${a.id} (cols ${a.cols.join('-')}, rows ${a.rows.join('-')}) overlaps ${b.id} (cols ${b.cols.join('-')}, rows ${b.rows.join('-')})`);
+        }
+      }
+    }
+
+    expect(problems, problems.join('; ')).toEqual([]);
+  });
+
   it('gives every trap definition its own id', () => {
     const ids = (level.traps ?? []).map((trap) => trap.id);
     expect(ids, 'duplicate trap ids').toEqual([...new Set(ids)]);

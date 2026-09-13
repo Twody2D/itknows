@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { TILE_SIZE } from '@/config/display';
+import { PALETTE } from '@/config/palette';
 
 export interface FakeExitConfig {
   id: string;
@@ -37,12 +38,22 @@ export class FakeExit {
     // the refusal has to be one bump per visit, not a tween stacked per
     // frame.
     if (this.rejecting?.isPlaying()) return;
+    // A red rattle, not a fade. Fading out is what a thing does when it is
+    // disappearing; the owner read it as the door doing something to him
+    // ("зачем он моргает когда в нём стоишь"). A door that shakes and
+    // flashes red is one that refused, which is what actually happened.
+    const restX = this.gameObject.x;
+    this.gameObject.setTint(PALETTE.danger);
     this.rejecting = this.gameObject.scene.tweens.add({
       targets: this.gameObject,
-      alpha: { from: 1, to: 0.4 },
+      x: { from: restX - 1, to: restX + 1 },
       yoyo: true,
-      duration: 120,
-      repeat: 1,
+      duration: 55,
+      repeat: 2,
+      onComplete: () => {
+        this.gameObject.clearTint();
+        this.gameObject.setX(restX);
+      },
     });
   }
 

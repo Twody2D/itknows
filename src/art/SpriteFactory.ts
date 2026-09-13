@@ -3,7 +3,6 @@ import { drawPlayerFrame } from './drawPlayer';
 import { SKIN_VISUALS, playerTexturePrefix, skinColorsFor } from '@/data/shop/skinVisuals';
 import {
   drawExitTile,
-  drawFakePlatformTile,
   drawGroundDamaged,
   drawGroundEdge,
   drawGroundFill,
@@ -136,10 +135,6 @@ export function generateTileTextures(scene: Phaser.Scene): void {
   const exitInactive = makeCanvas(exitW, exitH);
   drawExitTile(exitInactive.ctx, exitW, exitH, false);
   addOrReplaceCanvas(scene, 'exit-inactive', exitInactive.canvas);
-
-  const fakePlatform = makeCanvas(TILE_SIZE, TILE_SIZE);
-  drawFakePlatformTile(fakePlatform.ctx);
-  addOrReplaceCanvas(scene, 'tile-fake-platform', fakePlatform.canvas);
 
   const movingPlatform = makeCanvas(TILE_SIZE, TILE_SIZE);
   drawMovingPlatformTile(movingPlatform.ctx);

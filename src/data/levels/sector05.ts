@@ -138,7 +138,11 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     traps: [
 
       ...dropSpike('dspike-01', 16, 21, 22),
-      { type: 'spike-bank', id: 'sbank-01', col: 16, width: 3, hiddenRow: 23, lethalRow: 21 },
+      // Columns 18-20, not 16-18: the drop spike lands on 16, and a piston
+      // sharing that tile meant one of the two was always wasted. Two steps
+      // further on it is a second beat instead of a duplicate of the first,
+      // and column 21 stays clear as the take-off for the pit.
+      { type: 'spike-bank', id: 'sbank-01', col: 18, width: 3, hiddenRow: 23, lethalRow: 21 },
       { type: 'laser', id: 'laser-01', col: 28, topRow: 17, bottomRow: 21, initialIdleMs: 700 },
       { type: 'orbit-spike', id: 'orbit-01', pivotCol: 28, pivotRow: 15, radiusTiles: 1.75, periodMs: 1900 },
       { type: 'disappearing-platform', id: 'dp-01', col: 35, row: 16, width: 3 },
@@ -164,7 +168,9 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       { type: 'pursuer', id: 'pursuer-01', col: 0, row: 21, speedFactor: 0.55 },
       { type: 'laser', id: 'laser-01', col: 17, topRow: 16, bottomRow: 21 },
       { type: 'laser', id: 'laser-02', col: 24, topRow: 16, bottomRow: 21, initialIdleMs: 800 },
-      { type: 'electric-floor', id: 'ef-01', col: 36, width: 5, row: 22 },
+      // Columns 38-42, not 36-40: `sbank-01` punches up through 34-36, so
+      // column 36 was floor plate and piston at once.
+      { type: 'electric-floor', id: 'ef-01', col: 38, width: 5, row: 22 },
     ],
   },
   {
@@ -223,7 +229,22 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
         travelMs: 2200,
       },
       { type: 'laser', id: 'laser-01', col: 30, topRow: 17, bottomRow: 21 },
-      { type: 'orbit-spike', id: 'orbit-01', pivotCol: 30, pivotRow: 14, radiusTiles: 1.75, periodMs: 1800 },
+      // Pivoted at 30/17 with a 1-tile radius, not 30/14 with 1.75.
+      //
+      // Measured at the old placement, the arc swept x285-319 / y125-159 —
+      // which is the corridor between the row-16 and row-13 tiers AND both
+      // landings at once: standing on the left edge of row 16 was lethal
+      // for 32 frames of 120, the right edge of row 13 for 15, and the hop
+      // between them for 22. No single moment of the cycle left the whole
+      // crossing clear, so the climb's one mandatory transfer had no window
+      // at all — "system core непроходимый уровень, шип который крутится по
+      // кругу не даёт ни запрыгруть дальше никуда двинуться" (owner).
+      //
+      // It now turns in the open air over the row-19 → row-16 hop instead,
+      // small enough that both ledges stay clear and only the flight path
+      // crosses it. The hazard is the same; what changed is that waiting is
+      // now an answer.
+      { type: 'orbit-spike', id: 'orbit-01', pivotCol: 30, pivotRow: 17, radiusTiles: 1, periodMs: 1800 },
       { type: 'disappearing-platform', id: 'dp-01', col: 28, row: 10, width: 3 },
       // Pivoted at 31/row 4, not 28/row 3. At the old placement the bob
       // swept columns 26.4-30.6 at y 53-68 — which is the whole of the

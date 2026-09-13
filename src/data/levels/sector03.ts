@@ -28,6 +28,24 @@ import { dropSpike, floorSpikes, shiftingPit } from './ambush';
 /** The sector's honest machine cycle: half a second of visible warning, twice `MIN_WARNING_MS`. */
 const MACHINE_TIMING = { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 } as const;
 
+/**
+ * PISTON ROW's own cycle — the same honest 500ms telegraph, but up far more
+ * of the time: 700ms of the 1850ms loop instead of 300ms of 1950ms.
+ *
+ * Measured, because guessing is what got this wrong the first time. On the
+ * old cycle each piston was lethal for 15% of its loop, so walking the row
+ * with no plan at all cleared it about 60% of the time — five scripted
+ * "hold right, tap jump" runs won four of them, which is precisely the
+ * owner's "я буквально втупую пропрыгал весь уровень". At 38% per piston,
+ * the same run loses far more often than it wins, and the level asks what
+ * it was always supposed to ask: watch the row, then move.
+ *
+ * The warning is untouched at 500ms (twice `MIN_WARNING_MS`), so nothing
+ * here is less readable — there is simply less floor that is safe by
+ * default.
+ */
+const PISTON_TIMING = { idleMs: 400, warningMs: 500, activeMs: 700, cooldownMs: 250 } as const;
+
 export const SECTOR_03_LEVELS: LevelDef[] = [
   {
     id: 'sector-03-level-01',
@@ -133,15 +151,35 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
     exitCol: 43,
     traps: [
 
-      // Three banks on a clock, and a fourth that is not on one.
-      ...floorSpikes('sbank-04', 31, 3, 22),
+      // Columns 36-38, not 31-33. At 31 it shared columns 31-32 with the
+      // third piston and its trigger band sat under the second — two
+      // machines on the same tiles, which is what the owner saw: "плохо
+      // срабатывают тригеры, шипы друг на друга налазят". Past the last
+      // piston it has clear floor on both sides and a clear run-up.
+      ...floorSpikes('sbank-04', 36, 3, 22),
+      // CEILING TEETH — the answer to "я буквально втупую пропрыгал весь
+      // уровень".
+      //
+      // A piston is one tile tall and a jump clears 34.7px, so vaulting
+      // every one of them was not a mistake the level could punish: the
+      // safest way through a row of pistons was to never touch the floor.
+      // These hang over the standing room BETWEEN the pistons at a height
+      // that is chosen, not eyeballed — lethal at row 17 (y 170-180), where
+      // a standing android's head is at y 188 and a jumping one's reaches
+      // y 153. Walking under them is free. Jumping under them is not.
+      //
+      // Offset half a cycle from the pistons they sit between, so the row
+      // reads as one machine alternating top and bottom rather than two
+      // unrelated hazards.
+      { type: 'spike-bank', id: 'sbank-05', col: 18, width: 3, hiddenRow: 15, lethalRow: 17, timing: PISTON_TIMING, initialIdleMs: 1050 },
+      { type: 'spike-bank', id: 'sbank-06', col: 26, width: 3, hiddenRow: 15, lethalRow: 17, timing: PISTON_TIMING, initialIdleMs: 1750 },
       // Three pistons with four clear columns of standing room between
       // them. Hidden inside the ground fill at row 23, lethal at row 21 —
       // the row the player actually walks through — so a piston that is up
       // is a wall as much as a hazard. Dimly visible at idle by design
       // (`TrapDef.ts`): a machine filling a whole span would be unreadable
       // rather than hard if it hid itself.
-      { type: 'spike-bank', id: 'sbank-01', col: 14, width: 3, hiddenRow: 23, lethalRow: 21, timing: MACHINE_TIMING },
+      { type: 'spike-bank', id: 'sbank-01', col: 14, width: 3, hiddenRow: 23, lethalRow: 21, timing: PISTON_TIMING },
       {
         type: 'spike-bank',
         id: 'sbank-02',
@@ -149,7 +187,7 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
         width: 3,
         hiddenRow: 23,
         lethalRow: 21,
-        timing: MACHINE_TIMING,
+        timing: PISTON_TIMING,
         initialIdleMs: 700,
       },
       {
@@ -159,7 +197,7 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
         width: 3,
         hiddenRow: 23,
         lethalRow: 21,
-        timing: MACHINE_TIMING,
+        timing: PISTON_TIMING,
         initialIdleMs: 1400,
       },
     ],

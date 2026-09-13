@@ -4,53 +4,39 @@ export interface FakePlatformConfig {
   id: string;
   x: number;
   y: number;
-  /** Position within its span, so a run of tiles ripples rather than blinking in unison. */
-  rippleIndex?: number | undefined;
+  /** Same bolt/no-bolt choice `Level.ts` makes for a real slab at this column, so the two are byte-identical on screen. */
+  bolt: boolean;
 }
 
 /**
  * Looks like a platform and is not one — no physics body at all, so the
- * player falls straight through. Honesty is entirely visual (CLAUDE.md #4 /
- * master-prompt §14 "имеет понятный визуальный сигнал"), and it has to be
- * visual that anyone reads without being told, which the still texture was
- * not: the owner looked at a screenshot of them twice and asked both times
- * what they were even for.
+ * player falls straight through.
  *
- * So it flickers. A still translucent slab with a broken lip is a puzzle
- * about pixel differences; a slab that is visibly winking in and out is a
- * sentence — "this one is not really there" — in a vocabulary every player
- * already has. The pulse is a tween on alpha, not a per-frame redraw
- * (CLAUDE.md #9), and each tile is offset from its neighbours so a span of
- * them ripples instead of blinking as one block, which is what keeps it
- * reading as interference rather than as a deliberate light.
+ * IT IS DRAWN WITH THE REAL PLATFORM'S OWN TEXTURE, and that is the owner's
+ * explicit call: "сделай тогда чтобы фантомные платформы выглядели точь в
+ * точь как обычные, только на них нельзя встать, иначе смысла нет, если ты
+ * видишь что они отличаются туда и нет смысла прыгать". Two earlier
+ * versions tried to make the decoy legible instead — a dark box with orange
+ * ticks, then a slab with a violet SYSTEM lip and a flicker — and both times
+ * the answer was that a decoy you can identify is not a decoy.
+ *
+ * What keeps this honest is not the art, it is where these are allowed to
+ * stand: a fake platform never has a pit, spikes or any hazard under it, so
+ * falling through one costs the climb and never the attempt. That is
+ * enforced in `tests/level-def-sanity.test.ts`, not by eye — it is the only
+ * thing standing between this trap and an invisible kill (CLAUDE.md #4).
  */
 export class FakePlatformTrap {
   readonly type = 'fake-platform';
   readonly id: string;
   readonly gameObject: Phaser.GameObjects.Image;
 
-  private readonly flicker: Phaser.Tweens.Tween;
-
   constructor(scene: Phaser.Scene, config: FakePlatformConfig) {
     this.id = config.id;
-    this.gameObject = scene.add.image(config.x, config.y, 'tile-fake-platform');
-    this.flicker = scene.tweens.add({
-      targets: this.gameObject,
-      // Shallow on purpose. A deeper pulse takes the slab off the screen at
-      // the bottom of every cycle, and a thing that is not there half the
-      // time cannot be recognised as a platform — which is the whole job of
-      // this trap's art (`drawFakePlatformTile`).
-      alpha: { from: 1, to: 0.55 },
-      duration: 380,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-      delay: (config.rippleIndex ?? 0) * 90,
-    });
+    this.gameObject = scene.add.image(config.x, config.y, config.bolt ? 'tile-platform-slab-bolt' : 'tile-platform-slab');
   }
 
   destroy(): void {
-    this.flicker.stop();
     this.gameObject.destroy();
   }
 }

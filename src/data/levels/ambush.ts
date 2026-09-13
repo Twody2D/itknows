@@ -81,6 +81,22 @@ export const AMBUSH_TRIGGER_LEAD = 3;
  */
 export const TRAPDOOR_LEAD = 1;
 
+/**
+ * Timing for a DROP spike specifically.
+ *
+ * `warningMs` is 560 against the shared 320 because the window now holds two
+ * things instead of one: the spike hangs visible and still for the first
+ * 250ms (`AmbushSpikeTrap`'s `HANG_MS`, the telegraph) and falls through the
+ * remaining 310ms — lethal the whole way down, which is the change the owner
+ * asked for after watching one pass through the android harmlessly.
+ *
+ * The lead is unchanged, and that is the point: a player who crosses the
+ * trigger and keeps running arrives at ~318ms, which is 68ms into the fall.
+ * The spike comes down ON them rather than waiting on the floor for them,
+ * and stopping at the line still leaves the whole 250ms hang to react to.
+ */
+export const AMBUSH_DROP_TIMING = { ...AMBUSH_TIMING, warningMs: 560 } as const;
+
 /** How long a shifting pit takes to reach its new position — it has to finish before the player's take-off. */
 export const PIT_SHIFT_MS = 420;
 
@@ -135,8 +151,9 @@ export function approach(
 
 /**
  * A spike that falls out of nothing onto `landRow`, fired by walking into
- * the run-up. Invisible until it drops; the entire visible fall is the
- * warning and it can only kill once it has landed.
+ * the run-up. Invisible until it appears overhead, where it hangs in sight
+ * for the telegraph and then falls — lethal from the first frame of the
+ * fall (`AmbushSpikeTrap`, `AMBUSH_DROP_TIMING`).
  */
 export function dropSpike(
   id: string,
@@ -154,7 +171,7 @@ export function dropSpike(
       fromRow: opts.fromRow ?? Math.max(landRow - 10, 1),
       toCol: col,
       toRow: landRow,
-      timing: opts.activeMs ? { ...AMBUSH_TIMING, activeMs: opts.activeMs } : AMBUSH_TIMING,
+      timing: opts.activeMs ? { ...AMBUSH_DROP_TIMING, activeMs: opts.activeMs } : AMBUSH_DROP_TIMING,
       loop: false,
     },
     approach(`${id}-trigger`, id, col, opts.triggerRow ?? surfaceRow, opts.lead ?? AMBUSH_TRIGGER_LEAD, opts.from ?? 'left'),
@@ -183,7 +200,7 @@ export function floorSpikes(
       // Out of sight below the floor, up to one row above it.
       hiddenRow: surfaceRow + 1,
       lethalRow: surfaceRow - 1,
-      timing: opts.activeMs ? { ...AMBUSH_TIMING, activeMs: opts.activeMs } : AMBUSH_TIMING,
+      timing: opts.activeMs ? { ...AMBUSH_DROP_TIMING, activeMs: opts.activeMs } : AMBUSH_DROP_TIMING,
       loop: false,
     },
     approach(`${id}-trigger`, id, col, opts.triggerRow ?? surfaceRow, opts.lead ?? AMBUSH_TRIGGER_LEAD, opts.from ?? 'left'),

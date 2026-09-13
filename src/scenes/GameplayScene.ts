@@ -534,7 +534,21 @@ export class GameplayScene extends Phaser.Scene {
         body: Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody | null;
       }).body;
       if (!body || !body.enable) continue;
-      if (Phaser.Geom.Rectangle.Overlaps(hurt, this.hazardRect.setTo(body.x, body.y, body.width, body.height))) {
+      // SWEPT, not sampled. A hazard's hitbox is 4px tall and a drop spike
+      // covers 100px in ~310ms — over 5px in a frame — so testing only where
+      // it IS lets it step straight over the android between two frames and
+      // come out the other side untouched. The rectangle is stretched back
+      // over the ground it covered since the last frame, which is the path
+      // the player actually saw it take.
+      const dx = 'deltaX' in body ? body.deltaX() : 0;
+      const dy = 'deltaY' in body ? body.deltaY() : 0;
+      const swept = this.hazardRect.setTo(
+        Math.min(body.x, body.x - dx),
+        Math.min(body.y, body.y - dy),
+        body.width + Math.abs(dx),
+        body.height + Math.abs(dy),
+      );
+      if (Phaser.Geom.Rectangle.Overlaps(hurt, swept)) {
         this.player.kill('trap');
         return;
       }

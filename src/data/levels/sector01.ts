@@ -197,7 +197,12 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       ...floorSpikes('sbank-01', 38, 3, 22),
       // And one more the other way round: the walk back from the patrol
       // spike, which until now was the safe half of the level.
-      ...dropSpike('dspike-01', 24, 21, 22),
+      // Column 34, not 24: at 24 it landed in the middle of the patrol
+      // route and the two hazards shared the tile, so whichever arrived
+      // first was the only one the player ever met. Past the patrol's right
+      // turn it is the ambush the comment above describes and nothing is
+      // hiding inside anything else.
+      ...dropSpike('dspike-01', 34, 21, 22),
     ],
   },
   {

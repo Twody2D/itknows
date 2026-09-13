@@ -130,47 +130,6 @@ export function drawSpikeTile(ctx: CanvasRenderingContext2D): void {
   ctx.shadowBlur = 0;
 }
 
-/**
- * A fake platform: unmistakably the same *object* as `drawPlatformSlab`,
- * unmistakably not solid. Same body, same unbroken lip, same footprint —
- * the tell is that the lip is SYSTEM's violet instead of structural cyan,
- * a scanline runs through the body, and the whole tile breathes
- * (`FakePlatformTrap`).
- *
- * Two earlier versions failed the same way, and the failure is worth
- * keeping written down: both made the decoy *unlike* a platform (first a
- * dark box with orange ticks, then a see-through body with a dashed lip),
- * and each time the owner's reaction was to ask what the thing was. A decoy
- * only works if it is recognisably the thing it imitates; the tell has to
- * be what is WRONG with it, not that it is unfamiliar (master-prompt §14 —
- * "имеет понятный визуальный сигнал").
- */
-export function drawFakePlatformTile(ctx: CanvasRenderingContext2D): void {
-  ctx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
-  // SAME SILHOUETTE AS A REAL SLAB — solid body, unbroken lip. A decoy only
-  // works if the player recognises it as a platform in the first place, and
-  // the previous tile did not clear that bar: its body was drawn at 0.4
-  // alpha and its lip was broken into two 3px dashes, then the flicker tween
-  // multiplied the whole thing down to 0.1-0.34. What reached the screen was
-  // a dotted line on the background, which is exactly what the owner
-  // reported seeing — twice — and why he asked what it even was ("так и не
-  // понял что за платформа на скриншоте, на которую даже встать нельзя").
-  ctx.fillStyle = hexToCss(PALETTE.metalMid, 0.7);
-  ctx.fillRect(0, 1, TILE_SIZE, TILE_SIZE - 2);
-  ctx.fillStyle = hexToCss(PALETTE.metalEdge, 0.5);
-  ctx.fillRect(0, TILE_SIZE - 1, TILE_SIZE, 1);
-  // The one tell, and it is a word the game already uses everywhere else:
-  // structure is cyan, SYSTEM is violet. A real slab's lip is always cyan
-  // (`drawPlatformSlab`), so a violet lip says "SYSTEM is showing you this,
-  // it is not holding you up" without a tutorial line.
-  ctx.fillStyle = hexToCss(PALETTE.system, 0.9);
-  ctx.fillRect(0, 0, TILE_SIZE, 1);
-  // A scanline across the body — the same "this is a projection" grammar as
-  // the violet lip, readable even when the tile is at its dimmest.
-  ctx.fillStyle = hexToCss(PALETTE.system, 0.3);
-  ctx.fillRect(0, 4, TILE_SIZE, 1);
-}
-
 /** A mechanical platform tile — cyan trim signals "this one moves". */
 export function drawMovingPlatformTile(ctx: CanvasRenderingContext2D): void {
   ctx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
@@ -286,5 +245,37 @@ export function drawExitTile(ctx: CanvasRenderingContext2D, w: number, h: number
   } else {
     ctx.fillStyle = hexToCss(PALETTE.outline, 0.8);
     ctx.fillRect(beaconX, 0, beaconSize, lintelH * 0.9);
+
+    // BOARDED SHUT. An unlit beacon is the honest tell required by
+    // CLAUDE.md #4.7, and it turned out not to be a legible one: the owner
+    // met this door repeatedly and still asked "так и не понятно что за
+    // фиолетовый портал, зачем он". A dark doorway reads as a doorway, and
+    // a player who cannot tell a decoy from an exit is not being tested,
+    // they are being confused.
+    //
+    // Two beams across the opening say the one thing the unlit beacon was
+    // trying to say, in a vocabulary nobody has to be taught: this door
+    // does not open, the way out is somewhere else. The frame, the rune and
+    // the recess are untouched, so it is still unmistakably the same object
+    // as the real exit — which is the whole point of the trap.
+    const inset = strutW + 2;
+    const openW = w - inset * 2;
+    const openH = h - lintelH - 4;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(inset, lintelH + 2, openW, openH);
+    ctx.clip();
+    ctx.strokeStyle = hexToCss(PALETTE.metalEdge, 0.95);
+    ctx.lineWidth = Math.max(2, w * 0.07);
+    ctx.beginPath();
+    ctx.moveTo(inset - 4, lintelH + 2);
+    ctx.lineTo(inset + openW + 4, lintelH + 2 + openH);
+    ctx.moveTo(inset + openW + 4, lintelH + 2);
+    ctx.lineTo(inset - 4, lintelH + 2 + openH);
+    ctx.stroke();
+    ctx.strokeStyle = hexToCss(PALETTE.dangerAlt, 0.45);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
   }
 }

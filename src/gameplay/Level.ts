@@ -188,7 +188,10 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[], levelSeed: number, gro
       case 'fake-platform': {
         for (let i = 0; i < def.width; i++) {
           const { x, y } = tileCenter(def.col + i, def.row);
-          const trap = new FakePlatformTrap(scene, { id: `${def.id}-${i}`, x, y, rippleIndex: i });
+          // Same seed expression the real platforms use below, so a decoy
+          // at a given column gets the same slab a real one would have.
+          const bolt = hash01(levelSeed + (def.col + i) * 4111 + 3) < 0.3;
+          const trap = new FakePlatformTrap(scene, { id: `${def.id}-${i}`, x, y, bolt });
           result.all.push(trap);
         }
         break;

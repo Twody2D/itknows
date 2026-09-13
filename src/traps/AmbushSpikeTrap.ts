@@ -2,6 +2,26 @@ import Phaser from 'phaser';
 import { Trap } from './Trap';
 import type { TrapPhase } from './Trap';
 import type { TrapTiming } from './TrapTiming';
+import { MIN_WARNING_MS } from '@/config/physics';
+
+/**
+ * How long the spike hangs in plain sight before it starts falling.
+ *
+ * THIS, not the fall, is the telegraph now. The fall used to be it — the
+ * spike was harmless for the whole descent and only turned lethal in the
+ * frame it landed — which is honest on paper and nonsense on screen: "когда
+ * шип летит вниз я могу прыгнуть и он пролетит через меня и не убьёт, а я
+ * перепрыгну" (owner). A spike passing through the android without touching
+ * it teaches the player that falling spikes are scenery.
+ *
+ * So the two are swapped: the spike appears, holds still where the player
+ * can see it for the full `MIN_WARNING_MS`, and everything after that —
+ * the whole fall included — kills on contact. The honesty invariant is
+ * intact (CLAUDE.md #4.2: a visible signal for at least 250ms before the
+ * lethal state), and the thing now behaves the way a falling spike looks
+ * like it should.
+ */
+const HANG_MS = MIN_WARNING_MS;
 
 export interface AmbushSpikeConfig {
   id: string;
@@ -17,17 +37,15 @@ export interface AmbushSpikeConfig {
 
 /**
  * The ambush variant of `moving-spike` (`TrapDef.ts`'s `ambush: true`) —
- * invisible while idle, then drops fast and becomes visible at the same
- * moment, landing lethal. Unlike the ordinary `MovingSpikeTrap` (a bare
+ * invisible while idle, then appears overhead, hangs there for `HANG_MS`,
+ * and drops lethal. Unlike the ordinary `MovingSpikeTrap` (a bare
  * tween with no phase concept, always lethal, always visible — its
- * continuous motion IS the telegraph), this reuses `Trap`'s honest
- * idle→warning→active→cooldown cycle so "invisible until it drops" still
- * satisfies CLAUDE.md #4.2: the *entire* visible fall (`warningMs`, ≥
- * `MIN_WARNING_MS`) happens before `isLethal()` ever turns true — lethality
- * only starts once `active` begins, which `onEnterPhase` times to land
- * exactly when the drop tween finishes. The fall looking sudden is a
- * `Cubic.easeIn` tween, not a shorter warning than anything else in the
- * game gets.
+ * continuous motion IS the telegraph), this reuses `Trap`'s
+ * idle→warning→active→cooldown cycle, splitting `warning` in two: the
+ * spike is visible and motionless for `HANG_MS` (the telegraph, see that
+ * constant), then falls — and it is lethal from the first frame of the
+ * fall through to the end of `active`. `warningMs` must therefore be
+ * longer than `HANG_MS`; the constructor refuses anything else.
  *
  * Visibility never depends on `FxManager`'s warning-pulse (that's optional,
  * degradable FX, CLAUDE.md #9) — `onEnterPhase` sets `alpha` itself for
@@ -60,6 +78,11 @@ export class AmbushSpikeTrap extends Trap {
     this.yHidden = config.yHidden;
     this.yLanded = config.yLanded;
     this.idleElapsedOverride = config.initialIdleMs ?? 0;
+    if (this.timing.warningMs <= HANG_MS) {
+      throw new Error(
+        `moving-spike:${config.id}: warningMs (${this.timing.warningMs}) must exceed HANG_MS (${HANG_MS}) — the spike needs time to fall after its telegraph`,
+      );
+    }
 
     this.gameObject = scene.physics.add.sprite(config.x, config.yHidden, 'tile-spike');
     const body = this.gameObject.body as Phaser.Physics.Arcade.Body;
@@ -81,11 +104,15 @@ export class AmbushSpikeTrap extends Trap {
         this.gameObject.setAlpha(0);
         break;
       case 'warning':
+        // Appears where it will fall from and holds — `delay` is the whole
+        // telegraph, and the tween covers only what is left of the window.
+        this.gameObject.setPosition(this.x, this.yHidden);
         this.gameObject.setAlpha(1);
         this.fallTween = this.scene.tweens.add({
           targets: this.gameObject,
           y: this.yLanded,
-          duration: this.timing.warningMs,
+          delay: HANG_MS,
+          duration: this.timing.warningMs - HANG_MS,
           ease: 'Cubic.easeIn',
         });
         break;
@@ -104,6 +131,22 @@ export class AmbushSpikeTrap extends Trap {
         this.gameObject.setAlpha(0);
         break;
     }
+  }
+
+  /**
+   * Lethal from the moment it starts moving, not from the moment it lands.
+   * `phase === 'warning'` is only ever reached armed, so no extra check is
+   * needed for the hanging half.
+   */
+  override isLethal(): boolean {
+    if (this.phase === 'warning') return this.phaseElapsedMs >= HANG_MS;
+    return super.isLethal();
+  }
+
+  /** A 1px jitter while it hangs — cheap, allocation-free, and the difference between "a spike is up there" and "a spike is up there and it is about to go". */
+  protected override onUpdatePhase(phase: TrapPhase, elapsedMs: number): void {
+    if (phase !== 'warning' || elapsedMs >= HANG_MS) return;
+    this.gameObject.setX(this.x + (Math.sin(elapsedMs / 22) > 0 ? 1 : -1));
   }
 
   override update(time: number, delta: number): void {
