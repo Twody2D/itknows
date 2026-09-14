@@ -132,6 +132,7 @@ const UI_STRINGS = {
   resultLeaderboardTitle: { ru: 'Лидерборд', en: 'Leaderboard' },
   resultYou: { ru: 'ТЫ', en: 'YOU' },
   resultLeaderboardOffline: { ru: 'Лидерборд недоступен', en: 'Leaderboard unavailable' },
+  resultLeaderboardEmpty: { ru: 'Пока пусто', en: 'No times yet' },
   resultSignIn: { ru: 'Войти', en: 'Sign in' },
   resultMenu: { ru: 'Меню', en: 'Menu' },
 

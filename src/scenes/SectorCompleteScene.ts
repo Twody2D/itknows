@@ -373,6 +373,15 @@ export class SectorCompleteScene extends Phaser.Scene {
     ]);
     if (!this.scene.isActive()) return; // scene already left before the round-trip resolved
 
+    // A board that could not be read at all says so, instead of looking
+    // like a board nobody has posted to yet (`null` vs `[]`).
+    if (entries === null) {
+      this.leaderboardLabels.push(
+        this.mono(364, 110, t('resultLeaderboardOffline').toUpperCase(), PALETTE.labelMuted, 10, [0.5, 0.5]),
+      );
+      return;
+    }
+
     let y = 64;
     for (const entry of entries) {
       const isPlayerRow = playerEntry !== null && entry.rank === playerEntry.rank;
@@ -381,7 +390,12 @@ export class SectorCompleteScene extends Phaser.Scene {
     }
 
     if (entries.length === 0) {
-      this.leaderboardLabels.push(this.mono(364, 110, '—', PALETTE.labelMuted, 10, [0.5, 0.5]));
+      this.leaderboardLabels.push(
+        this.mono(364, 96, t('resultLeaderboardEmpty').toUpperCase(), PALETTE.labelMuted, 10, [0.5, 0.5]),
+      );
+      // `y` still points at the first (never drawn) row, which would put the
+      // sign-in link ABOVE the message explaining why there are no rows.
+      y = 104;
     }
 
     const playerShown = playerEntry !== null && entries.some((e) => e.rank === playerEntry.rank);

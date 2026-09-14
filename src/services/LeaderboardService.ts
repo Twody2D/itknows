@@ -34,8 +34,8 @@ class LeaderboardServiceController {
     await YandexGamesService.submitScore(leaderboardNameFor(levelId), Math.round(timeMs));
   }
 
-  /** Read-only, works for a guest too (no auth required to view a board). */
-  getLevelEntries(levelId: string, quantityTop = 10): Promise<YsdkLeaderboardEntry[]> {
+  /** Read-only, works for a guest too (no auth required to view a board). `null` means the board could not be read at all — see the facade's own note on why that is not the same as an empty board. */
+  getLevelEntries(levelId: string, quantityTop = 10): Promise<YsdkLeaderboardEntry[] | null> {
     return YandexGamesService.getLeaderboardEntries(leaderboardNameFor(levelId), quantityTop);
   }
 
@@ -56,7 +56,7 @@ class LeaderboardServiceController {
     await YandexGamesService.submitScore(sectorLeaderboardNameFor(sectorId), Math.round(timeMs));
   }
 
-  getSectorEntries(sectorId: string, quantityTop = 10): Promise<YsdkLeaderboardEntry[]> {
+  getSectorEntries(sectorId: string, quantityTop = 10): Promise<YsdkLeaderboardEntry[] | null> {
     return YandexGamesService.getLeaderboardEntries(sectorLeaderboardNameFor(sectorId), quantityTop);
   }
 

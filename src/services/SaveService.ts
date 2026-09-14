@@ -342,14 +342,20 @@ class SaveServiceController {
    * chained off `YandexGamesService.init()`). Pulls whatever the cloud has,
    * merges it into the local save (see `mergeSaves`), persists the result,
    * then pushes the merged save back — so the cloud converges too, not just
-   * this device. Safe to call multiple times; only the first call does
-   * anything. Never throws, never blocks anything else on the network —
-   * `SaveService`'s synchronous API already works before this ever resolves.
+   * this device. Safe to call multiple times; only the first call that
+   * actually had an SDK to talk to does anything. Never throws, never blocks
+   * anything else on the network — `SaveService`'s synchronous API already
+   * works before this ever resolves.
+   *
+   * A call made with no SDK deliberately does NOT count as the first one:
+   * the SDK can arrive late (`YandexGamesService.onReady`), and marking the
+   * sync done against an absent SDK would leave the cloud save permanently
+   * unread for that session.
    */
   async syncWithCloud(): Promise<void> {
     if (this.cloudSyncStarted) return;
-    this.cloudSyncStarted = true;
     if (!YandexGamesService.isAvailable()) return;
+    this.cloudSyncStarted = true;
 
     const cloud = await YandexGamesService.getPlayerData([CLOUD_KEY]);
     const rawSave = cloud?.[CLOUD_KEY];

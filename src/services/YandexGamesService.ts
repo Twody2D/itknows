@@ -101,6 +101,24 @@ declare global {
 
 const SDK_SCRIPT_URL = 'https://yandex.ru/games/sdk/v2';
 
+/**
+ * How long `init()` waits for the SDK before reporting back "not here".
+ *
+ * A script tag has no timeout of its own: `onerror` fires for a refused or
+ * failed request, and never for one that simply never answers. On a phone
+ * losing its connection mid-load that is not a theoretical case — the
+ * promise stays pending for as long as the page lives, and anything chained
+ * off `init()` (cloud sync, purchase restoration) never runs at all, which
+ * is a far worse outcome than running them without a cloud.
+ *
+ * So `init()` resolves either way, and a slow SDK is simply an absent one
+ * for as long as it takes to arrive. The wait itself is NOT abandoned: if
+ * the script does land afterwards, `markReady()` still fires, so
+ * `LoadingAPI.ready()` and everything registered through `onReady()`
+ * happen late rather than not at all.
+ */
+export const SDK_INIT_TIMEOUT_MS = 8000;
+
 class YandexGamesServiceController {
   private ysdk: Ysdk | null = null;
   private initPromise: Promise<void> | null = null;
@@ -110,11 +128,37 @@ class YandexGamesServiceController {
   private playerPromise: Promise<YsdkPlayer | null> | null = null;
   private payments: YsdkPayments | null = null;
   private paymentsPromise: Promise<YsdkPayments | null> | null = null;
+  private readonly readyCallbacks: Array<() => void> = [];
 
-  /** Call once, as early as possible (`main.ts`) — never blocks game creation, the network can be slower than boot. */
+  /**
+   * Call once, as early as possible (`main.ts`) — never blocks game
+   * creation, the network can be slower than boot, and it always settles
+   * within `SDK_INIT_TIMEOUT_MS` whatever the network does.
+   */
   init(): Promise<void> {
-    if (!this.initPromise) this.initPromise = this.loadAndInit();
+    if (!this.initPromise) {
+      this.initPromise = Promise.race([this.loadAndInit(), wait(SDK_INIT_TIMEOUT_MS)]);
+    }
     return this.initPromise;
+  }
+
+  /**
+   * Runs `callback` once the SDK is actually usable, and never otherwise —
+   * immediately if it already is, later if it arrives after `init()` has
+   * given up waiting, not at all if it never arrives.
+   *
+   * This is what everything that only makes sense WITH a real SDK hangs off
+   * (`main.ts`: cloud sync, purchase restoration). Chaining those off
+   * `init()` instead was the shape that broke on a slow connection: the
+   * timeout above makes `init()` resolve with no SDK, the chain runs,
+   * finds nothing, and nothing runs it again when the SDK finally lands.
+   */
+  onReady(callback: () => void): void {
+    if (this.ysdk) {
+      callback();
+      return;
+    }
+    this.readyCallbacks.push(callback);
   }
 
   isAvailable(): boolean {
@@ -256,14 +300,25 @@ class YandexGamesServiceController {
     }
   }
 
-  /** `getEntries` needs no authorization (verified against the docs) — a guest can always read a leaderboard, only submitting to one requires signing in. */
-  async getLeaderboardEntries(leaderboardName: string, quantityTop = 10): Promise<YsdkLeaderboardEntry[]> {
-    if (!this.ysdk?.leaderboards) return [];
+  /**
+   * `getEntries` needs no authorization (verified against the docs) — a
+   * guest can always read a leaderboard, only submitting to one requires
+   * signing in.
+   *
+   * `null` and `[]` mean different things here, and the difference is the
+   * one thing the player can see: `[]` is a board that answered and holds
+   * nobody yet, `null` is a board that could not be read at all (no SDK, no
+   * leaderboards, a rejected call). Collapsing both into `[]` — which is
+   * what this used to return — made the result screen tell a player the
+   * leaderboard was unavailable when it was simply empty, and vice versa.
+   */
+  async getLeaderboardEntries(leaderboardName: string, quantityTop = 10): Promise<YsdkLeaderboardEntry[] | null> {
+    if (!this.ysdk?.leaderboards) return null;
     try {
       const { entries } = await this.ysdk.leaderboards.getEntries(leaderboardName, { quantityTop, includeUser: true });
       return entries;
     } catch {
-      return [];
+      return null;
     }
   }
 
@@ -358,6 +413,7 @@ class YandexGamesServiceController {
     this.playerPromise = null;
     this.payments = null;
     this.paymentsPromise = null;
+    this.readyCallbacks.length = 0;
   }
 
   /** `ysdk.getPlayer()` is rate-limited (20 requests/5 minutes) — resolved once and cached, never re-requested per call. */
@@ -379,6 +435,24 @@ class YandexGamesServiceController {
     }
     this.payments = await this.paymentsPromise;
     return this.payments;
+  }
+
+  /**
+   * The single place the SDK goes from absent to present. Fires
+   * `LoadingAPI.ready()` if the menu is already up, then everything that
+   * asked to be told — each callback exactly once, and drained before it is
+   * called so a callback that registers another one cannot loop.
+   */
+  private markReady(): void {
+    this.flushLoadingReady();
+    const callbacks = this.readyCallbacks.splice(0);
+    for (const callback of callbacks) {
+      try {
+        callback();
+      } catch {
+        /* a subscriber's own failure is never the SDK facade's problem */
+      }
+    }
   }
 
   private flushLoadingReady(): void {
@@ -404,7 +478,7 @@ class YandexGamesServiceController {
       await this.loadScript();
       if (!window.YaGames) return;
       this.ysdk = await window.YaGames.init();
-      this.flushLoadingReady();
+      this.markReady();
     } catch {
       this.ysdk = null;
     }
@@ -421,6 +495,11 @@ class YandexGamesServiceController {
       document.head.appendChild(script);
     });
   }
+}
+
+/** Resolves after `ms`, used only to bound `init()` — never to delay anything. */
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export const YandexGamesService = new YandexGamesServiceController();

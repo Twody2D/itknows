@@ -45,8 +45,8 @@ describe('YandexGamesService', () => {
     await expect(YandexGamesService.submitScore('level-sector-01-level-01', 1000)).resolves.toBeUndefined();
   });
 
-  it('getLeaderboardEntries() degrades to an empty list without a real SDK', async () => {
-    await expect(YandexGamesService.getLeaderboardEntries('level-sector-01-level-01')).resolves.toEqual([]);
+  it('getLeaderboardEntries() reports "unreadable" (null), not "empty", without a real SDK', async () => {
+    await expect(YandexGamesService.getLeaderboardEntries('level-sector-01-level-01')).resolves.toBeNull();
   });
 
   it('getPlayerLeaderboardEntry() degrades to null without a real SDK', async () => {

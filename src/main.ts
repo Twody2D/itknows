@@ -37,15 +37,19 @@ PurchaseManager.init();
 // Started as early as possible — the SDK script is a network fetch, slower
 // than generating textures in BootScene, so this races the boot sequence
 // rather than blocking it (CLAUDE.md #8 — the game works fully without it).
-// Cloud save sync and purchase restoration only make sense once we know
-// whether the SDK/an authorized player is actually there, hence chained
-// after `init()` instead of also firing immediately — `SaveService`'s own
-// localStorage-backed API already works synchronously before any of this
-// ever resolves. Cloud sync runs first so restorePurchases() replays
-// against the already-merged save, not a stale local-only one.
-void YandexGamesService.init()
-  .then(() => SaveService.syncWithCloud())
-  .then(() => PurchaseManager.restorePurchases());
+//
+// Cloud save sync and purchase restoration only make sense with a real SDK,
+// so they hang off `onReady` rather than off `init()`: `init()` now settles
+// on a timeout too (`SDK_INIT_TIMEOUT_MS`), and a chain hung off it would
+// run once against no SDK on a slow connection and never run again when the
+// SDK finally landed. `SaveService`'s own localStorage-backed API already
+// works synchronously long before any of this resolves. Cloud sync runs
+// first so restorePurchases() replays against the already-merged save, not
+// a stale local-only one.
+void YandexGamesService.init();
+YandexGamesService.onReady(() => {
+  void SaveService.syncWithCloud().then(() => PurchaseManager.restorePurchases());
+});
 
 // Audio focus (master-prompt §32): a hidden tab suspends the context outright
 // instead of letting scheduled nodes play into nothing, and picks back up on

@@ -218,19 +218,25 @@ export class DailyResultScene extends Phaser.Scene {
       return;
     }
 
-    let entries: YsdkLeaderboardEntry[] = [];
+    let entries: YsdkLeaderboardEntry[] | null = null;
     try {
       entries = await LeaderboardService.getLevelEntries(this.result.levelId, 4);
     } catch {
-      entries = [];
+      entries = null;
     }
     // The scene can be torn down while this promise is in flight — a button
     // press or a resize rebuild — and `boardBody` then belongs to a
     // destroyed scene.
     if (!this.scene.isActive() || !this.boardBody.scene) return;
 
-    if (entries.length === 0) {
+    // Two different truths, and the player is owed the right one: a board
+    // that answered with nobody on it yet is not a board that is down.
+    if (entries === null) {
       this.boardLabels.push(this.mono(356, 122, t('resultLeaderboardOffline'), PALETTE.labelMuted, 10, [0.5, 0.5]));
+      return;
+    }
+    if (entries.length === 0) {
+      this.boardLabels.push(this.mono(356, 122, t('resultLeaderboardEmpty'), PALETTE.labelMuted, 10, [0.5, 0.5]));
       return;
     }
     entries.slice(0, 4).forEach((entry, i) => {
