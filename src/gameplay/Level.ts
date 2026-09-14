@@ -236,11 +236,18 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[], levelSeed: number, gro
             holdMs: def.holdMs,
             fallSpeed: def.fallSpeed,
             armed: def.armed,
-            // The tile the ground on either side would have used at this
-            // column, so the trapdoor is not a different-looking patch of
-            // floor (owner: "сделай, чтобы яма, которая разрушается, не
-            // отличалась по внешнему виду с обычной землёй").
-            texture: groundTopKey(levelSeed, def.col + i),
+            // In the ground row: the exact tile the floor either side would
+            // have used at this column, so a trapdoor is not a
+            // different-looking patch of floor (owner: "сделай, чтобы яма,
+            // которая разрушается, не отличалась по внешнему виду с обычной
+            // землёй").
+            //
+            // Up in the air: the platform slab, cracked. It used to take the
+            // ground tile there too, which put patches of FLOOR in a row of
+            // SLABS — "стало видно стыки земли где яма будет". Same object
+            // as its neighbours now, in a state that says it will not hold
+            // (`drawPlatformSlabCracked`).
+            texture: def.row === groundRow ? groundTopKey(levelSeed, def.col + i) : 'tile-platform-slab-cracked',
             asFloor: def.row === groundRow,
             // A trapdoor in the ground row brings its own sub-surface rock:
             // the runs either side stop at its columns, so without this the

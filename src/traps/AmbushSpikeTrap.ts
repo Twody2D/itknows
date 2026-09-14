@@ -5,21 +5,28 @@ import type { TrapTiming } from './TrapTiming';
 import { MIN_WARNING_MS } from '@/config/physics';
 
 /**
- * How long the spike hangs in plain sight before it starts falling.
+ * How long the spike is visible before it can kill.
  *
- * THIS, not the fall, is the telegraph now. The fall used to be it — the
- * spike was harmless for the whole descent and only turned lethal in the
- * frame it landed — which is honest on paper and nonsense on screen: "когда
- * шип летит вниз я могу прыгнуть и он пролетит через меня и не убьёт, а я
- * перепрыгну" (owner). A spike passing through the android without touching
- * it teaches the player that falling spikes are scenery.
+ * The fall used to BE the telegraph — the spike was harmless the whole way
+ * down and only turned lethal in the frame it landed, so it visibly passed
+ * through the player ("когда шип летит вниз я могу прыгнуть и он пролетит
+ * через меня и не убьёт"). The first fix made the spike hang still for this
+ * long before dropping, and the owner rejected the look of it: "верни
+ * скорость падения шипа как до этого, сейчас он резко падает и трясётся
+ * сверху. Сделай чтобы сразу падал".
  *
- * So the two are swapped: the spike appears, holds still where the player
- * can see it for the full `MIN_WARNING_MS`, and everything after that —
- * the whole fall included — kills on contact. The honesty invariant is
- * intact (CLAUDE.md #4.2: a visible signal for at least 250ms before the
- * lethal state), and the thing now behaves the way a falling spike looks
- * like it should.
+ * So nothing hangs and nothing shakes: the spike appears and starts falling
+ * in the same frame, down the whole of `warningMs` on the `Cubic.easeIn`
+ * curve it always used. What this constant now measures is only when the
+ * thing becomes dangerous — and the easing is what makes both true at once.
+ * Cubic spends its first quarter of TIME on a twentieth of the DISTANCE, so
+ * at 250ms into a 560ms drop the spike has moved about 9px: it is plainly
+ * visible, plainly committed to falling, and has not reached anybody. After
+ * that it accelerates into the floor, lethal for the rest of the fall.
+ *
+ * CLAUDE.md #4.2 holds exactly as written — a visible signal for at least
+ * 250ms before the lethal state — and so does the owner's "just let it
+ * fall".
  */
 const HANG_MS = MIN_WARNING_MS;
 
@@ -37,15 +44,14 @@ export interface AmbushSpikeConfig {
 
 /**
  * The ambush variant of `moving-spike` (`TrapDef.ts`'s `ambush: true`) —
- * invisible while idle, then appears overhead, hangs there for `HANG_MS`,
- * and drops lethal. Unlike the ordinary `MovingSpikeTrap` (a bare
+ * invisible while idle, then appears overhead and drops — harmless for the
+ * first `HANG_MS` of the fall, lethal for the rest of it. Unlike the ordinary `MovingSpikeTrap` (a bare
  * tween with no phase concept, always lethal, always visible — its
  * continuous motion IS the telegraph), this reuses `Trap`'s
- * idle→warning→active→cooldown cycle, splitting `warning` in two: the
- * spike is visible and motionless for `HANG_MS` (the telegraph, see that
- * constant), then falls — and it is lethal from the first frame of the
- * fall through to the end of `active`. `warningMs` must therefore be
- * longer than `HANG_MS`; the constructor refuses anything else.
+ * idle→warning→active→cooldown cycle, with `warning` as one uninterrupted
+ * fall that turns lethal `HANG_MS` in (see that constant for why the
+ * easing makes that fair). `warningMs` must therefore be longer than
+ * `HANG_MS`; the constructor refuses anything else.
  *
  * Visibility never depends on `FxManager`'s warning-pulse (that's optional,
  * degradable FX, CLAUDE.md #9) — `onEnterPhase` sets `alpha` itself for
@@ -104,15 +110,14 @@ export class AmbushSpikeTrap extends Trap {
         this.gameObject.setAlpha(0);
         break;
       case 'warning':
-        // Appears where it will fall from and holds — `delay` is the whole
-        // telegraph, and the tween covers only what is left of the window.
+        // Appears and falls, in that frame. No delay, no hold — the slow
+        // start is the easing curve doing it, not a pause.
         this.gameObject.setPosition(this.x, this.yHidden);
         this.gameObject.setAlpha(1);
         this.fallTween = this.scene.tweens.add({
           targets: this.gameObject,
           y: this.yLanded,
-          delay: HANG_MS,
-          duration: this.timing.warningMs - HANG_MS,
+          duration: this.timing.warningMs,
           ease: 'Cubic.easeIn',
         });
         break;
@@ -134,19 +139,13 @@ export class AmbushSpikeTrap extends Trap {
   }
 
   /**
-   * Lethal from the moment it starts moving, not from the moment it lands.
+   * Lethal once it is properly moving, not once it lands.
    * `phase === 'warning'` is only ever reached armed, so no extra check is
-   * needed for the hanging half.
+   * needed for the first, harmless part of the fall.
    */
   override isLethal(): boolean {
     if (this.phase === 'warning') return this.phaseElapsedMs >= HANG_MS;
     return super.isLethal();
-  }
-
-  /** A 1px jitter while it hangs — cheap, allocation-free, and the difference between "a spike is up there" and "a spike is up there and it is about to go". */
-  protected override onUpdatePhase(phase: TrapPhase, elapsedMs: number): void {
-    if (phase !== 'warning' || elapsedMs >= HANG_MS) return;
-    this.gameObject.setX(this.x + (Math.sin(elapsedMs / 22) > 0 ? 1 : -1));
   }
 
   override update(time: number, delta: number): void {

@@ -111,6 +111,44 @@ export function drawPlatformSlab(ctx: CanvasRenderingContext2D, bolt: boolean): 
   }
 }
 
+/**
+ * A slab that will fall: the same platform tile, cracked.
+ *
+ * Stones hanging over a pit used to be drawn with the GROUND texture
+ * instead — a deliberate "this is visibly not one of the level's solid
+ * slabs", and from a normal viewing distance what it actually produced was
+ * a row of mismatched patches: "стало видно стыки земли где яма будет"
+ * (owner). A different material reads as a seam in the level's geometry,
+ * not as a property of one platform.
+ *
+ * So it is the same object in a different state. Body, lip and footprint
+ * are `drawPlatformSlab`'s exactly; what differs is a fracture across the
+ * slab and a lip that has lost its brightness. That tell has to stay
+ * legible — these stones sit over pits, and with a crumbling floor no
+ * longer jumpable (owner's own decision, CLAUDE.md #4) stepping on one
+ * over a pit costs the attempt. It is the only warning there is.
+ */
+export function drawPlatformSlabCracked(ctx: CanvasRenderingContext2D): void {
+  drawPlatformSlab(ctx, false);
+  // A dimmer lip — still the platform's own line, visibly not carrying.
+  ctx.fillStyle = hexToCss(PALETTE.metalDark, 0.55);
+  ctx.fillRect(0, 0, TILE_SIZE, 1);
+  ctx.fillStyle = hexToCss(PALETTE.cyanDim, 0.3);
+  ctx.fillRect(0, 0, TILE_SIZE, 1);
+  // The fracture: a stepped dark line, plus a highlight on its upper side
+  // so it reads as a split rather than a smudge at 1px.
+  ctx.fillStyle = hexToCss(PALETTE.outline, 0.85);
+  ctx.fillRect(2, 2, 1, 3);
+  ctx.fillRect(3, 4, 1, 2);
+  ctx.fillRect(4, 5, 2, 1);
+  ctx.fillRect(6, 4, 1, 3);
+  ctx.fillRect(7, 6, 1, 3);
+  ctx.fillStyle = hexToCss(PALETTE.metalEdge, 0.5);
+  ctx.fillRect(3, 2, 1, 2);
+  ctx.fillRect(5, 4, 1, 1);
+  ctx.fillRect(7, 4, 1, 2);
+}
+
 export function drawSpikeTile(ctx: CanvasRenderingContext2D): void {
   ctx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
   ctx.fillStyle = hexToCss(PALETTE.danger);

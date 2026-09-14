@@ -31,9 +31,12 @@ export interface FallingPlatformConfig {
    * level's edge reads as one unbroken line across it.
    *
    * False for a stone hanging in mid-air over a pit (sector 02's
-   * FREEFALL), where the opposite is wanted — it keeps the plain ground
-   * tile and no lip, so it is visibly not one of the level's solid slabs
-   * and the player can choose their route across.
+   * FREEFALL), which carries no lip of its own: it takes
+   * `tile-platform-slab-cracked` instead (see `Level.ts`), the same slab
+   * its neighbours are drawn with, fractured. The player can still tell
+   * which stones fall — they have to be able to, these hang over pits —
+   * but the row reads as one material rather than as patches of floor
+   * dropped into a run of platforms.
    */
   asFloor?: boolean | undefined;
   /**

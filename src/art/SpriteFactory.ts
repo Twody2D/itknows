@@ -9,6 +9,7 @@ import {
   drawGroundTop,
   drawMovingPlatformTile,
   drawPlatformSlab,
+  drawPlatformSlabCracked,
   drawPursuerIcon,
   drawSpikeTile,
   EXIT_VISUAL_HEIGHT_TILES,
@@ -121,6 +122,10 @@ export function generateTileTextures(scene: Phaser.Scene): void {
   const platformSlabBolt = makeCanvas(TILE_SIZE, TILE_SIZE);
   drawPlatformSlab(platformSlabBolt.ctx, true);
   addOrReplaceCanvas(scene, 'tile-platform-slab-bolt', platformSlabBolt.canvas);
+
+  const platformSlabCracked = makeCanvas(TILE_SIZE, TILE_SIZE);
+  drawPlatformSlabCracked(platformSlabCracked.ctx);
+  addOrReplaceCanvas(scene, 'tile-platform-slab-cracked', platformSlabCracked.canvas);
 
   const spike = makeCanvas(TILE_SIZE, TILE_SIZE);
   drawSpikeTile(spike.ctx);
