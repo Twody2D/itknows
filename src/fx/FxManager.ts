@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
 import { generateFxTextures } from './textures';
-import { FxSettings } from './FxSettings';
+import { FxQuality } from './FxSettings';
 
 type Emitter = Phaser.GameObjects.Particles.ParticleEmitter;
 type Alphable = Phaser.GameObjects.GameObject & { alpha: number };
@@ -85,12 +85,12 @@ export class FxManager {
 
   /** Spawned a couple pixels above the contact point — right on it lands exactly on the ground tile's own top-edge highlight line and camouflages against it. */
   jumpDust(x: number, y: number): void {
-    if (!FxSettings.particlesEnabled) return;
+    if (!FxQuality.particlesAllowed()) return;
     this.jumpDustEmitter.explode(5, x, y - 3);
   }
 
   landDust(x: number, y: number): void {
-    if (!FxSettings.particlesEnabled) return;
+    if (!FxQuality.particlesAllowed()) return;
     this.landDustEmitter.explode(7, x, y - 3);
   }
 
@@ -115,7 +115,7 @@ export class FxManager {
    *   the biggest fragment count. Reads as being deleted, not blown up.
    */
   deathBurst(x: number, y: number, variant: 'static' | 'glitch' | 'data_wipe' = 'static', shake = true): void {
-    if (FxSettings.particlesEnabled) {
+    if (FxQuality.particlesAllowed()) {
       // The fragments carry the variant's colour too, otherwise all three
       // rain the same red and the signature is only half applied.
       this.deathEmitter.setParticleTint(DEATH_FRAGMENT_TINT[variant]);
@@ -142,7 +142,7 @@ export class FxManager {
   }
 
   victoryBurst(x: number, y: number): void {
-    if (FxSettings.particlesEnabled) this.victoryEmitter.explode(18, x, y);
+    if (FxQuality.particlesAllowed()) this.victoryEmitter.explode(18, x, y);
     this.flash(x, y, PALETTE.reward, 0.16);
     this.pulseRing(x, y);
   }
@@ -162,7 +162,7 @@ export class FxManager {
   }
 
   shake(durationMs: number, intensity: number): void {
-    if (!FxSettings.shakeEnabled) return;
+    if (!FxQuality.screenEffectsAllowed()) return;
     this.scene.cameras.main.shake(durationMs, intensity);
   }
 

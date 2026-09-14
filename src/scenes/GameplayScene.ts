@@ -7,7 +7,10 @@ import { TouchControls } from '@/ui/components/TouchControls';
 import { PixelLabel } from '@/ui/PixelLabel';
 import { PixelButton } from '@/ui/PixelButton';
 import { isTouchDevice } from '@/utils/input/isTouchDevice';
-import { buildEnvironmentLayers } from '@/art/Environment';
+import { buildEnvironmentLayers, type EnvironmentLayers } from '@/art/Environment';
+import { FxQuality } from '@/fx/FxSettings';
+import { FpsMeter, initialGuardState, stepGuard, type GuardState } from '@/fx/PerformanceGuard';
+import type { DebugOverlay } from '@/dev/DebugOverlay';
 import { FxManager } from '@/fx/FxManager';
 import { Player } from '@/gameplay/Player';
 import { GhostRecorder } from '@/gameplay/GhostRecorder';
@@ -130,6 +133,16 @@ export class GameplayScene extends Phaser.Scene {
   private hudAttemptsText!: PixelLabel;
   /** Non-null only for a Daily Challenge run — see `GameplaySceneData.daily`. */
   private daily: DailyRunState | null = null;
+  private environment: EnvironmentLayers | null = null;
+  private readonly fpsMeter = new FpsMeter();
+  /**
+   * Dev instrumentation, loaded only when `import.meta.env.DEV` is true —
+   * the dynamic import below is the only reference to the module, so a
+   * production build drops it entirely (CLAUDE.md #12, same shape as
+   * `ShopDevTools`).
+   */
+  private debugOverlay: DebugOverlay | null = null;
+  private guard: GuardState = initialGuardState();
   private hudSystemText!: PixelLabel;
   private hudSystemPill!: Phaser.GameObjects.Graphics;
   /** Last whole second shown on the HUD clock — `PixelLabel.setPixelText` rebuilds a canvas texture per call, so the live timer is throttled to once a second (CLAUDE.md #9) instead of following `attemptElapsedMs`'s tenths every frame. */
@@ -201,7 +214,16 @@ export class GameplayScene extends Phaser.Scene {
     // Ground the skyline on the visible floor line, not the world's full
     // fall-pit height (`worldHeight` includes space below the floor) —
     // the same class of bug the menu's environment call already fixed.
-    buildEnvironmentLayers(this, this.level.worldWidth, this.level.spawn.y, this.levelDef.id);
+    this.environment = buildEnvironmentLayers(this, this.level.worldWidth, this.level.spawn.y, this.levelDef.id);
+    // A fresh level is the one moment the frame rate says nothing useful —
+    // textures are still being uploaded and the first frames are enormous.
+    this.fpsMeter.reset();
+    this.applyQualityTier();
+    if (import.meta.env.DEV) {
+      void import('@/dev/DebugOverlay').then(({ DebugOverlay }) => {
+        if (this.scene.isActive()) this.debugOverlay = new DebugOverlay(this);
+      });
+    }
     this.setupInput();
     this.behaviorTracker = new BehaviorTracker();
     // Real capture happens on the first `update()` tick — see the field's
@@ -433,6 +455,8 @@ export class GameplayScene extends Phaser.Scene {
 
   override update(time: number, delta: number): void {
     this.attemptElapsedMs += delta;
+    this.stepQuality(delta);
+    if (import.meta.env.DEV) this.debugOverlay?.update(delta, this.level, this.player, this.levelDef);
 
     if (this.player.isAlive() && this.player.y > this.level.worldHeight + 40) {
       this.player.kill('fall');
@@ -791,6 +815,40 @@ export class GameplayScene extends Phaser.Scene {
   private hudCounterText(livesOverride?: number): string {
     if (this.daily) return String(Math.max(livesOverride ?? this.daily.livesLeft, 0));
     return String(GameState.run.deaths);
+  }
+
+  /**
+   * Auto-degradation, ticked from the one `update()` that always runs
+   * (CLAUDE.md #9). The measurement is a rolling average and the decision
+   * has hysteresis — both live in `PerformanceGuard`; this only applies the
+   * tier it comes back with.
+   */
+  private stepQuality(delta: number): void {
+    this.fpsMeter.push(delta);
+    const average = this.fpsMeter.average();
+    if (average === null) return;
+    const next = stepGuard(this.guard, delta, average);
+    if (next.tier !== this.guard.tier) {
+      this.guard = next;
+      FxQuality.tier = next.tier;
+      this.applyQualityTier();
+      return;
+    }
+    this.guard = next;
+  }
+
+  /**
+   * The background layers are the only degradable thing the scene owns
+   * outright — particles and shake are asked for through `FxManager`, which
+   * checks `FxQuality` itself. The near layer (`far`) stays: with all three
+   * hidden the level floats on flat void, and the horizon is what grounds
+   * it (see the haze in `art/Environment.ts`).
+   */
+  private applyQualityTier(): void {
+    if (!this.environment) return;
+    const allowed = FxQuality.backdropAllowed();
+    this.environment.mid.setVisible(allowed);
+    this.environment.signals.setVisible(allowed);
   }
 
   private handlePlayerDeath(payload: { cause: DeathCause; x: number; y: number }): void {

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { FxQuality } from '@/fx/FxSettings';
 import { PALETTE } from '@/config/palette';
 import { lerpColor } from '@/utils/color';
 import { PLAYER_SPRITE_H } from '@/art/PLAYER_SPRITE';
@@ -150,7 +151,10 @@ export class TrailFx {
 
   /** Spawns run before `stepPool` so anything spawned this frame (here or via `onJump`, called earlier in the same frame from `Player.preUpdate`) gets its frac-0 position/size/color applied immediately instead of flashing one frame late at its pooled slot's stale transform. */
   update(elapsedMs: number, deltaMs: number, player: TrailPlayerState, isAlive: boolean): void {
-    if (isAlive) {
+    // A trail is particles, and particles are the first thing CLAUDE.md #9
+    // sheds under load. Existing ones are still stepped below so they fade
+    // out instead of freezing mid-air; only new ones stop being made.
+    if (isAlive && FxQuality.particlesAllowed()) {
       switch (this.kind) {
         case 'data_trail':
           this.updateDataTrail(elapsedMs, player);
@@ -214,7 +218,7 @@ export class TrailFx {
 
   /** Ground-jump burst — called once per real jump (`GameplayScene`'s `player:jumped` handler), not from `update()`. */
   onJump(x: number, y: number): void {
-    if (this.kind !== 'launch') return;
+    if (this.kind !== 'launch' || !FxQuality.particlesAllowed()) return;
     for (let i = 0; i < 8; i++) {
       const angleDeg = 90 + (Math.random() * 100 - 50);
       const angleRad = (angleDeg * Math.PI) / 180;
