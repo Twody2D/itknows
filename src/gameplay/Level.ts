@@ -105,8 +105,16 @@ function groundRuns(def: LevelDef): Array<[number, number]> {
 function groundTopKey(levelSeed: number, col: number): string {
   const seamRoll = hash01(levelSeed + col * 7919);
   const seam = seamRoll < 0.3 ? 0 : seamRoll < 0.55 ? 1 : seamRoll < 0.8 ? 2 : 3;
-  const damageRoll = hash01(levelSeed + col * 5303 + 1);
-  if (damageRoll < 0.05) return 'tile-ground-damaged';
+  // NO SCUFFED-PANEL VARIANT. There used to be one on 5% of columns: a dark
+  // notch with a warm sliver above it — drawn, as it happens, in the same
+  // `dangerAlt` the level uses to mark the lip of a hole. Decoration was
+  // speaking the traps' language, and a player who has learned to read this
+  // floor reads it: a scuff a column or two ahead of a trapdoor (DROP had
+  // one at column 38, with the door at 39-41) is indistinguishable from the
+  // level telling you where the floor is about to go. "Я вижу стык где
+  // будет яма" — and the honest answer is that there was something to see,
+  // it just did not mean anything. Panel seams and lights carry all the
+  // variety the surface needs without saying anything about danger.
   const lightRoll = hash01(levelSeed + col * 2609 + 2);
   return lightRoll < 0.12 ? `tile-ground-top-s${seam}-light` : `tile-ground-top-s${seam}`;
 }
@@ -518,14 +526,29 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
   // 2. Cost. A 260-tile level would otherwise mean ~260 static bodies and
   //    ~1300 images; this is a handful of bodies plus one fill sprite per
   //    run (the surface row stays per-column, for its texture variety).
-  // Columns a trapdoor is currently covering. The pit under one is real
+  // Columns something is currently covering. The pit under one is real
   // geometry (the solver reads it, and it is what the player falls into),
   // but until the trap springs there is floor over it — so it must not get
   // the drop-off treatment that marks a genuine edge.
+  //
+  // A SHIFTING PIT COUNTS, and used to not. Its slab covers part of the pit
+  // at the start of the level, but only trapdoors were collected here, so
+  // the column beside the slab was painted as a lip — the warm drop-off
+  // sliver, sitting over floor that still looked solid, exactly where the
+  // hole was going to appear once the slab slid away. That is the "стык где
+  // будет яма" the owner kept seeing: the level marking its own trap in
+  // advance.
   const coveredCols = new Set<number>();
   for (const trap of def.traps ?? []) {
-    if (trap.type !== 'falling-platform' || !trap.armed) continue;
-    for (let i = 0; i < trap.width; i++) coveredCols.add(trap.col + i);
+    if (trap.type === 'falling-platform') {
+      if (!trap.armed) continue;
+      for (let i = 0; i < trap.width; i++) coveredCols.add(trap.col + i);
+    } else if (trap.type === 'moving-platform') {
+      if (!trap.armed) continue;
+      // Where the slab STARTS — that is the part of the pit it is hiding
+      // right now. Its destination is an open hole and must keep its lip.
+      for (let i = 0; i < trap.width; i++) coveredCols.add(trap.fromCol + i);
+    }
   }
   const isOpenGap = (col: number): boolean => isInAnyGap(col, def.gaps) && !coveredCols.has(col);
 

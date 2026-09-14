@@ -3,7 +3,6 @@ import { drawPlayerFrame } from './drawPlayer';
 import { SKIN_VISUALS, playerTexturePrefix, skinColorsFor } from '@/data/shop/skinVisuals';
 import {
   drawExitTile,
-  drawGroundDamaged,
   drawGroundEdge,
   drawGroundFill,
   drawGroundTop,
@@ -102,10 +101,6 @@ export function generateTileTextures(scene: Phaser.Scene): void {
     drawGroundTop(lit.ctx, seam, true);
     addOrReplaceCanvas(scene, `tile-ground-top-s${seam}-light`, lit.canvas);
   }
-
-  const groundDamaged = makeCanvas(TILE_SIZE, TILE_SIZE);
-  drawGroundDamaged(groundDamaged.ctx, 4);
-  addOrReplaceCanvas(scene, 'tile-ground-damaged', groundDamaged.canvas);
 
   const groundEdge = makeCanvas(TILE_SIZE, TILE_SIZE);
   drawGroundEdge(groundEdge.ctx);

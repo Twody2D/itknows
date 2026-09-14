@@ -59,15 +59,6 @@ export function drawGroundTop(ctx: CanvasRenderingContext2D, seam: 0 | 1 | 2 | 3
   }
 }
 
-/** A rare scuffed/damaged panel — small dark notch, breaks the "every tile is pristine" rhythm. */
-export function drawGroundDamaged(ctx: CanvasRenderingContext2D, notchX: number): void {
-  drawGroundTop(ctx, 3, false);
-  ctx.fillStyle = hexToCss(PALETTE.outline, 0.5);
-  ctx.fillRect(notchX, 2, 2, 2);
-  ctx.fillStyle = hexToCss(PALETTE.dangerAlt, 0.25);
-  ctx.fillRect(notchX, 1, 2, 1);
-}
-
 export function drawGroundEdge(ctx: CanvasRenderingContext2D): void {
   drawGroundTop(ctx, 0, false);
   // A dark drop-off cap plus a warm warning sliver right at the lip — a gap
