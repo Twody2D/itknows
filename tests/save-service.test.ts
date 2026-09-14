@@ -339,6 +339,66 @@ describe('SaveService', () => {
     });
   });
 
+  /**
+   * The Daily Challenge's persistent half (master-prompt §74). The run's own
+   * lives live in the scene payload — they have to survive a death restart,
+   * not a reload — while today's best and the one rewarded continue live
+   * here, because a continue that a page refresh hands back is not a limit.
+   */
+  describe('daily challenge', () => {
+    it('starts a fresh record for a date it has never seen', () => {
+      const daily = SaveService.getDaily('2026-09-14');
+      expect(daily).toEqual({ date: '2026-09-14', bestTimeMs: null, bestDeaths: null, continuesUsed: 0 });
+    });
+
+    it('rolls the record over when the date changes instead of reporting yesterday', () => {
+      SaveService.saveDailyResult('2026-09-14', 30_000, 2);
+      SaveService.useDailyContinue('2026-09-14');
+      const today = SaveService.getDaily('2026-09-15');
+      expect(today.bestTimeMs).toBeNull();
+      expect(today.continuesUsed).toBe(0);
+    });
+
+    it("keeps only the fastest clear of the day, with that run's deaths", () => {
+      SaveService.saveDailyResult('2026-09-14', 30_000, 2);
+      SaveService.saveDailyResult('2026-09-14', 41_000, 0);
+      expect(SaveService.getDaily('2026-09-14')).toMatchObject({ bestTimeMs: 30_000, bestDeaths: 2 });
+      SaveService.saveDailyResult('2026-09-14', 21_000, 5);
+      expect(SaveService.getDaily('2026-09-14')).toMatchObject({ bestTimeMs: 21_000, bestDeaths: 5 });
+    });
+
+    it('allows exactly one rewarded continue per day', () => {
+      expect(SaveService.canUseDailyContinue('2026-09-14')).toBe(true);
+      expect(SaveService.useDailyContinue('2026-09-14')).toBe(true);
+      expect(SaveService.canUseDailyContinue('2026-09-14')).toBe(false);
+      expect(SaveService.useDailyContinue('2026-09-14')).toBe(false);
+      expect(SaveService.getDaily('2026-09-14').continuesUsed).toBe(1);
+    });
+
+    it('hands the continue back when the ad never played, and never below zero', () => {
+      SaveService.useDailyContinue('2026-09-14');
+      SaveService.refundDailyContinue('2026-09-14');
+      expect(SaveService.canUseDailyContinue('2026-09-14')).toBe(true);
+      SaveService.refundDailyContinue('2026-09-14');
+      expect(SaveService.getDaily('2026-09-14').continuesUsed).toBe(0);
+    });
+
+    it('re-reading the same date never resets what it holds', () => {
+      // `getDaily` rolls the record over on a date change, and every other
+      // daily accessor goes through it — so a bug there would quietly clear
+      // the day on the next read rather than at midnight.
+      SaveService.saveDailyResult('2026-09-14', 12_345, 1);
+      SaveService.useDailyContinue('2026-09-14');
+      SaveService.getDaily('2026-09-14');
+      expect(SaveService.getDaily('2026-09-14')).toEqual({
+        date: '2026-09-14',
+        bestTimeMs: 12_345,
+        bestDeaths: 1,
+        continuesUsed: 1,
+      });
+    });
+  });
+
   describe('sector bests', () => {
     it('has no best for a sector that has never been cleared', () => {
       expect(SaveService.getSectorBestMs('sector-01')).toBeNull();

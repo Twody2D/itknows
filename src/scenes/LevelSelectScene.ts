@@ -14,7 +14,8 @@ import { GhostService } from '@/services/GhostService';
 import { InventoryService } from '@/services/InventoryService';
 import { playerTexturePrefix } from '@/data/shop/skinVisuals';
 import { levelSelectComment } from '@/data/dialogues/levelSelect';
-import { DAILY_CHALLENGE_VARIANT_ID, currentChallengeTimeMs, getDailyChallenge } from '@/gameplay/DailyChallenge';
+import { currentChallengeTimeMs, getDailyChallenge } from '@/gameplay/DailyChallenge';
+import { DAILY_LIVES } from '@/services/SaveService';
 import { rebuildOnResize } from '@/ui/relayout';
 import { addCheckGlyph, addChevronGlyph, addDiamondGlyph, addPlayTriangle } from '@/ui/glyphs';
 
@@ -533,10 +534,13 @@ export class LevelSelectScene extends Phaser.Scene {
     this.hit(x, y, w, h, () => {
       this.scene.stop('MainMenuScene');
       this.scene.stop();
+      // Enters as a DAILY RUN, not as the campaign level it happens to be:
+      // a fixed number of lives on one clock, its own result screen, and no
+      // campaign progress at either end (see `GameplayScene.DailyRunState`).
       this.scene.start('GameplayScene', {
         levelId: daily.levelId,
-        forceVariantId: DAILY_CHALLENGE_VARIANT_ID,
         entryTransition: true,
+        daily: { date: daily.date, livesLeft: DAILY_LIVES },
       });
     });
   }

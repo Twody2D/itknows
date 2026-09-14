@@ -134,6 +134,21 @@ const UI_STRINGS = {
   resultLeaderboardOffline: { ru: 'Лидерборд недоступен', en: 'Leaderboard unavailable' },
   resultSignIn: { ru: 'Войти', en: 'Sign in' },
   resultMenu: { ru: 'Меню', en: 'Menu' },
+
+  // Daily Challenge (master-prompt §74). A run is the same level under
+  // different rules — a fixed number of lives on one clock — so these name
+  // the run, never the campaign.
+  dailyResultCleared: { ru: 'Испытание пройдено', en: 'Challenge cleared' },
+  dailyResultFailed: { ru: 'Забег окончен', en: 'Run over' },
+  dailyLives: { ru: 'Жизни', en: 'Lives' },
+  dailyBestToday: { ru: 'Лучшее сегодня', en: "Today's best" },
+  dailyNoResultYet: { ru: 'Ещё не пройдено', en: 'Not cleared yet' },
+  dailyNextIn: { ru: 'Новое испытание через', en: 'Next challenge in' },
+  dailyRetry: { ru: 'Ещё раз', en: 'Run again' },
+  dailyContinue: { ru: 'Продолжить', en: 'Continue' },
+  dailyContinueHint: { ru: 'За рекламу', en: 'Watch an ad' },
+  dailyContinueSpent: { ru: 'Продолжение уже использовано', en: 'Continue already used' },
+  dailyContinueUnavailable: { ru: 'Реклама недоступна', en: 'Ad unavailable' },
   resultSectorLabel: { ru: 'Сектор', en: 'Sector' },
   resultToMenu: { ru: 'В меню', en: 'To menu' },
   resultAllDoneShort: { ru: 'Всё пройдено', en: 'All complete' },

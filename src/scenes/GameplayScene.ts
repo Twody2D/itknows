@@ -21,6 +21,10 @@ import type { BuiltLevel } from '@/gameplay/Level';
 import type { LevelDef } from '@/gameplay/LevelDef';
 import { getLevel, getNextLevelId } from '@/gameplay/LevelFactory';
 import { GameState } from '@/core/GameState';
+import { CurrencyService } from '@/services/CurrencyService';
+import { LeaderboardService } from '@/services/LeaderboardService';
+import { EARN_AMOUNTS } from '@/data/shop/economy';
+import type { DailyResultData } from './DailyResultScene';
 import { SaveService } from '@/services/SaveService';
 import { YandexGamesService } from '@/services/YandexGamesService';
 import { InventoryService } from '@/services/InventoryService';
@@ -49,6 +53,25 @@ interface GameplaySceneData {
   levelId: string;
   /** Fade in from black on entry — only for deliberate navigation (main menu → gameplay, sector complete → next sector), never death-retry or a same-level restart (`ui/SceneFade.ts`). */
   entryTransition?: boolean;
+  /**
+   * Present only while this is a Daily Challenge run (master-prompt §74),
+   * which is the same level played under different rules: a limited number
+   * of lives instead of unlimited retries, one clock across all of them,
+   * and no campaign progress at either end — a daily run never marks a
+   * level completed and never moves where PLAY resumes.
+   *
+   * `livesLeft` rides along in this payload rather than living in a store
+   * because a death restarts the scene: the count has to survive that, and
+   * it is the only thing about the run that changes. Everything persistent
+   * about the day (today's best, the rewarded continue already spent) is in
+   * `SaveService.getDaily`.
+   */
+  daily?: DailyRunState;
+}
+
+export interface DailyRunState {
+  date: string;
+  livesLeft: number;
 }
 
 /** Pixels of leeway when deciding whether the player was already above a one-way platform. */
@@ -105,6 +128,8 @@ export class GameplayScene extends Phaser.Scene {
 
   private hudTimeText!: PixelLabel;
   private hudAttemptsText!: PixelLabel;
+  /** Non-null only for a Daily Challenge run — see `GameplaySceneData.daily`. */
+  private daily: DailyRunState | null = null;
   private hudSystemText!: PixelLabel;
   private hudSystemPill!: Phaser.GameObjects.Graphics;
   /** Last whole second shown on the HUD clock — `PixelLabel.setPixelText` rebuilds a canvas texture per call, so the live timer is throttled to once a second (CLAUDE.md #9) instead of following `attemptElapsedMs`'s tenths every frame. */
@@ -138,7 +163,10 @@ export class GameplayScene extends Phaser.Scene {
     // owner had that removed so every run of a level is the same run. What
     // THE SYSTEM still does is watch and comment — see `LevelFactory`.
     this.levelDef = getLevel(data.levelId);
-    SaveService.setLastLevelId(this.levelDef.id);
+    this.daily = data.daily ?? null;
+    // A daily run is a side event, not campaign progress — it must not move
+    // where PLAY resumes (master-prompt §74; see `DailyRunState`).
+    if (!this.daily) SaveService.setLastLevelId(this.levelDef.id);
     this.resolving = false;
     this.hesitationCommented = false;
     this.useEntryFade = data.entryTransition ?? false;
@@ -627,7 +655,10 @@ export class GameplayScene extends Phaser.Scene {
     attemptIcon.lineStyle(1.5, PALETTE.dangerAlt, 1);
     attemptIcon.strokeRect(stripX + 60, stripY + stripH / 2 - 4, 8, 8);
 
-    this.hudAttemptsText = new PixelLabel(this, stripX + 74, stripY + stripH / 2, String(GameState.run.deaths), {
+    // In a daily run the number that matters is what is LEFT, not what has
+    // been spent — the run ends at zero (`DailyRunState`). The campaign has
+    // no such limit, so it keeps counting attempts.
+    this.hudAttemptsText = new PixelLabel(this, stripX + 74, stripY + stripH / 2, this.hudCounterText(), {
       color: hexToCss(PALETTE.dangerAlt),
       strokeColor: hexToCss(PALETTE.outline),
       scale: 1,
@@ -756,11 +787,17 @@ export class GameplayScene extends Phaser.Scene {
     playSfx('land');
   }
 
+  /** Lives left in a daily run, attempts spent in the campaign — see the HUD strip for why. */
+  private hudCounterText(livesOverride?: number): string {
+    if (this.daily) return String(Math.max(livesOverride ?? this.daily.livesLeft, 0));
+    return String(GameState.run.deaths);
+  }
+
   private handlePlayerDeath(payload: { cause: DeathCause; x: number; y: number }): void {
     if (this.resolving) return;
     this.resolving = true;
     GameState.registerDeath();
-    this.hudAttemptsText.setPixelText(String(GameState.run.deaths));
+    this.hudAttemptsText.setPixelText(this.hudCounterText(this.daily ? this.daily.livesLeft - 1 : undefined));
     this.fx.deathBurst(payload.x, payload.y, InventoryService.getEquipped('death_fx') as 'static' | 'glitch' | 'data_wipe');
     this.trailFx?.onPlayerDeath(this);
     playSfx('death');
@@ -778,6 +815,24 @@ export class GameplayScene extends Phaser.Scene {
     });
 
     this.time.delayedCall(450, () => {
+      if (this.daily) {
+        const livesLeft = this.daily.livesLeft - 1;
+        if (livesLeft > 0) {
+          this.scene.restart({ levelId: this.levelDef.id, daily: { ...this.daily, livesLeft } });
+        } else {
+          // The clock is handed over rather than re-read on the result
+          // screen: `GameState.run` keeps running until something restarts
+          // it, and the player is done running now.
+          this.scene.start('DailyResultScene', {
+            date: this.daily.date,
+            levelId: this.levelDef.id,
+            outcome: 'out-of-lives',
+            timeMs: GameState.elapsedMs(),
+            deaths: GameState.run.deaths,
+          } satisfies DailyResultData);
+        }
+        return;
+      }
       this.scene.restart({ levelId: this.levelDef.id });
     });
   }
@@ -811,13 +866,48 @@ export class GameplayScene extends Phaser.Scene {
 
     const timeMs = GameState.elapsedMs();
     const deaths = GameState.run.deaths;
-    EventBus.emit('level:completed', { levelId: this.levelDef.id, timeMs, deaths });
+    // `level:completed` is the campaign's own event: it pays CREDITS
+    // (`shop/EconomyRewards.ts`) and posts to the leaderboard. A daily run
+    // may be replayed as often as the player likes, so firing it here would
+    // turn the challenge into a credit faucet — the daily branch below pays
+    // once per day itself and posts its own score.
+    if (!this.daily) EventBus.emit('level:completed', { levelId: this.levelDef.id, timeMs, deaths });
     GhostService.recordAttempt(this.levelDef.id, timeMs, this.ghostRecorder.finish());
 
     const wasStruggling = SystemMemory.snapshot().repeatDeathCount >= 2;
     SystemMemory.registerClear(this.levelDef.id, wasStruggling);
     PlayerProfile.integrate(this.behaviorTracker.finish(null, true));
     if (wasStruggling) Commentator.commentOnAdaptation();
+
+    // A DAILY RUN ENDS HERE, on its own screen, and touches no campaign
+    // state on the way out: no `markCompleted`, no `setLastLevelId`, no
+    // next level. Clearing today's challenge must not skip a player
+    // forward through the campaign (master-prompt §74).
+    if (this.daily) {
+      const date = this.daily.date;
+      // Paid for the first clear of the day only, and read before the save
+      // below overwrites it — every later run of the same challenge is for
+      // the time, not the money.
+      const firstClearToday = SaveService.getDaily(date).bestTimeMs === null;
+      SaveService.saveDailyResult(date, timeMs, deaths);
+      if (firstClearToday) {
+        CurrencyService.earnCredits(EARN_AMOUNTS.levelComplete, 'level_complete');
+        if (deaths === 0) CurrencyService.earnCredits(EARN_AMOUNTS.zeroDeaths, 'zero_deaths');
+      }
+      // The daily is the same level in the same shape as the campaign's, so
+      // its time belongs on that level's board with every other.
+      void LeaderboardService.submitLevelScore(this.levelDef.id, timeMs);
+      this.time.delayedCall(600, () => {
+        this.scene.start('DailyResultScene', {
+          date,
+          levelId: this.levelDef.id,
+          outcome: 'cleared',
+          timeMs,
+          deaths,
+        } satisfies DailyResultData);
+      });
+      return;
+    }
 
     const next = getNextLevelId(this.levelDef.id);
     SaveService.markCompleted(this.levelDef.id);

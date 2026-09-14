@@ -18,6 +18,7 @@ import { PauseScene } from '@/scenes/PauseScene';
 import { SettingsScene } from '@/scenes/SettingsScene';
 import { HowToPlayScene } from '@/scenes/HowToPlayScene';
 import { SectorCompleteScene } from '@/scenes/SectorCompleteScene';
+import { DailyResultScene } from '@/scenes/DailyResultScene';
 import { LevelSelectScene } from '@/scenes/LevelSelectScene';
 import { ShopScene } from '@/scenes/ShopScene';
 import '@/shop/EconomyRewards';
@@ -92,6 +93,7 @@ const game = new Phaser.Game({
     SettingsScene,
     HowToPlayScene,
     SectorCompleteScene,
+    DailyResultScene,
     LevelSelectScene,
     ShopScene,
   ],
