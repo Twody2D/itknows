@@ -31,7 +31,6 @@ import type { DeathCause } from '@/core/EventBus';
 import { BehaviorTracker } from '@/ai/BehaviorTracker';
 import { PlayerProfile } from '@/ai/PlayerProfile';
 import { SystemMemory } from '@/ai/SystemMemory';
-import { selectVariant } from '@/ai/DifficultyDirector';
 import { Commentator } from '@/ai/Commentator';
 import { SystemVoice } from '@/ai/SystemVoice';
 import { personalityTag } from '@/ai/SystemPersonality';
@@ -50,8 +49,6 @@ interface GameplaySceneData {
   levelId: string;
   /** Fade in from black on entry — only for deliberate navigation (main menu → gameplay, sector complete → next sector), never death-retry or a same-level restart (`ui/SceneFade.ts`). */
   entryTransition?: boolean;
-  /** Skips `DifficultyDirector`'s adaptive pick entirely — Daily Challenge's only door in, since every player must land on the exact same variant for the same date for the seed (and any future shared leaderboard) to mean anything (CLAUDE.md #6). */
-  forceVariantId?: string;
 }
 
 /** Pixels of leeway when deciding whether the player was already above a one-way platform. */
@@ -83,7 +80,6 @@ export class GameplayScene extends Phaser.Scene {
   private inputState!: InputState;
   private touchControls?: TouchControls;
   private behaviorTracker!: BehaviorTracker;
-  private variantId!: string;
   /**
    * How long this attempt has actually been played, accumulated from
    * `update()`'s own delta rather than measured against a start timestamp.
@@ -137,10 +133,11 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   init(data: GameplaySceneData): void {
-    // THE SYSTEM only ever picks a variant here, before the level is built —
-    // never mid-attempt (CLAUDE.md #4.1, see DifficultyDirector's doc comment).
-    this.variantId = data.forceVariantId ?? selectVariant(data.levelId, PlayerProfile.snapshot(), SystemMemory.snapshot());
-    this.levelDef = getLevel(data.levelId, this.variantId);
+    // ONE SHAPE PER LEVEL. THE SYSTEM used to pick an adaptive cut here,
+    // before the level was built and never mid-attempt (CLAUDE.md #4.1); the
+    // owner had that removed so every run of a level is the same run. What
+    // THE SYSTEM still does is watch and comment — see `LevelFactory`.
+    this.levelDef = getLevel(data.levelId);
     SaveService.setLastLevelId(this.levelDef.id);
     this.resolving = false;
     this.hesitationCommented = false;
@@ -171,7 +168,6 @@ export class GameplayScene extends Phaser.Scene {
       GameState.currentSectorId = sectorId;
       GameState.startSector();
     }
-    GameState.currentVariantId = this.variantId;
 
     this.level = buildLevel(this, this.levelDef);
     // Ground the skyline on the visible floor line, not the world's full
@@ -184,7 +180,7 @@ export class GameplayScene extends Phaser.Scene {
     // doc comment for why `this.time.now` can't be trusted here.
     this.attemptElapsedMs = 0;
     this.ghostRecorder.reset();
-    EventBus.emit('level:loaded', { levelId: this.levelDef.id, variantId: this.variantId });
+    EventBus.emit('level:loaded', { levelId: this.levelDef.id });
     MusicSequencer.start();
     // The game now opens straight into a level rather than the menu
     // (`BootScene`), so this is where "loaded and actually playable" happens
@@ -200,7 +196,7 @@ export class GameplayScene extends Phaser.Scene {
     // Ghost and trail are pure visual overlays — created before the player
     // so draw order never lets either cover the real character (master-
     // prompt §40 for the ghost; the trail is shop cosmetic content).
-    const ghostRecord = GhostSettings.enabled ? GhostService.getGhost(this.levelDef.id, this.variantId) : null;
+    const ghostRecord = GhostSettings.enabled ? GhostService.getGhost(this.levelDef.id) : null;
     this.ghostSprite = ghostRecord ? new GhostSprite(this, ghostRecord.samples) : null;
 
     this.trailFx = new TrailFx(this, equippedTrailKind(), spawnX, this.level.spawn.y);
@@ -816,7 +812,7 @@ export class GameplayScene extends Phaser.Scene {
     const timeMs = GameState.elapsedMs();
     const deaths = GameState.run.deaths;
     EventBus.emit('level:completed', { levelId: this.levelDef.id, timeMs, deaths });
-    GhostService.recordAttempt(this.levelDef.id, this.variantId, timeMs, this.ghostRecorder.finish());
+    GhostService.recordAttempt(this.levelDef.id, timeMs, this.ghostRecorder.finish());
 
     const wasStruggling = SystemMemory.snapshot().repeatDeathCount >= 2;
     SystemMemory.registerClear(this.levelDef.id, wasStruggling);

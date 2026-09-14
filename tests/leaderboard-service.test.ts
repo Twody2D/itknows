@@ -17,20 +17,14 @@ describe('LeaderboardService', () => {
     vi.mocked(YandexGamesService.getPlayerLeaderboardEntry).mockClear();
   });
 
-  it('submits a canonical ("standard") variant time to that level\'s board', async () => {
-    await LeaderboardService.submitLevelScore('sector-01-level-01', 12345, 'standard');
+  it('submits a finish time to that level\'s board', async () => {
+    await LeaderboardService.submitLevelScore('sector-01-level-01', 12345);
     expect(YandexGamesService.submitScore).toHaveBeenCalledWith('level-sector-01-level-01', 12345);
   });
 
-  it('never submits an adaptive variant\'s time — not a fair cross-player comparison', async () => {
-    await LeaderboardService.submitLevelScore('sector-01-level-01', 12345, 'gentle');
-    await LeaderboardService.submitLevelScore('sector-01-level-01', 12345, 'bold');
-    await LeaderboardService.submitLevelScore('sector-01-level-01', 12345, 'troll');
-    expect(YandexGamesService.submitScore).not.toHaveBeenCalled();
-  });
 
   it('rounds the submitted score to a whole millisecond', async () => {
-    await LeaderboardService.submitLevelScore('sector-01-level-01', 999.7, 'standard');
+    await LeaderboardService.submitLevelScore('sector-01-level-01', 999.7);
     expect(YandexGamesService.submitScore).toHaveBeenCalledWith('level-sector-01-level-01', 1000);
   });
 

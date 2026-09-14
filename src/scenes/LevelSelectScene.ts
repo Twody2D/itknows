@@ -200,7 +200,7 @@ export class LevelSelectScene extends Phaser.Scene {
   }
 
   private bestTimeText(levelId: string): string | null {
-    const ghost = GhostService.getGhost(levelId, 'standard');
+    const ghost = GhostService.getGhost(levelId);
     return ghost ? this.clock(ghost.timeMs) : null;
   }
 

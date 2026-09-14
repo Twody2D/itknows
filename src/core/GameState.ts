@@ -25,7 +25,6 @@ class GameStateStore {
    * against a HUD reading five seconds.
    */
   currentLevelId = '';
-  currentVariantId = 'base';
 
   run: RunStats = { deaths: 0, startedAtMs: 0, pausedMs: 0 };
 

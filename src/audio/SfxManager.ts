@@ -26,7 +26,7 @@ import './AudioSettings';
  * tick-tick loop. This is cosmetic randomness in the audio layer only — it
  * never touches gameplay state, timing, or geometry, so it doesn't conflict
  * with CLAUDE.md #4.6's "no RNG in gameplay" (that rule is about level
- * outcomes being deterministic from `(levelId, variantId, seed)`, not about
+ * outcomes being deterministic from `(levelId, seed)`, not about
  * whether a footstep sounds a few percent different each time). `trapWarning`
  * deliberately keeps a fixed pitch — it's a telegraphed danger cue
  * (CLAUDE.md #4.2), and a recognizable, unchanging signal is the point.

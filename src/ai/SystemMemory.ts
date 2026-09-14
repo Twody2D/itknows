@@ -1,7 +1,9 @@
 /**
  * THE SYSTEM's short-term memory (master-prompt §69) — a handful of facts
- * about the last few attempts, not a history log. Drives both comment
- * selection (Commentator) and variant selection (DifficultyDirector).
+ * about the last few attempts, not a history log. Drives comment selection
+ * (Commentator). It used to drive variant selection too, until the adaptive
+ * cuts of a level were removed (`LevelFactory`) — THE SYSTEM still watches,
+ * it just no longer changes what it is watching.
  * Session-only, like `GameState`/`PlayerProfile` — see those for why.
  */
 export interface SystemMemoryData {
@@ -10,7 +12,7 @@ export interface SystemMemoryData {
   repeatDeathCount: number;
   /** id of the trap involved in the most recent death, if any (null for spikes/falls). */
   recentTrap: string | null;
-  /** Did the last DifficultyDirector-picked easier variant actually get cleared? */
+  /** Was the last clear the end of a losing streak? Feeds THE SYSTEM's "you got there" line, and nothing else reads it now that difficulty no longer adapts. */
   recentSuccessfulAdaptation: boolean;
   /** Consecutive level clears without a death, session-wide. */
   currentStreak: number;

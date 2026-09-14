@@ -146,11 +146,9 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     groundRow: 22,
     gaps: [],
     spikeColumns: [],
-    // Two honest routes across the patrol's stretch, which is what gives
-    // `DifficultyDirector` something to observe and vary later (CLAUDE.md
-    // #6 — "персональнее, а не сложнее"): time it and walk under, or take
-    // the two ledges over it. Neither is strictly better; the ground is
-    // shorter, the ledges are safer.
+    // Two honest routes across the patrol's stretch: time it and walk
+    // under, or take the two ledges over it. Neither is strictly better —
+    // the ground is shorter, the ledges are safer.
     platforms: [
       { col: 16, row: 19, width: 5 },
       { col: 26, row: 19, width: 5 },
@@ -340,9 +338,18 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     // and what stops the first tier from being reachable off the near
     // ground (five columns at a three-row rise is 50px against a 40.6px
     // reach — the solver checks this, it is not a guess).
+    // THE TRAPDOOR SITS UNDER THE DOOR, on 33-35, and that is the owner's
+    // placement: "дыру после движущегося шипа делаем чуть ближе, чтобы
+    // игрок сразу проваливался, если бежал напрямик, прямо под порталом".
+    // At 35-37 it was two columns past the exit's own, so the obvious line
+    // — run out from under the patrol spike, keep going, climb — cleared it
+    // without ever meeting it. On 33 the trigger (`TRAPDOOR_LEAD`) lands on
+    // column 32, the exact tile the patrol spike turns back at, so leaving
+    // the spike behind at a run is what opens the floor, directly beneath
+    // the door the player is heading for.
     gaps: [
       [16, 21],
-      [35, 37],
+      [33, 35],
     ],
     spikeColumns: [10, 11],
     platforms: [
@@ -372,7 +379,7 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         toRow: 21,
         travelMs: 2000,
       },
-      ...trapdoor('flp-01', 35, 3),
+      ...trapdoor('flp-01', 33, 3),
     ],
   },
 ];

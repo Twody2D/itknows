@@ -4,7 +4,7 @@ import { YandexGamesService } from './YandexGamesService';
 
 const STORAGE_KEY = 'itknows.save.v1';
 const CLOUD_KEY = 'save';
-const SAVE_VERSION = 5;
+const SAVE_VERSION = 6;
 
 /** Everything the shop grants/tracks — `default`/`static`/`standard` are owned+equipped from a fresh save (CurrencyService/InventoryService read this, never a second save file). */
 export interface InventoryData {
@@ -33,18 +33,54 @@ export interface GhostRecord {
   samples: number[];
 }
 
-interface SaveDataV5 {
-  version: 5;
+/**
+ * Today's Daily Challenge, and only today's.
+ *
+ * One UTC date at a time (`DailyChallenge.dailyChallengeDateKey`): when the
+ * date rolls over, every field below is replaced rather than accumulated.
+ * A daily run is a side event, not campaign progress — it never touches
+ * `completedLevels` or `lastLevelId`, so clearing today's challenge cannot
+ * skip a player forward through the campaign or backwards to a level they
+ * already finished.
+ *
+ * `continuesUsed` is the whole reason this is persisted rather than held in
+ * memory: the rewarded continue (CLAUDE.md #8) has to survive a reload, or
+ * the limit is not a limit.
+ */
+export interface DailyRecord {
+  date: string;
+  /** Fastest completed run today, or `null` if today has not been cleared yet. */
+  bestTimeMs: number | null;
+  /** Deaths on that fastest run — reported next to the time, never a separate best. */
+  bestDeaths: number | null;
+  /** Rewarded continues already spent today. See `DAILY_MAX_CONTINUES`. */
+  continuesUsed: number;
+}
+
+/** Rewarded continues a player may take per day. One: enough to rescue a good run, not enough to make the life limit decorative (CLAUDE.md #8 — ads are voluntary and never required to finish anything). */
+export const DAILY_MAX_CONTINUES = 1;
+
+/** Lives in a daily run before it ends. The "ограниченные условия" of master-prompt §74 — the campaign itself stays unlimited-retry. */
+export const DAILY_LIVES = 3;
+
+function emptyDaily(date = ''): DailyRecord {
+  return { date, bestTimeMs: null, bestDeaths: null, continuesUsed: 0 };
+}
+
+interface SaveDataV6 {
+  version: 6;
   completedLevels: string[];
   lastLevelId: string | null;
   credits: number;
   inventory: InventoryData;
   /** Yandex purchase tokens already granted — the idempotency guard against a double-processed or replayed purchase (master-prompt §6/§44 scenario F). */
   processedPurchaseTokens: string[];
-  /** Keyed by `${levelId}::${variantId}` (GhostService owns that scheme) — one best-run trace per level+variant, since different variants have different geometry (CLAUDE.md #4.3). */
+  /** Keyed by level id — one best-run trace per level. It used to carry a `::variantId` suffix, from back when a level had adaptive cuts with different geometry; `parseSave` strips that suffix forward. */
   ghosts: Record<string, GhostRecord>;
   /** Keyed by `sector-01`-style id (`sectors.ts`'s `sectorIdOf`) — best `GameState.sectorElapsedMs()` ever posted for that sector, shown as BEST on `SectorCompleteScene`. No per-variant split like ghosts: a sector's time already blends whatever variant each of its levels happened to serve, so there's no single "canonical" sector run to isolate. */
   sectorBests: Record<string, number>;
+  /** Today's Daily Challenge only — see `DailyRecord`. */
+  daily: DailyRecord;
 }
 
 function defaultInventory(): InventoryData {
@@ -61,7 +97,7 @@ function defaultInventory(): InventoryData {
   };
 }
 
-function emptySave(): SaveDataV5 {
+function emptySave(): SaveDataV6 {
   return {
     version: SAVE_VERSION,
     completedLevels: [],
@@ -71,6 +107,7 @@ function emptySave(): SaveDataV5 {
     processedPurchaseTokens: [],
     ghosts: {},
     sectorBests: {},
+    daily: emptyDaily(),
   };
 }
 
@@ -101,7 +138,7 @@ function sanitizeInventory(raw: unknown): InventoryData {
 }
 
 /** Loose shape covering a v1/v2/v3/v4/v5 payload — `version` is the only field whose type actually conflicts between them, so it's widened here rather than intersected. */
-type AnySaveShape = Partial<Omit<SaveDataV5, 'version'>> & { version?: unknown };
+type AnySaveShape = Partial<Omit<SaveDataV6, 'version'>> & { version?: unknown };
 
 /** Drops anything that isn't a plausible `[t,x,y,facing]×N` trace — a corrupt/truncated entry is dropped whole rather than replayed as a broken ghost. */
 function sanitizeGhostRecord(raw: unknown): GhostRecord | null {
@@ -113,12 +150,33 @@ function sanitizeGhostRecord(raw: unknown): GhostRecord | null {
   return { timeMs: parsed.timeMs, samples: parsed.samples };
 }
 
+/**
+ * Ghost keys lost their `::variantId` suffix when the adaptive variants were
+ * removed, and this is where an existing save catches up rather than losing
+ * its personal bests (CLAUDE.md #8 — progress is never lost).
+ *
+ * Only the canonical `::standard` traces carry forward: a trace recorded in
+ * a `gentle` or `bold` cut was run through geometry that no longer exists,
+ * so replaying it against the one remaining shape would show a ghost
+ * clipping walls. Those are dropped, which costs a player a replay overlay
+ * and nothing else. Where a save somehow holds both, the faster wins.
+ */
 function sanitizeGhosts(raw: unknown): Record<string, GhostRecord> {
   if (!raw || typeof raw !== 'object') return {};
   const result: Record<string, GhostRecord> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const record = sanitizeGhostRecord(value);
-    if (record) result[key] = record;
+    if (!record) continue;
+    const legacy = key.indexOf('::');
+    if (legacy === -1) {
+      const existing = result[key];
+      if (!existing || record.timeMs < existing.timeMs) result[key] = record;
+      continue;
+    }
+    if (key.slice(legacy + 2) !== 'standard') continue;
+    const levelId = key.slice(0, legacy);
+    const existing = result[levelId];
+    if (!existing || record.timeMs < existing.timeMs) result[levelId] = record;
   }
   return result;
 }
@@ -132,8 +190,21 @@ function sanitizeSectorBests(raw: unknown): Record<string, number> {
   return result;
 }
 
+function sanitizeDaily(value: unknown): DailyRecord {
+  const raw = value as Partial<DailyRecord> | null | undefined;
+  if (!raw || typeof raw.date !== 'string') return emptyDaily();
+  const positiveOrNull = (v: unknown): number | null =>
+    typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null;
+  return {
+    date: raw.date,
+    bestTimeMs: positiveOrNull(raw.bestTimeMs),
+    bestDeaths: positiveOrNull(raw.bestDeaths),
+    continuesUsed: Number.isInteger(raw.continuesUsed) && (raw.continuesUsed as number) >= 0 ? (raw.continuesUsed as number) : 0,
+  };
+}
+
 /** A v1/v2 save (or anything unrecognized) migrates forward with sane shop defaults and no ghost data yet — never a hard failure, same "fall back to a clean save" posture v1 already had for a fully malformed payload. */
-function parseSave(raw: unknown): SaveDataV5 {
+function parseSave(raw: unknown): SaveDataV6 {
   const parsed = raw as AnySaveShape | null;
   if (!parsed || !Array.isArray(parsed.completedLevels)) return emptySave();
 
@@ -153,6 +224,7 @@ function parseSave(raw: unknown): SaveDataV5 {
     processedPurchaseTokens: sanitizeStringArray(parsed.processedPurchaseTokens),
     ghosts: sanitizeGhosts(parsed.ghosts),
     sectorBests: sanitizeSectorBests(parsed.sectorBests),
+    daily: sanitizeDaily(parsed.daily),
   };
 }
 
@@ -208,7 +280,25 @@ function mergeSectorBests(local: Record<string, number>, cloud: Record<string, n
   return result;
 }
 
-function mergeSaves(local: SaveDataV5, cloud: SaveDataV5): SaveDataV5 {
+/**
+ * Only the same date merges, and then conservatively: the faster time wins
+ * and the continues taken on EITHER device count against the day's
+ * allowance. Different dates means one of the two is yesterday's — the
+ * local one is kept and `getDaily` rolls it over on the next read, rather
+ * than resurrecting a stale day from the cloud.
+ */
+function mergeDaily(local: DailyRecord, cloud: DailyRecord): DailyRecord {
+  if (local.date !== cloud.date) return local;
+  const faster = cloud.bestTimeMs !== null && (local.bestTimeMs === null || cloud.bestTimeMs < local.bestTimeMs);
+  return {
+    date: local.date,
+    bestTimeMs: faster ? cloud.bestTimeMs : local.bestTimeMs,
+    bestDeaths: faster ? cloud.bestDeaths : local.bestDeaths,
+    continuesUsed: Math.max(local.continuesUsed, cloud.continuesUsed),
+  };
+}
+
+function mergeSaves(local: SaveDataV6, cloud: SaveDataV6): SaveDataV6 {
   return {
     version: SAVE_VERSION,
     completedLevels: unionArrays(local.completedLevels, cloud.completedLevels),
@@ -218,6 +308,7 @@ function mergeSaves(local: SaveDataV5, cloud: SaveDataV5): SaveDataV5 {
     processedPurchaseTokens: unionArrays(local.processedPurchaseTokens, cloud.processedPurchaseTokens),
     ghosts: mergeGhosts(local.ghosts, cloud.ghosts),
     sectorBests: mergeSectorBests(local.sectorBests, cloud.sectorBests),
+    daily: mergeDaily(local.daily, cloud.daily),
   };
 }
 
@@ -233,7 +324,7 @@ function mergeSaves(local: SaveDataV5, cloud: SaveDataV5): SaveDataV5 {
  * to sane defaults, field by field" is still an open `TODO.md` item.
  */
 class SaveServiceController {
-  private data: SaveDataV5 = parseSave(readJson(STORAGE_KEY));
+  private data: SaveDataV6 = parseSave(readJson(STORAGE_KEY));
   private cloudSyncStarted = false;
 
   private persist(): void {
@@ -333,7 +424,7 @@ class SaveServiceController {
     this.persist();
   }
 
-  // --- Ghost (GhostService owns the `${levelId}::${variantId}` key scheme — see its doc comment) ---
+  // --- Ghost (keyed by level id — see `GhostService`) ---
 
   getGhost(key: string): GhostRecord | null {
     return this.data.ghosts[key] ?? null;
@@ -359,6 +450,44 @@ class SaveServiceController {
     if (existing !== undefined && existing <= timeMs) return;
     this.data.sectorBests[sectorId] = timeMs;
     this.persist();
+  }
+
+  // --- Daily Challenge (one UTC date at a time — see `DailyRecord`) ---
+
+  /**
+   * Today's record, rolled over first: asking about a new date clears
+   * yesterday's rather than reporting it. Every other daily accessor goes
+   * through this, so a stale date can never be read as if it were today's.
+   */
+  getDaily(date: string): DailyRecord {
+    if (this.data.daily.date !== date) {
+      this.data.daily = emptyDaily(date);
+      this.persist();
+    }
+    return this.data.daily;
+  }
+
+  /** No-ops unless this beats today's stored time — same enforcement posture as `saveGhostIfBest`. */
+  saveDailyResult(date: string, timeMs: number, deaths: number): void {
+    const daily = this.getDaily(date);
+    if (daily.bestTimeMs !== null && daily.bestTimeMs <= timeMs) return;
+    daily.bestTimeMs = timeMs;
+    daily.bestDeaths = deaths;
+    this.persist();
+  }
+
+  /** True while the player still has a rewarded continue left today. */
+  canUseDailyContinue(date: string): boolean {
+    return this.getDaily(date).continuesUsed < DAILY_MAX_CONTINUES;
+  }
+
+  /** Spends one. Returns false (and spends nothing) once the day's allowance is gone — the limit is enforced here, once, not trusted to the UI. */
+  useDailyContinue(date: string): boolean {
+    const daily = this.getDaily(date);
+    if (daily.continuesUsed >= DAILY_MAX_CONTINUES) return false;
+    daily.continuesUsed += 1;
+    this.persist();
+    return true;
   }
 
   /** Resets only the shop fields (credits/inventory/processed tokens) back to a fresh save's defaults — level progress (`completedLevels`/`lastLevelId`) is untouched. Used by `ShopDevTools`; harmless enough to also back a future "reset purchases" settings option. */

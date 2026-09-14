@@ -4,16 +4,21 @@ import { SECTOR_02_LEVELS } from '@/data/levels/sector02';
 import { SECTOR_03_LEVELS } from '@/data/levels/sector03';
 import { SECTOR_04_LEVELS } from '@/data/levels/sector04';
 import { SECTOR_05_LEVELS } from '@/data/levels/sector05';
-import { LEVEL_VARIANTS } from '@/data/levels/variants';
 
 /**
- * Single registry of every handcrafted level, in play order. Centralizes
- * what `GameplayScene` used to duplicate locally.
+ * Single registry of every handcrafted level, in play order.
  *
- * `ALL_LEVELS` holds each level's base ("standard") shape — what
- * `LevelValidator`/tests check by default, and what a `variantId` that
- * isn't in `LEVEL_VARIANTS` falls back to. `DifficultyDirector` (Phase 3)
- * is the only caller that ever passes a real `variantId`.
+ * ONE SHAPE PER LEVEL, and that is now the whole story. There used to be a
+ * second layer here — hand-authored `gentle`/`bold`/`troll` cuts of eleven
+ * levels, picked between attempts by `DifficultyDirector` from the player's
+ * own profile. The owner had it removed: "давай уберём систему gentle bold
+ * troll, чтобы всегда у нас было одинаково". Every player now meets the
+ * same level, always, which also means the level a leaderboard time or a
+ * ghost was set on is unambiguous without a variant to qualify it.
+ *
+ * THE SYSTEM still watches and still talks (`Commentator`,
+ * `PlayerProfile`, `SystemMemory`); what it no longer does is change what
+ * it is watching.
  */
 const ALL_LEVELS: LevelDef[] = [
   ...SECTOR_01_LEVELS,
@@ -23,12 +28,10 @@ const ALL_LEVELS: LevelDef[] = [
   ...SECTOR_05_LEVELS,
 ];
 
-export function getLevel(id: string, variantId?: string): LevelDef {
-  const level = ALL_LEVELS.find((l) => l.id === id);
+export function getLevel(id: string): LevelDef {
+  const level = ALL_LEVELS.find((lvl) => lvl.id === id);
   if (!level) throw new Error(`Unknown level id: ${id}`);
-  if (!variantId || variantId === 'standard') return level;
-  const variant = LEVEL_VARIANTS[id]?.[variantId as 'gentle' | 'bold' | 'troll'];
-  return variant ?? level;
+  return level;
 }
 
 export function getNextLevelId(id: string): string | undefined {

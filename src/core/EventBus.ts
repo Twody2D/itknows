@@ -5,7 +5,7 @@ export interface GameEvents {
   'player:died': { cause: DeathCause; x: number; y: number };
   'player:landed': { x: number; y: number };
   'player:jumped': undefined;
-  'level:loaded': { levelId: string; variantId: string };
+  'level:loaded': { levelId: string };
   'level:completed': { levelId: string; timeMs: number; deaths: number };
   'level:restart': undefined;
   'trap:armed': { trapId: string };

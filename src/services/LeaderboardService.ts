@@ -1,17 +1,6 @@
 import { YandexGamesService, type YsdkLeaderboardEntry } from './YandexGamesService';
 
 /**
- * The one variant id every level's own leaderboard is comparable against
- * (`DifficultyDirector.selectVariant`'s fallback string). An adaptive
- * variant (`gentle`/`bold`/`troll`) is picked from the player's own recent
- * behavior, so its time is never a fair comparison across players —
- * decided in `TODO.md`, "Решённые вопросы" #4, and re-affirmed in
- * `docs/yandex-games.md`. `submitLevelScore` enforces this at the one place
- * a score ever leaves the game, not by trusting every caller to check first.
- */
-const CANONICAL_VARIANT_ID = 'standard';
-
-/**
  * Per-level leaderboard technical names. Yandex Games leaderboards are
  * configured server-side, by name, in the developer console — this game can
  * never create one from client code. Real submissions/reads only work once
@@ -30,9 +19,18 @@ function sectorLeaderboardNameFor(sectorId: string): string {
 }
 
 class LeaderboardServiceController {
-  /** Wired onto `level:completed` (see `LeaderboardSubmission.ts`) — silently skipped for anything but the canonical variant, and for a guest (submitting requires auth), same best-effort contract as the SDK facade underneath. */
-  async submitLevelScore(levelId: string, timeMs: number, variantId: string): Promise<void> {
-    if (variantId !== CANONICAL_VARIANT_ID) return;
+  /**
+   * Wired onto `level:completed` (see `LeaderboardSubmission.ts`) — silently
+   * skipped for a guest (submitting requires auth), same best-effort
+   * contract as the SDK facade underneath.
+   *
+   * There used to be a canonical-variant gate here, because an adaptive cut
+   * of a level was picked from the player's own behavior and its time was
+   * therefore never comparable across players. The adaptive layer is gone
+   * (`LevelFactory`): one shape per level means every time posted is a time
+   * on the same level, and there is nothing left to filter.
+   */
+  async submitLevelScore(levelId: string, timeMs: number): Promise<void> {
     await YandexGamesService.submitScore(leaderboardNameFor(levelId), Math.round(timeMs));
   }
 
