@@ -270,6 +270,22 @@ export function buildEnvironmentLayers(
     }
   }
 
+  // GROUND HAZE — a solid band of the mid layer's own colour sitting on the
+  // horizon, fading upward over a few steps.
+  //
+  // Without it the gaps between silhouettes run all the way down to the
+  // floor, and a narrow one — measured at 3px on DROP, between two towers
+  // that nearly meet — is a dark vertical tick standing on the ground line.
+  // It means nothing, it lands wherever the seed puts it, and a player who
+  // has learned that this floor can give way reads it as a mark: "тёмная
+  // засечка... я вижу стык где будет яма" (owner). The haze cuts every one
+  // of those gaps off before it reaches the ground, so the line the player
+  // walks on is never interrupted by the city behind it.
+  for (let i = 0; i < 7; i++) {
+    mid.fillStyle(PALETTE.layerMid, 1 - i * 0.14);
+    mid.fillRect(-40, towerBaseY - 2 - i * 3, worldWidth + 80, 4);
+  }
+
   // A handful of sagging cables, not a full-width repeating comb.
   mid.lineStyle(1, PALETTE.layerMid, 1);
   for (let k = 0; k < theme.cableCount; k++) {

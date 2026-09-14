@@ -39,11 +39,21 @@ export function drawGroundTop(ctx: CanvasRenderingContext2D, seam: 0 | 1 | 2 | 3
 
   // Panel seam(s) — position varies by variant so consecutive tiles don't all
   // look like their own tiny panel; seam 3 has none (mid-panel), the rest cut
-  // the tile at a different point instead of always both edges.
-  ctx.fillStyle = hexToCss(PALETTE.metalDark, 0.6);
+  // the tile at a different point.
+  //
+  // NEVER ON THE OUTER PIXELS. Seam 0 used to draw on x=0 and x=TILE_SIZE-1,
+  // so whenever it landed next to another tile that also seamed its facing
+  // edge, the two 1px lines met and the floor showed a 2px dark tick —
+  // darker and twice as wide as any seam is meant to be. Measured on DROP at
+  // x=198-199. It means nothing, it is scattered at random, and a player who
+  // has learned that this floor gives way reads it as a mark: "тёмная
+  // засечка... я вижу стык где будет яма" (owner). Inset by one, the seams
+  // still divide the run into panels and two tiles can never pool into one
+  // heavier line.
+  ctx.fillStyle = hexToCss(PALETTE.metalDark, 0.45);
   if (seam === 0) {
-    ctx.fillRect(0, 4, 1, TILE_SIZE - 4);
-    ctx.fillRect(TILE_SIZE - 1, 4, 1, TILE_SIZE - 4);
+    ctx.fillRect(1, 4, 1, TILE_SIZE - 4);
+    ctx.fillRect(TILE_SIZE - 2, 4, 1, TILE_SIZE - 4);
   } else if (seam === 1) {
     ctx.fillRect(3, 4, 1, TILE_SIZE - 4);
   } else if (seam === 2) {
