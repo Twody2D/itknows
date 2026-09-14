@@ -281,9 +281,18 @@ export function buildEnvironmentLayers(
   // засечка... я вижу стык где будет яма" (owner). The haze cuts every one
   // of those gaps off before it reaches the ground, so the line the player
   // walks on is never interrupted by the city behind it.
+  // Opaque for the first 10px, then fading. A translucent band was not
+  // enough: at 0.5-0.8 alpha the edge of a silhouette still shows through
+  // it as a contrast step, and a contrast step running down to the lip is
+  // the same dark tick it was before — the owner found one under the exit
+  // door on SYSTEM CORE after the first attempt at this. Nothing of the
+  // skyline reaches the ground line any more; the fade above it is what
+  // keeps the band from reading as a wall.
+  mid.fillStyle(PALETTE.layerMid, 1);
+  mid.fillRect(-40, towerBaseY - 10, worldWidth + 80, 12);
   for (let i = 0; i < 7; i++) {
-    mid.fillStyle(PALETTE.layerMid, 1 - i * 0.14);
-    mid.fillRect(-40, towerBaseY - 2 - i * 3, worldWidth + 80, 4);
+    mid.fillStyle(PALETTE.layerMid, 0.86 - i * 0.12);
+    mid.fillRect(-40, towerBaseY - 13 - i * 3, worldWidth + 80, 4);
   }
 
   // A handful of sagging cables, not a full-width repeating comb.

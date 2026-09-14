@@ -96,20 +96,37 @@ export function drawGroundFill(ctx: CanvasRenderingContext2D): void {
   ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
 }
 
-/** A floating structural slab — visually distinct from ground so "what I can stand on" reads at a glance. */
+/**
+ * A floating structural slab — the SAME MATERIAL as the ground, by the
+ * owner's request ("сделай чтобы платформы которые летают были такого же
+ * цвета как и основная земля").
+ *
+ * It used to be its own thing: a thinner cap, a dimmer lip, a slightly
+ * different body, on the theory that "what I can stand on" should be
+ * distinguishable from the floor. In practice both are things you stand on,
+ * and two greys that nearly match read as an inconsistency rather than as
+ * information. The top is now byte-identical to `drawGroundTop`'s — same
+ * cap, same lip — and the only thing that differs is the underside, which
+ * ground does not have: a dark line so a slab hanging in the air still has
+ * a bottom edge.
+ */
 export function drawPlatformSlab(ctx: CanvasRenderingContext2D, bolt: boolean): void {
   ctx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
+  ctx.fillStyle = hexToCss(PALETTE.metalDark);
+  ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
   ctx.fillStyle = hexToCss(PALETTE.metalMid);
-  ctx.fillRect(0, 1, TILE_SIZE, TILE_SIZE - 2);
+  ctx.fillRect(0, 3, TILE_SIZE, TILE_SIZE - 4);
   ctx.fillStyle = hexToCss(PALETTE.metalEdge);
-  ctx.fillRect(0, 0, TILE_SIZE, 1);
+  ctx.fillRect(0, 0, TILE_SIZE, 3);
+  ctx.fillStyle = hexToCss(PALETTE.cyanDim, 0.9);
+  ctx.fillRect(0, 0, TILE_SIZE, 2);
+  // The underside — the one honest difference from ground, which has none.
+  ctx.fillStyle = hexToCss(PALETTE.outline, 0.55);
   ctx.fillRect(0, TILE_SIZE - 1, TILE_SIZE, 1);
-  ctx.fillStyle = hexToCss(PALETTE.cyanDim, 0.7);
-  ctx.fillRect(0, 0, TILE_SIZE, 1);
   if (bolt) {
     ctx.fillStyle = hexToCss(PALETTE.metalDark, 0.8);
-    ctx.fillRect(2, 4, 1, 1);
-    ctx.fillRect(TILE_SIZE - 3, 4, 1, 1);
+    ctx.fillRect(2, 6, 1, 1);
+    ctx.fillRect(TILE_SIZE - 3, 6, 1, 1);
   }
 }
 
@@ -133,22 +150,22 @@ export function drawPlatformSlab(ctx: CanvasRenderingContext2D, bolt: boolean): 
 export function drawPlatformSlabCracked(ctx: CanvasRenderingContext2D): void {
   drawPlatformSlab(ctx, false);
   // A dimmer lip — still the platform's own line, visibly not carrying.
-  ctx.fillStyle = hexToCss(PALETTE.metalDark, 0.55);
-  ctx.fillRect(0, 0, TILE_SIZE, 1);
+  ctx.fillStyle = hexToCss(PALETTE.metalDark, 0.6);
+  ctx.fillRect(0, 0, TILE_SIZE, 2);
   ctx.fillStyle = hexToCss(PALETTE.cyanDim, 0.3);
-  ctx.fillRect(0, 0, TILE_SIZE, 1);
+  ctx.fillRect(0, 0, TILE_SIZE, 2);
   // The fracture: a stepped dark line, plus a highlight on its upper side
   // so it reads as a split rather than a smudge at 1px.
   ctx.fillStyle = hexToCss(PALETTE.outline, 0.85);
-  ctx.fillRect(2, 2, 1, 3);
-  ctx.fillRect(3, 4, 1, 2);
-  ctx.fillRect(4, 5, 2, 1);
-  ctx.fillRect(6, 4, 1, 3);
-  ctx.fillRect(7, 6, 1, 3);
+  ctx.fillRect(2, 3, 1, 3);
+  ctx.fillRect(3, 5, 1, 2);
+  ctx.fillRect(4, 6, 2, 1);
+  ctx.fillRect(6, 5, 1, 3);
+  ctx.fillRect(7, 7, 1, 2);
   ctx.fillStyle = hexToCss(PALETTE.metalEdge, 0.5);
-  ctx.fillRect(3, 2, 1, 2);
-  ctx.fillRect(5, 4, 1, 1);
-  ctx.fillRect(7, 4, 1, 2);
+  ctx.fillRect(3, 3, 1, 2);
+  ctx.fillRect(5, 5, 1, 1);
+  ctx.fillRect(7, 5, 1, 2);
 }
 
 export function drawSpikeTile(ctx: CanvasRenderingContext2D): void {
