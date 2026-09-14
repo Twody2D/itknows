@@ -45,7 +45,13 @@ pnpm levels       # ASCII-раскладка всех 30 уровней + вер
 pnpm build        # production build в dist/
 pnpm preview      # локальный просмотр production build
 pnpm size         # отчёт по размеру dist/ (бюджет — docs/performance-budget.md)
+pnpm package      # проверить сборку и упаковать zip для консоли Яндекс Игр
 ```
+
+`pnpm package` не просто архивирует: он отказывается паковать сборку, в
+которой есть запрещённый формат ассета, отладочный след (`console.log`,
+dev-оверлей) или абсолютный путь в `index.html` — последний сломался бы
+внутри iframe Яндекса.
 
 ## Архитектура
 

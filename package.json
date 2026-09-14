@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src tests",
     "size": "node scripts/size-report.mjs",
-    "levels": "vite-node scripts/preview-levels.ts"
+    "levels": "vite-node scripts/preview-levels.ts",
+    "package": "node scripts/package-build.mjs"
   },
   "dependencies": {
     "phaser": "^3.90.0"

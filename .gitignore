@@ -1,6 +1,9 @@
 node_modules/
 dist/
 dist-zip/
+# Архив для загрузки в консоль Яндекс Игр — собирается из dist/ командой
+# `pnpm package`, поэтому в репозитории ему делать нечего.
+it-knows-*.zip
 *.log
 .DS_Store
 Thumbs.db
