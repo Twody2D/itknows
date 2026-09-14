@@ -31,7 +31,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   /** Raised by the scene for one frame while the android's footing is a floor that has already given way — see `notifyFootingCollapsed`. */
   private footingCollapsed = false;
   private lastJumpPressedAtMs = -Infinity;
-
+  private jumpCutApplied = false;
 
   private currentAnim: PlayerAnimState = 'idle';
   private lifeState: LifeState = 'alive';
@@ -141,12 +141,21 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     const hasBufferedJump = nowMs - this.lastJumpPressedAtMs <= PHYSICS.jumpBufferMs;
 
     if (hasBufferedJump && canCoyoteJump) {
-      // Every jump is the full jump — see `PHYSICS.jumpVelocity`'s note on
-      // why the release-to-cut branch that used to live here is gone.
       this.body.setVelocityY(PHYSICS.jumpVelocity);
       this.lastJumpPressedAtMs = -Infinity;
       this.lastGroundedAtMs = -Infinity;
+      this.jumpCutApplied = false;
       EventBus.emit('player:jumped', undefined);
+    } else if (!this.inputState.isJumpDown() && this.body.velocity.y < 0 && !this.jumpCutApplied) {
+      // Applied once per jump, not every frame the key stays up — multiplying
+      // every frame compounded (0.45, then 0.45² within 2 frames, ...), so a
+      // tap shorter than ~3 frames decayed almost to zero velocity instead of
+      // a short hop. That tiny hop touched ground again almost immediately,
+      // and with a jump press still buffered from rapid tapping, re-triggered
+      // an instant re-jump — the character visibly juddering in place instead
+      // of jumping, exactly what rapid space-tapping produced.
+      this.body.setVelocityY(this.body.velocity.y * PHYSICS.jumpCutMultiplier);
+      this.jumpCutApplied = true;
     }
 
     const wantLeft = this.inputState.left;

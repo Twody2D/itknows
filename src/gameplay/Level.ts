@@ -27,6 +27,7 @@ import { SpikeWallTrap } from '@/traps/SpikeWallTrap';
 import { OrbitSpikeTrap } from '@/traps/OrbitSpikeTrap';
 import { SwingingSpikeTrap } from '@/traps/SwingingSpikeTrap';
 import { LoopSpikeTrap } from '@/traps/LoopSpikeTrap';
+import { widenForPlatforms } from '@/data/levels/ambush';
 import { hash01, stringHash } from '@/art/hash';
 import { PALETTE } from '@/config/palette';
 
@@ -118,7 +119,13 @@ function groundTopKey(levelSeed: number, col: number): string {
  * `trigger` defs reference another trap's `id` — everything triggerable
  * must exist before triggers are wired to it.
  */
-function buildTraps(scene: Phaser.Scene, defs: TrapDef[], levelSeed: number, groundRow: number): BuiltTraps {
+function buildTraps(
+  scene: Phaser.Scene,
+  defs: TrapDef[],
+  levelSeed: number,
+  groundRow: number,
+  platforms: LevelDef['platforms'],
+): BuiltTraps {
   const result: BuiltTraps = {
     updatable: [],
     lethalHazards: [],
@@ -464,11 +471,15 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[], levelSeed: number, gro
     }
   }
 
-  for (const def of triggerDefs) {
-    const target = triggerable.get(def.targetId);
+  for (const rawDef of triggerDefs) {
+    const target = triggerable.get(rawDef.targetId);
     if (!target) {
-      throw new Error(`trigger ${def.id}: unknown targetId "${def.targetId}"`);
+      throw new Error(`trigger ${rawDef.id}: unknown targetId "${rawDef.targetId}"`);
     }
+    // Raised, where needed, to also cover a jump launched from a nearby
+    // platform — see `widenForPlatforms`'s doc comment for the PATROL bug
+    // this exists to fix.
+    const def = widenForPlatforms(rawDef, platforms);
     const x = def.col * TILE_SIZE + (def.width * TILE_SIZE) / 2;
     const y = def.row * TILE_SIZE + (def.height * TILE_SIZE) / 2;
     const trap = new TriggerTrap(scene, {
@@ -658,7 +669,7 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
     y: def.groundRow * TILE_SIZE,
   };
 
-  const traps = buildTraps(scene, def.traps ?? [], levelSeed, def.groundRow);
+  const traps = buildTraps(scene, def.traps ?? [], levelSeed, def.groundRow, def.platforms);
 
   return {
     groundGroup,

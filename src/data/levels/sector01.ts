@@ -174,6 +174,12 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       // clock, only on approach. The 500ms warning is `moveSpeed × lead`
       // again: run straight at it and it is lethal exactly as you arrive.
       // Stopping, or jumping the three-column span, both clear it.
+      //
+      // This trigger's columns sit close enough to the second ledge (`col:
+      // 26, row: 19`) that a jump off it peaks well above this band's
+      // ground-sized ceiling — `widenForPlatforms` (`ambush.ts`, applied to
+      // every level's triggers in `Level.ts`) is what raises it, not a
+      // number authored here.
       ...floorSpikes('sbank-01', 38, 3, 22),
       // And one more the other way round: the walk back from the patrol
       // spike, which until now was the safe half of the level.
@@ -182,6 +188,16 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
       // first was the only one the player ever met. Past the patrol's right
       // turn it is the ambush the comment above describes and nothing is
       // hiding inside anything else.
+      //
+      // This one is the real find: its columns (31-33) sit directly under
+      // the PEAK of a jump launched off that same ledge, not just under its
+      // landing — measured live at row ≈15.7-15.9 while crossing, well above
+      // the un-widened band's ceiling (row 17), so the trigger never fired
+      // at all and the player jumped the whole ambush unseen: "могу
+      // перепрыгнуть триггер второго шипа и он активизируется чуть позже"
+      // (owner; what they actually met next was `sbank-01`, arriving late
+      // enough itself to read as the same complaint). `widenForPlatforms`
+      // fixes both.
       ...dropSpike('dspike-01', 34, 21, 22),
     ],
   },

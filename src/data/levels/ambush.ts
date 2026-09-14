@@ -1,6 +1,6 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
 import { TILE_SIZE } from '@/config/display';
-import { MAX_JUMP_RISE_PX } from '@/gameplay/jumpPhysics';
+import { MAX_JUMP_RISE_PX, REACH_AT_SAME_HEIGHT_PX } from '@/gameplay/jumpPhysics';
 import { PLAYER_BODY_HEIGHT } from '@/config/physics';
 
 type Trap = NonNullable<LevelDef['traps']>[number];
@@ -129,7 +129,7 @@ export const PIT_SHIFT_MS = 420;
  * Derived rather than picked, so it cannot drift away from the jump it has
  * to cover if the physics are ever retuned.
  */
-const APPROACH_BAND_TILES = Math.ceil((MAX_JUMP_RISE_PX + PLAYER_BODY_HEIGHT) / TILE_SIZE);
+export const APPROACH_BAND_TILES = Math.ceil((MAX_JUMP_RISE_PX + PLAYER_BODY_HEIGHT) / TILE_SIZE);
 
 /**
  * A trigger zone covering everywhere a player can be while crossing these
@@ -138,6 +138,12 @@ const APPROACH_BAND_TILES = Math.ceil((MAX_JUMP_RISE_PX + PLAYER_BODY_HEIGHT) / 
  * Approaching from the left is the default (`width` columns ending where
  * the hazard is); `from: 'right'` mirrors it for a hazard approached the
  * other way.
+ *
+ * This band is sized for a jump launched from `surfaceRow` itself. A jump
+ * launched from a nearby ELEVATED platform peaks higher still, which this
+ * function has no way to know about — `widenForPlatforms` below is what
+ * corrects for that, applied once per level after every trigger and every
+ * platform both exist.
  */
 export function approach(
   id: string,
@@ -159,6 +165,48 @@ export function approach(
     height: APPROACH_BAND_TILES,
     targetId,
   };
+}
+
+/**
+ * Raises a trigger's band to also cover the peak of a jump launched from any
+ * PLATFORM whose reach overlaps the trigger's columns — not just a jump off
+ * the ground surface the trigger was originally sized from.
+ *
+ * A real bug on PATROL: `dspike-01-trigger` sat under a ledge (`col: 26,
+ * row: 19`), sized by `approach()` for a jump off the GROUND three rows
+ * below. A jump launched from the ledge itself peaks three rows higher
+ * still — so a player clearing the ledge stayed above the band for the
+ * whole crossing and only dropped back into it at the hazard column,
+ * meaning the trigger fired far too late or not at all: "могу перепрыгнуть
+ * триггер второго шипа и он активизируется чуть позже" (owner). Measured
+ * live crossing PATROL's own ledge: row ≈15.7-15.9 over the trigger's
+ * columns, well above that trigger's un-widened ceiling of row 17.
+ *
+ * Applied once, automatically, to every level's triggers (`Level.ts`) —
+ * not something a level author has to remember per hazard, because the
+ * geometry that makes it necessary (a ledge near a sprung trap) is exactly
+ * the kind of layout choice a level is designed around, not tuned against.
+ * Only ever raises a band (lowers its `row`), never shrinks one.
+ */
+export function widenForPlatforms(
+  trigger: Of<'trigger'>,
+  platforms: ReadonlyArray<{ col: number; row: number; width: number }>,
+): Of<'trigger'> {
+  const jumpReachTiles = Math.ceil(REACH_AT_SAME_HEIGHT_PX / TILE_SIZE);
+  const triggerFrom = trigger.col;
+  const triggerTo = trigger.col + trigger.width - 1;
+  const overlaps = (from: number, to: number): boolean => triggerFrom <= to && triggerTo >= from;
+
+  let top = trigger.row;
+  for (const platform of platforms) {
+    const peakRow = platform.row - APPROACH_BAND_TILES;
+    const reachesFromRight = overlaps(platform.col + platform.width, platform.col + platform.width + jumpReachTiles);
+    const reachesFromLeft = overlaps(platform.col - jumpReachTiles, platform.col - 1);
+    if (reachesFromRight || reachesFromLeft) top = Math.min(top, peakRow);
+  }
+
+  if (top === trigger.row) return trigger;
+  return { ...trigger, row: top, height: trigger.row + trigger.height - top };
 }
 
 /**

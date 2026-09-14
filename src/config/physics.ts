@@ -13,23 +13,19 @@ export const PHYSICS = {
   friction: 1200,
 
   jumpVelocity: -250,
-  // THERE IS NO VARIABLE JUMP HEIGHT ANY MORE. Releasing the button used to
-  // cut the rise to 45% of its remaining velocity, so a tap gave a short hop
-  // and a hold gave the full arc. The owner asked for it gone — "может
-  // сделать всегда высокий прыжок и убрать маленький при быстром нажатии" —
-  // so every jump is now the full jump, whatever the press looks like.
-  //
-  // This is a real trade and it is worth naming: the short hop was the only
-  // way to pass under something without clearing it, and the only way to
-  // land on a ledge barely above your head without overshooting it. What it
-  // buys is that the height of a jump no longer depends on how long a
-  // finger happened to stay on glass — which on a phone is the difference
-  // between a jump and a mis-timed one, and CLAUDE.md #5 is emphatic that
-  // input is never allowed to be the cause of a death.
+  // Variable jump height is back (owner, 2026-09-14, one round after asking
+  // for it gone — "верни всё же разные прыжки, по степени нажатия
+  // пробела"). Releasing the button cuts the rise to 45% of its remaining
+  // upward velocity, so a tap gives a short hop and a hold gives the full
+  // arc — this is the reach the short-hop trick from before removal used,
+  // restored rather than reinvented (`Player.ts`, once-per-jump guard
+  // included, since a naive per-frame cut is what caused the juddering
+  // re-jump bug the guard exists for).
   //
   // Nothing about level reachability changes: `jumpPhysics.ts` and the
-  // solver have always measured the FULL jump, so every level is still
-  // proved passable by the same numbers.
+  // solver have always measured the FULL jump (the held-button case), so
+  // every level is proved passable independent of this multiplier.
+  jumpCutMultiplier: 0.45,
   // There is deliberately no dash. Run and jump are the whole vocabulary;
   // every level in the game is authored against that reach (`jumpPhysics.ts`),
   // and a dash on Shift only ever let a player skip past hazards they were
