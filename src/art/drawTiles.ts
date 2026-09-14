@@ -63,20 +63,26 @@ export function drawGroundTop(ctx: CanvasRenderingContext2D, light: boolean): vo
   }
 }
 
-export function drawGroundEdge(ctx: CanvasRenderingContext2D): void {
+export function drawGroundEdge(ctx: CanvasRenderingContext2D, side: 'left' | 'right'): void {
   drawGroundTop(ctx, false);
-  // A dark drop-off cap plus a warm warning sliver right at the lip — a gap
-  // must read as a hazard boundary at a glance, not just a slightly darker
-  // pixel (VISUAL RESET v1 #9: danger has to be legible to a kid, not just
-  // technically telegraphed).
-  ctx.fillStyle = hexToCss(PALETTE.outline, 0.6);
-  ctx.fillRect(TILE_SIZE - 3, 0, 3, TILE_SIZE);
-  // Sits just below Level.ts's full-run cyan rim (2px) so it isn't painted
-  // over by it — the rim says "safe surface", this says "except right here".
+  // A warm sliver right at the lip: a hole has to read as a hazard boundary
+  // at a glance (VISUAL RESET v1 #9).
+  //
+  // The dark cap that used to sit under it is gone. It was a 3px block of
+  // `outline` running the full height of the tile, and that is a black
+  // vertical bar on the floor — the last of the ruling that had the owner
+  // reading marks into the ground ("чёрная засечка на яме так и не
+  // исчезла"). The warm sliver was always the part that carried the
+  // meaning; the bar only made it look like the floor was cracked there.
+  //
+  // It also belongs on the side the hole is actually on. One tile served
+  // both edges and always marked its right-hand side, so the lip on the far
+  // side of a pit was drawn on the wrong end of the tile.
+  const x = side === 'right' ? TILE_SIZE - 3 : 0;
   ctx.fillStyle = hexToCss(PALETTE.dangerAlt, 0.85);
   ctx.shadowColor = hexToCss(PALETTE.dangerAlt, 0.85);
   ctx.shadowBlur = 3;
-  ctx.fillRect(TILE_SIZE - 3, 2, 3, 3);
+  ctx.fillRect(x, 2, 3, 3);
   ctx.shadowBlur = 0;
 }
 

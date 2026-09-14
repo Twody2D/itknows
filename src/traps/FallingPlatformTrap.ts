@@ -165,7 +165,7 @@ export class FallingPlatformTrap {
     this.fallSpeed = config.fallSpeed ?? 120;
     this.state = this.armed ? 'armed' : 'solid';
 
-    this.gameObject = scene.physics.add.sprite(config.x, config.y, config.texture ?? 'tile-ground');
+    this.gameObject = scene.physics.add.sprite(config.x, config.y, config.texture ?? 'tile-ground-top');
     this.body = this.gameObject.body as Phaser.Physics.Arcade.Body;
     this.body.setAllowGravity(false);
     this.body.setImmovable(true);

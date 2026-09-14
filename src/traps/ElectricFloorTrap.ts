@@ -27,7 +27,7 @@ export class ElectricFloorTrap extends Trap {
     super('electric-floor', config.id, { timing: config.timing });
 
     const width = config.widthTiles * TILE_SIZE;
-    this.support = scene.physics.add.staticSprite(config.x, config.y, 'tile-ground');
+    this.support = scene.physics.add.staticSprite(config.x, config.y, 'tile-ground-top');
     this.support.setDisplaySize(width, TILE_SIZE).refreshBody();
     this.support.setTint(PALETTE.cyan);
 

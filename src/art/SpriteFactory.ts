@@ -83,8 +83,7 @@ export function generatePlayerTextures(scene: Phaser.Scene, skinId = 'default'):
 
 export function generateTileTextures(scene: Phaser.Scene): void {
   // 'tile-ground' stays as the default top-edge look — dynamic platform
-  // traps (falling/disappearing/electric-floor) key off it directly; the
-  // position-aware variants below are only for `Level.ts`'s static ground.
+  // traps (falling/disappearing/electric-floor) key off it directly.
   const groundTop = makeCanvas(TILE_SIZE, TILE_SIZE);
   drawGroundTop(groundTop.ctx, false);
   addOrReplaceCanvas(scene, 'tile-ground-top', groundTop.canvas);
@@ -93,9 +92,13 @@ export function generateTileTextures(scene: Phaser.Scene): void {
   drawGroundTop(groundTopLight.ctx, true);
   addOrReplaceCanvas(scene, 'tile-ground-top-light', groundTopLight.canvas);
 
-  const groundEdge = makeCanvas(TILE_SIZE, TILE_SIZE);
-  drawGroundEdge(groundEdge.ctx);
-  addOrReplaceCanvas(scene, 'tile-ground-edge', groundEdge.canvas);
+  const groundEdgeRight = makeCanvas(TILE_SIZE, TILE_SIZE);
+  drawGroundEdge(groundEdgeRight.ctx, 'right');
+  addOrReplaceCanvas(scene, 'tile-ground-edge-right', groundEdgeRight.canvas);
+
+  const groundEdgeLeft = makeCanvas(TILE_SIZE, TILE_SIZE);
+  drawGroundEdge(groundEdgeLeft.ctx, 'left');
+  addOrReplaceCanvas(scene, 'tile-ground-edge-left', groundEdgeLeft.canvas);
 
   const groundFill = makeCanvas(TILE_SIZE, TILE_SIZE);
   drawGroundFill(groundFill.ctx);

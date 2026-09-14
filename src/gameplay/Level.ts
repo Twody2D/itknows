@@ -554,9 +554,11 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
       // player exactly where the floor was about to leave (owner: "яма,
       // которая разрушается, не должна отличаться по внешнему виду с
       // обычной землёй").
-      const isGapEdge = isOpenGap(col - 1) || isOpenGap(col + 1);
+      // The lip is drawn on the side the hole is on, so a pit is bracketed
+      // by two marks facing into it rather than two facing the same way.
+      const edgeSide = isOpenGap(col + 1) ? 'right' : isOpenGap(col - 1) ? 'left' : null;
       const { x, y } = tileCenter(col, def.groundRow);
-      scene.add.image(x, y, isGapEdge ? 'tile-ground-edge' : groundTopKey(levelSeed, col));
+      scene.add.image(x, y, edgeSide ? `tile-ground-edge-${edgeSide}` : groundTopKey(levelSeed, col));
     }
 
     const runWidth = (toCol - fromCol + 1) * TILE_SIZE;

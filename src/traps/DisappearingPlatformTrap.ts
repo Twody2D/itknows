@@ -35,7 +35,7 @@ export class DisappearingPlatformTrap {
     this.crumbleMs = config.crumbleMs ?? 350;
     this.goneMs = config.goneMs ?? 1500;
 
-    this.gameObject = scene.physics.add.staticSprite(config.x, config.y, 'tile-ground');
+    this.gameObject = scene.physics.add.staticSprite(config.x, config.y, 'tile-ground-top');
   }
 
   /**
