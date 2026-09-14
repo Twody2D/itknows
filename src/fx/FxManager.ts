@@ -30,6 +30,26 @@ export class FxManager {
   private victoryEmitter: Emitter;
   private pulses = new Map<string, Phaser.Tweens.Tween>();
   private clipMask: Phaser.Display.Masks.GeometryMask | null = null;
+  /**
+   * Every short-lived object currently wearing `clipMask`.
+   *
+   * A Phaser geometry mask holds a reference to the `Graphics` that defines
+   * it, and every masked object reaches through the mask to that Graphics on
+   * every frame it renders. Destroying the Graphics while anything still
+   * wears the mask therefore does not fail at the destroy — it fails later,
+   * inside the renderer, as `Cannot read properties of null (reading
+   * 'renderWebGL')`, and that exception aborts the frame.
+   *
+   * That is exactly what a fast tab switch in the shop produced. The death
+   * preview's flashes, glitch slices and wipe bars live 140-260ms on a
+   * tween; switching category destroyed the mask under them, the render
+   * loop threw on the next frame, and the canvas froze on whatever it had
+   * last drawn while the DOM text layer carried on updating over the top of
+   * it — "одна вкладка зависает и ломается вся игра... текст и картинки
+   * будут зависать друг на друге" (owner). Both halves of that report are
+   * this one bug.
+   */
+  private readonly masked = new Set<Phaser.GameObjects.GameObject>();
 
   constructor(scene: Phaser.Scene) {
     this.scene = scene;
@@ -159,6 +179,24 @@ export class FxManager {
       if (mask) emitter.setMask(mask);
       else emitter.clearMask();
     }
+    // Clearing the mask has to reach everything that is wearing it right
+    // now, not just the emitters — the caller's next act is to destroy the
+    // Graphics behind it (see `masked`).
+    if (!mask) {
+      for (const object of this.masked) (object as Phaser.GameObjects.Image).clearMask();
+      this.masked.clear();
+    }
+  }
+
+  /**
+   * Masks a short-lived decoration and remembers it until it destroys
+   * itself, so `setClipMask(null)` can take the mask back off again.
+   */
+  private applyClip(object: Phaser.GameObjects.GameObject & { setMask(mask: Phaser.Display.Masks.GeometryMask): unknown }): void {
+    if (!this.clipMask) return;
+    object.setMask(this.clipMask);
+    this.masked.add(object);
+    object.once(Phaser.GameObjects.Events.DESTROY, () => this.masked.delete(object));
   }
 
   shake(durationMs: number, intensity: number): void {
@@ -190,7 +228,7 @@ export class FxManager {
 
   private flash(x: number, y: number, color: number, alpha: number): void {
     const rect = this.scene.add.rectangle(x, y, 24, 24, color, alpha).setDepth(140).setBlendMode(Phaser.BlendModes.ADD);
-    if (this.clipMask) rect.setMask(this.clipMask);
+    this.applyClip(rect);
     this.scene.tweens.add({
       targets: rect,
       alpha: 0,
@@ -211,7 +249,7 @@ export class FxManager {
     for (let i = 0; i < 3; i++) {
       const w = 10 + i * 4;
       const slice = this.scene.add.rectangle(x, y - 6 + i * 5, w, 1, color, 0.5).setDepth(145);
-      if (this.clipMask) slice.setMask(this.clipMask);
+      this.applyClip(slice);
       this.scene.tweens.add({
         targets: slice,
         x: x + (i % 2 === 0 ? kick : -kick),
@@ -226,7 +264,7 @@ export class FxManager {
   /** DATA WIPE's own mark: a solid white bar that sweeps down through the android and thins out as it goes — an erase head, not an explosion. */
   private wipeBar(x: number, y: number): void {
     const bar = this.scene.add.rectangle(x, y - 16, 30, 6, PALETTE.white, 0.9).setDepth(146);
-    if (this.clipMask) bar.setMask(this.clipMask);
+    this.applyClip(bar);
     this.scene.tweens.add({
       targets: bar,
       y: y + 6,
@@ -241,6 +279,7 @@ export class FxManager {
   private pulseRing(x: number, y: number): void {
     const ring = this.scene.add.circle(x, y).setStrokeStyle(1, PALETTE.reward, 0.9).setDepth(140);
     ring.radius = 4;
+    this.applyClip(ring);
     this.scene.tweens.add({
       targets: ring,
       radius: 26,
@@ -253,5 +292,8 @@ export class FxManager {
   destroy(): void {
     for (const tween of this.pulses.values()) tween.stop();
     this.pulses.clear();
+    // Same reasoning as `setClipMask(null)`: whoever owns the mask's
+    // Graphics is about to throw it away.
+    this.setClipMask(null);
   }
 }

@@ -68,6 +68,19 @@ interface Item {
   originY: number;
   opts: DomTextOptions;
   shape?: ShapeSpec;
+  /**
+   * Whether the caller wants this element on screen.
+   *
+   * It has to be remembered rather than read back off `el.style.display`,
+   * because `applyStyle` rewrites that property from scratch — it is the
+   * one place that decides between `inline-block`, `block` and `-webkit-box`
+   * — and it runs again on every restyle and every window resize. Without
+   * this flag a hidden element came back the moment anything touched it:
+   * the "all clear" button's play triangle is hidden when there is no next
+   * sector, and hovering the button recoloured its icon, which restyled the
+   * triangle, which un-hid it straight over the button's real icon.
+   */
+  visible: boolean;
 }
 
 const BASE_SIZE = 9;
@@ -127,7 +140,7 @@ export class DomTextOverlay {
   /** `originX`/`originY` (0..1) work like `PixelLabel.setOrigin` — 0.5,0.5 centers on (vx,vy); 0,0 grows right/down from it. */
   add(vx: number, vy: number, text: string, opts: DomTextOptions, originX = 0, originY = 0): DomTextHandle {
     const el = document.createElement('div');
-    const item: Item = { el, vx, vy, originX, originY, opts: this.fitted(text, opts) };
+    const item: Item = { el, vx, vy, originX, originY, opts: this.fitted(text, opts), visible: true };
     this.applyStyle(item);
     el.textContent = text;
     this.layer.appendChild(el);
@@ -171,7 +184,8 @@ export class DomTextOverlay {
         reposition();
       },
       setVisible: (visible: boolean) => {
-        el.style.display = visible ? 'inline-block' : 'none';
+        item.visible = visible;
+        this.applyStyle(item);
       },
       destroy: () => {
         el.remove();
@@ -206,6 +220,7 @@ export class DomTextOverlay {
       originY,
       opts: { color: 'transparent' },
       shape: { vw, vh, ...style },
+      visible: true,
     };
     this.applyStyle(item);
     this.layer.appendChild(el);
@@ -252,7 +267,8 @@ export class DomTextOverlay {
         reposition();
       },
       setVisible: (visible: boolean) => {
-        el.style.display = visible ? 'block' : 'none';
+        item.visible = visible;
+        this.applyStyle(item);
       },
       destroy: () => {
         el.remove();
@@ -357,6 +373,14 @@ export class DomTextOverlay {
   private applyStyle(item: Item): void {
     const { el, opts, originX } = item;
     const { scaleY } = this.currentScale();
+
+    // Hidden wins over everything below: this method is the only writer of
+    // `display`, so it has to honour the caller's own visibility (see
+    // `Item.visible`) instead of quietly restoring the element.
+    if (!item.visible) {
+      el.style.display = 'none';
+      return;
+    }
 
     if (item.shape) {
       const s = item.shape;

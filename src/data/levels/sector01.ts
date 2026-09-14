@@ -237,16 +237,23 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
         width: 14,
         travelMs: 3000,
       },
-      // Six columns of lead, not fourteen. At fourteen the band reached
-      // right back across the bridge, so the hole finished moving while the
-      // player was still halfway along the ride with their eyes on the far
-      // bank — the trap happened, correctly and invisibly, somewhere they
-      // were not looking, which is a large part of why the owner reported
-      // never having met it. Six is 545ms of approach against a 420ms
-      // shift: still finished before the take-off, and now close enough to
-      // watch. Any shorter and the hole would move under someone already in
-      // the air, which is a coin toss rather than a trap.
-      ...shiftingPit('sp-01', 39, 36, 3, 22, { lead: 6 }),
+      // Two columns of lead, not six, and the hole now moves under a player
+      // who is ALREADY IN THE AIR. That was previously ruled out here in as
+      // many words — "any shorter and the hole would move under someone
+      // already in the air, which is a coin toss rather than a trap" — and
+      // the owner has now asked for exactly that: at six the slab had
+      // finished travelling before the take-off, so the jump was lined up
+      // on a hole that was already in its final place ("платформа которая
+      // передвигается по триггеру срабатывает слишком рано ещё до моего
+      // прыжка, и перепрыгнуть её слишком просто").
+      //
+      // It is not a coin toss, because the slab is 420ms of plainly visible
+      // motion and it is under the player for all of it. What it costs is
+      // the jump taken on the old reading — the attempt, never the run:
+      // `LevelValidator` only ever counts the slab where it ENDS, so the
+      // level is proved passable in exactly the state this leaves it in,
+      // and from a standstill at the lip the crossing is ordinary.
+      ...shiftingPit('sp-01', 39, 36, 3, 22, { lead: 2 }),
     ],
   },
   {

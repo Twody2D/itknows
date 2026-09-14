@@ -10,7 +10,6 @@ import { fadeIn } from '@/ui/SceneFade';
 import { playSfx } from '@/audio/SfxManager';
 import { LEVELS_PER_SECTOR, SECTOR_COUNT, isLevelUnlocked, levelIdFor, sectorIdOf, sectorName } from '@/gameplay/sectors';
 import { SaveService } from '@/services/SaveService';
-import { GhostService } from '@/services/GhostService';
 import { InventoryService } from '@/services/InventoryService';
 import { playerTexturePrefix } from '@/data/shop/skinVisuals';
 import { levelSelectComment } from '@/data/dialogues/levelSelect';
@@ -29,7 +28,7 @@ import { addCheckGlyph, addChevronGlyph, addDiamondGlyph, addPlayTriangle } from
  * otherwise state something the game does not do: **no chips**. The mockup's
  * three-chip row counts collectibles that do not exist in this game. The card
  * shows what the save really holds instead: cleared or not, and the personal
- * best time from the player's own ghost record.
+ * best time from the player's own save.
  *
  * The padlocks are real (`isLevelUnlocked`) — a locked tile gets no hit zone
  * at all, so it cannot be tapped past.
@@ -201,8 +200,8 @@ export class LevelSelectScene extends Phaser.Scene {
   }
 
   private bestTimeText(levelId: string): string | null {
-    const ghost = GhostService.getGhost(levelId);
-    return ghost ? this.clock(ghost.timeMs) : null;
+    const bestMs = SaveService.getLevelBestMs(levelId);
+    return bestMs === null ? null : this.clock(bestMs);
   }
 
   private startLevel(levelId: string): void {

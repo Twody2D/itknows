@@ -45,11 +45,18 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     traps: [
 
       ...floorSpikes('sbank-01', 26, 3, 22),
-      // Slower than the player by a wide margin and starting three columns
-      // behind them: a clock, not a predator. Every spike pair and the pit
-      // are things the player already knows how to solve — what is new is
-      // that hesitating in front of them now has a price.
-      { type: 'pursuer', id: 'pursuer-01', col: 0, row: 21, speedFactor: 0.6 },
+      // TWO COLUMNS BEHIND THE PLAYER AT 0.8, not seven behind at 0.6.
+      //
+      // At the old numbers the drone was a decoration: a clean run reached
+      // the exit with it still twenty tiles back, so the thing the whole
+      // sector is built on — that waiting now costs something — never
+      // happened at all ("красный шар слишком долго стоит слева, я могу
+      // успеть пройти уровень до того как он доедет до меня", owner). At
+      // 0.8 a player who keeps moving still finishes several tiles clear of
+      // it, which is CLAUDE.md #13 intact: it is never faster than they
+      // are. What changed is that every pause — reading the spike pair,
+      // timing the pit, waiting out the patrol — is now paid for.
+      { type: 'pursuer', id: 'pursuer-01', col: 5, row: 21, speedFactor: 0.8 },
       // ON THE FLOOR, not hovering two rows above it. At row 19 this spike
       // sat exactly at the android's chest — visibly through it — and could
       // not be stood under, jumped over comfortably, or ignored; it only
@@ -79,7 +86,11 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     traps: [
 
       ...dropSpike('dspike-01', 40, 21, 22),
-      { type: 'pursuer', id: 'pursuer-01', col: 0, row: 21, speedFactor: 0.55 },
+      // Closer and faster than it was (col 0 / 0.55), but gentler than
+      // HUNTED's: this level's crossing REQUIRES standing still while the
+      // slab comes back, so the drone has to price that wait without
+      // making it unaffordable.
+      { type: 'pursuer', id: 'pursuer-01', col: 2, row: 21, speedFactor: 0.7 },
       {
         type: 'moving-platform',
         id: 'movp-01',
@@ -115,6 +126,21 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       // the spawn — the level is a question about whether the player has
       // been reading or pattern-matching.
       { type: 'fake-exit', id: 'fake-exit-01', col: 27, row: 22 },
+      // AND IT IS GUARDED, which it was not before. On its own the decoy
+      // door only shook and flashed red when touched, which the owner read
+      // as nothing happening at all — "вообще не понятно зачем нужен
+      // перечёркнутый фиолетовый портал, у него буквально нет никаких
+      // функций". Now walking up to it springs a spike onto the doorway
+      // itself: the door still refuses entry and still costs no life by
+      // itself (CLAUDE.md #4.7 — a fake exit is never lethal), but the
+      // approach to it is a trap like any other, with its own `warningMs`
+      // of telegraph and a way out for anyone who reads it.
+      // `fromRow` 17, not the default: the patrolling spike sweeps row 15
+      // across these columns, and two hazards may never share tiles
+      // (`tests/level-def-sanity.test.ts`). Hanging it below the patrol
+      // also puts it right in the doorway's own frame, which is where it
+      // reads best.
+      ...dropSpike('dspike-01', 28, 21, 22, { fromRow: 17 }),
       { type: 'laser', id: 'laser-01', col: 31, topRow: 17, bottomRow: 21 },
       { type: 'moving-spike', id: 'mspike-01', fromCol: 27, fromRow: 15, toCol: 32, toRow: 15, travelMs: 1700 },
     ],
@@ -165,12 +191,14 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       // plain geometry: every beam here is a wait, and the wait is now
       // being charged for. The ground between them is still wide enough to
       // take that wait — just not twice.
-      { type: 'pursuer', id: 'pursuer-01', col: 0, row: 21, speedFactor: 0.55 },
+      { type: 'pursuer', id: 'pursuer-01', col: 2, row: 21, speedFactor: 0.7 },
       { type: 'laser', id: 'laser-01', col: 17, topRow: 16, bottomRow: 21 },
       { type: 'laser', id: 'laser-02', col: 24, topRow: 16, bottomRow: 21, initialIdleMs: 800 },
       // Columns 38-42, not 36-40: `sbank-01` punches up through 34-36, so
       // column 36 was floor plate and piston at once.
-      { type: 'electric-floor', id: 'ef-01', col: 38, width: 5, row: 22 },
+      // Same long idle as sector 04's plates: invisible while safe, so the
+      // flare is the only tell (see `CURRENT`'s own note).
+      { type: 'electric-floor', id: 'ef-01', col: 38, width: 5, row: 22, timing: { idleMs: 2400, warningMs: 500, activeMs: 500, cooldownMs: 250 } },
     ],
   },
   {

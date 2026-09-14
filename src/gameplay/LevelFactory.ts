@@ -14,7 +14,7 @@ import { SECTOR_05_LEVELS } from '@/data/levels/sector05';
  * own profile. The owner had it removed: "давай уберём систему gentle bold
  * troll, чтобы всегда у нас было одинаково". Every player now meets the
  * same level, always, which also means the level a leaderboard time or a
- * ghost was set on is unambiguous without a variant to qualify it.
+ * best time was set on is unambiguous without a variant to qualify it.
  *
  * THE SYSTEM still watches and still talks (`Commentator`,
  * `PlayerProfile`, `SystemMemory`); what it no longer does is change what

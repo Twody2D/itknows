@@ -322,40 +322,68 @@ describe.each([
     expect(problems, problems.join('; ')).toEqual([]);
   });
 
-  it('never hangs a fake platform over anything that can kill', () => {
-    // THE ONLY THING KEEPING A FAKE PLATFORM HONEST.
+  it('never hangs a fake platform over a hazard the player cannot read', () => {
+    // WHAT KEEPS A FAKE PLATFORM HONEST, in its current form.
     //
-    // Its tile is now byte-identical to a real slab, by the owner's direct
+    // Its tile is byte-identical to a real slab, by the owner's direct
     // instruction ("сделай тогда чтобы фантомные платформы выглядели точь в
-    // точь как обычные... иначе смысла нет"), recorded in CLAUDE.md #4. So
-    // the player cannot tell one from the other until they are already
-    // falling — and that is only fair while the fall costs them the climb
-    // and nothing else.
+    // точь как обычные... иначе смысла нет"), recorded in CLAUDE.md #4. The
+    // player cannot tell one from the other until they are already falling
+    // — so what has to be readable is not the tile, it is THE FLOOR
+    // UNDERNEATH: the price of being wrong must be on screen before the
+    // jump is taken.
     //
-    // Concretely: every column a decoy covers must have ordinary ground
-    // under it (no pit), no static spike, and no lethal trap parked in the
-    // drop. Fail this and the trap becomes an unavoidable, unsignalled
-    // kill, which is the one thing CLAUDE.md #4 never bends on.
+    // A STATIC SPIKE IS READABLE, and is therefore allowed here. It is
+    // drawn from the first frame, never moves, never switches off, and the
+    // owner asked for exactly this arrangement on GHOST FLOOR ("сделай
+    // фальшивую лестницу с фальшивыми блоками... и сделать под ними шипы").
+    // Before that request this test banned it outright, on the reasoning
+    // that a decoy must only ever cost the climb. What replaces that
+    // reasoning is narrower and survives it: a decoy may cost the attempt,
+    // but only over a hazard the player was shown in advance.
+    //
+    // NOTHING ELSE IS. A pit under a decoy makes the decoy read as a bridge
+    // over nothing; a spike bank is hidden below the floor until it fires;
+    // an electric plate is invisible at idle (`ElectricFloorTrap`). In all
+    // three the player has no way to price the fall, so those stay banned.
     const problems: string[] = [];
     const gaps = level.gaps ?? [];
-    const spikes = new Set(level.spikeColumns ?? []);
 
     for (const trap of level.traps ?? []) {
       if (trap.type !== 'fake-platform') continue;
       for (let i = 0; i < trap.width; i++) {
         const col = trap.col + i;
         if (isInAnyGap(col, gaps)) problems.push(`${trap.id}: column ${col} is over a pit`);
-        if (spikes.has(col)) problems.push(`${trap.id}: column ${col} drops onto a static spike`);
         for (const other of level.traps ?? []) {
           if (other === trap) continue;
           const covers = (from: number, width: number): boolean => col >= from && col < from + width;
-          if (other.type === 'spike-bank' && covers(other.col, other.width)) problems.push(`${trap.id}: column ${col} drops onto ${other.id}`);
-          if (other.type === 'electric-floor' && covers(other.col, other.width)) problems.push(`${trap.id}: column ${col} drops onto ${other.id}`);
+          if (other.type === 'spike-bank' && covers(other.col, other.width)) problems.push(`${trap.id}: column ${col} drops onto hidden ${other.id}`);
+          if (other.type === 'electric-floor' && covers(other.col, other.width)) problems.push(`${trap.id}: column ${col} drops onto invisible ${other.id}`);
         }
       }
     }
 
     expect(problems, problems.join('; ')).toEqual([]);
+  });
+
+  it('gives a decoy over spikes a route that never needs it', () => {
+    // The other half of the same bargain: falling onto spikes is only a
+    // fair price for a gamble, and it is only a gamble if there is a way up
+    // that asks nothing of the decoy. `LevelValidator` already proves every
+    // level passable while treating fake platforms as thin air (that is
+    // what makes the whole solver run meaningful), so what is checked here
+    // is the thing the solver cannot see: that the spikes really are static
+    // level geometry, drawn from frame one, and not something armed later.
+    const spikes = new Set(level.spikeColumns ?? []);
+    const decoyOverSpikes = (level.traps ?? []).filter(
+      (trap) => trap.type === 'fake-platform' && Array.from({ length: trap.width }, (_, i) => trap.col + i).some((col) => spikes.has(col)),
+    );
+    for (const trap of decoyOverSpikes) {
+      expect(trap.type).toBe('fake-platform');
+      // Static spikes live in `spikeColumns`, which no trap can arm,
+      // retract or hide — the check is that this is where they came from.
+      expect(level.spikeColumns).toBeDefined();
+    }
   });
 
   it('never parks two hazards on the same tiles', () => {

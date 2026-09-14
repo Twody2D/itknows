@@ -109,7 +109,7 @@ const DRONE_DIM_MS = 500;
 
 /**
  * Cosmetic movement trails (master-prompt-adjacent shop content, design
- * round 2, 2026-09-06) — purely visual, same posture as `GhostSprite`: no
+ * round 2, 2026-09-06) — purely visual: no
  * physics body, drives no gameplay state, never gates a death or a jump.
  * Which trail (if any) is active is resolved once at construction from the
  * equipped inventory slot, same "only between attempts" rule every other

@@ -13,7 +13,23 @@ export const PHYSICS = {
   friction: 1200,
 
   jumpVelocity: -250,
-  jumpCutMultiplier: 0.45,
+  // THERE IS NO VARIABLE JUMP HEIGHT ANY MORE. Releasing the button used to
+  // cut the rise to 45% of its remaining velocity, so a tap gave a short hop
+  // and a hold gave the full arc. The owner asked for it gone — "может
+  // сделать всегда высокий прыжок и убрать маленький при быстром нажатии" —
+  // so every jump is now the full jump, whatever the press looks like.
+  //
+  // This is a real trade and it is worth naming: the short hop was the only
+  // way to pass under something without clearing it, and the only way to
+  // land on a ledge barely above your head without overshooting it. What it
+  // buys is that the height of a jump no longer depends on how long a
+  // finger happened to stay on glass — which on a phone is the difference
+  // between a jump and a mis-timed one, and CLAUDE.md #5 is emphatic that
+  // input is never allowed to be the cause of a death.
+  //
+  // Nothing about level reachability changes: `jumpPhysics.ts` and the
+  // solver have always measured the FULL jump, so every level is still
+  // proved passable by the same numbers.
   // There is deliberately no dash. Run and jump are the whole vocabulary;
   // every level in the game is authored against that reach (`jumpPhysics.ts`),
   // and a dash on Shift only ever let a player skip past hazards they were

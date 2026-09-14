@@ -13,10 +13,6 @@ import { FpsMeter, initialGuardState, stepGuard, type GuardState } from '@/fx/Pe
 import type { DebugOverlay } from '@/dev/DebugOverlay';
 import { FxManager } from '@/fx/FxManager';
 import { Player } from '@/gameplay/Player';
-import { GhostRecorder } from '@/gameplay/GhostRecorder';
-import { GhostSprite } from '@/gameplay/GhostSprite';
-import { GhostSettings } from '@/gameplay/GhostSettings';
-import { GhostService } from '@/services/GhostService';
 import { TrailFx } from '@/gameplay/TrailFx';
 import type { TrailKind } from '@/gameplay/TrailFx';
 import { buildLevel } from '@/gameplay/Level';
@@ -125,8 +121,6 @@ export class GameplayScene extends Phaser.Scene {
    */
   private attemptElapsedMs = 0;
   private hesitationCommented = false;
-  private readonly ghostRecorder = new GhostRecorder();
-  private ghostSprite: GhostSprite | null = null;
   private trailFx: TrailFx | null = null;
 
   private hudTimeText!: PixelLabel;
@@ -229,7 +223,6 @@ export class GameplayScene extends Phaser.Scene {
     // Real capture happens on the first `update()` tick — see the field's
     // doc comment for why `this.time.now` can't be trusted here.
     this.attemptElapsedMs = 0;
-    this.ghostRecorder.reset();
     EventBus.emit('level:loaded', { levelId: this.levelDef.id });
     MusicSequencer.start();
     // The game now opens straight into a level rather than the menu
@@ -243,12 +236,9 @@ export class GameplayScene extends Phaser.Scene {
 
     const spawnX = this.level.spawn.x;
 
-    // Ghost and trail are pure visual overlays — created before the player
-    // so draw order never lets either cover the real character (master-
-    // prompt §40 for the ghost; the trail is shop cosmetic content).
-    const ghostRecord = GhostSettings.enabled ? GhostService.getGhost(this.levelDef.id) : null;
-    this.ghostSprite = ghostRecord ? new GhostSprite(this, ghostRecord.samples) : null;
-
+    // The trail is a pure visual overlay — created before the player so
+    // draw order never lets it cover the real character (it is shop
+    // cosmetic content, nothing gameplay reads).
     this.trailFx = new TrailFx(this, equippedTrailKind(), spawnX, this.level.spawn.y);
 
     this.player = new Player(this, spawnX, this.level.spawn.y, this.inputState);
@@ -299,7 +289,6 @@ export class GameplayScene extends Phaser.Scene {
       YandexGamesService.notifyGameplayStop();
       this.touchControls?.destroy();
       this.behaviorTracker.destroy();
-      this.ghostSprite?.destroy();
       this.trailFx?.destroy();
       this.fx.destroy();
       this.tutorialHints?.destroy();
@@ -472,10 +461,6 @@ export class GameplayScene extends Phaser.Scene {
 
     const attemptElapsedMs = this.attemptElapsedMs;
     this.behaviorTracker.sample(time, delta, this.inputState, this.player.isAlive());
-    if (this.player.isAlive()) {
-      this.ghostRecorder.sample(attemptElapsedMs, this.player.x, this.player.y, this.player.flipX);
-    }
-    this.ghostSprite?.update(attemptElapsedMs);
     this.trailFx?.update(
       attemptElapsedMs,
       delta,
@@ -930,7 +915,10 @@ export class GameplayScene extends Phaser.Scene {
     // turn the challenge into a credit faucet — the daily branch below pays
     // once per day itself and posts its own score.
     if (!this.daily) EventBus.emit('level:completed', { levelId: this.levelDef.id, timeMs, deaths });
-    GhostService.recordAttempt(this.levelDef.id, timeMs, this.ghostRecorder.finish());
+    // The personal best the level-select screen prints. This used to be a
+    // side effect of recording a ghost run; the ghost is gone and the
+    // number stayed, because it is what the player actually reads.
+    SaveService.saveLevelBestIfFaster(this.levelDef.id, timeMs);
 
     const wasStruggling = SystemMemory.snapshot().repeatDeathCount >= 2;
     SystemMemory.registerClear(this.levelDef.id, wasStruggling);

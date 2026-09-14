@@ -4,7 +4,7 @@ import { YandexGamesService } from './YandexGamesService';
 
 const STORAGE_KEY = 'itknows.save.v1';
 const CLOUD_KEY = 'save';
-const SAVE_VERSION = 6;
+const SAVE_VERSION = 7;
 
 /** Everything the shop grants/tracks — `default`/`static`/`standard` are owned+equipped from a fresh save (CurrencyService/InventoryService read this, never a second save file). */
 export interface InventoryData {
@@ -23,15 +23,17 @@ export interface InventoryData {
  * One level's best-run trace (master-prompt §40) — `timeMs` is the same
  * completion clock used for the leaderboard/`level:completed` (not just the
  * winning attempt's own duration), so "personal best" means one thing
- * everywhere. `samples` is a flat `[t,x,y,facing]×N` array rather than an
- * array of objects — no repeated key names, smaller JSON, and this is the
- * one save field with any real potential to grow (see GhostRecorder's
- * MAX_SAMPLES cap and this file's `sanitizeGhosts`).
+ * everywhere.
+ *
+ * THE TRACE ITSELF IS GONE. Until 2026-09-14 this stored a flat
+ * `[t,x,y,facing]xN` array alongside the time, replayed as a translucent
+ * ghost of the player's best run. The owner had it removed — "давай уберём
+ * функцию призрак, мне кажется она бесполезна" — so what is left is the
+ * number the rest of the UI actually reads: the level-select screen's BEST
+ * column. Existing saves keep their times (see `sanitizeLevelBests`); only
+ * the sample arrays are dropped, which is also the single largest thing
+ * this save could ever have grown.
  */
-export interface GhostRecord {
-  timeMs: number;
-  samples: number[];
-}
 
 /**
  * Today's Daily Challenge, and only today's.
@@ -67,8 +69,8 @@ function emptyDaily(date = ''): DailyRecord {
   return { date, bestTimeMs: null, bestDeaths: null, continuesUsed: 0 };
 }
 
-interface SaveDataV6 {
-  version: 6;
+interface SaveDataV7 {
+  version: 7;
   completedLevels: string[];
   lastLevelId: string | null;
   credits: number;
@@ -76,8 +78,9 @@ interface SaveDataV6 {
   /** Yandex purchase tokens already granted — the idempotency guard against a double-processed or replayed purchase (master-prompt §6/§44 scenario F). */
   processedPurchaseTokens: string[];
   /** Keyed by level id — one best-run trace per level. It used to carry a `::variantId` suffix, from back when a level had adaptive cuts with different geometry; `parseSave` strips that suffix forward. */
-  ghosts: Record<string, GhostRecord>;
-  /** Keyed by `sector-01`-style id (`sectors.ts`'s `sectorIdOf`) — best `GameState.sectorElapsedMs()` ever posted for that sector, shown as BEST on `SectorCompleteScene`. No per-variant split like ghosts: a sector's time already blends whatever variant each of its levels happened to serve, so there's no single "canonical" sector run to isolate. */
+  /** Best clear time per level id, in ms. Was `ghosts` (time + replay trace) through v6. */
+  levelBests: Record<string, number>;
+  /** Keyed by `sector-01`-style id (`sectors.ts`'s `sectorIdOf`) — best `GameState.sectorElapsedMs()` ever posted for that sector, shown as BEST on `SectorCompleteScene`. No per-level split: a sector's time already blends whatever variant each of its levels happened to serve, so there's no single "canonical" sector run to isolate. */
   sectorBests: Record<string, number>;
   /** Today's Daily Challenge only — see `DailyRecord`. */
   daily: DailyRecord;
@@ -97,7 +100,7 @@ function defaultInventory(): InventoryData {
   };
 }
 
-function emptySave(): SaveDataV6 {
+function emptySave(): SaveDataV7 {
   return {
     version: SAVE_VERSION,
     completedLevels: [],
@@ -105,7 +108,7 @@ function emptySave(): SaveDataV6 {
     credits: 0,
     inventory: defaultInventory(),
     processedPurchaseTokens: [],
-    ghosts: {},
+    levelBests: {},
     sectorBests: {},
     daily: emptyDaily(),
   };
@@ -138,45 +141,43 @@ function sanitizeInventory(raw: unknown): InventoryData {
 }
 
 /** Loose shape covering a v1/v2/v3/v4/v5 payload — `version` is the only field whose type actually conflicts between them, so it's widened here rather than intersected. */
-type AnySaveShape = Partial<Omit<SaveDataV6, 'version'>> & { version?: unknown };
-
-/** Drops anything that isn't a plausible `[t,x,y,facing]×N` trace — a corrupt/truncated entry is dropped whole rather than replayed as a broken ghost. */
-function sanitizeGhostRecord(raw: unknown): GhostRecord | null {
-  const parsed = raw as Partial<GhostRecord> | null;
-  if (!parsed || typeof parsed !== 'object') return null;
-  if (typeof parsed.timeMs !== 'number' || !Number.isFinite(parsed.timeMs) || parsed.timeMs < 0) return null;
-  if (!Array.isArray(parsed.samples) || parsed.samples.length % 4 !== 0) return null;
-  if (!parsed.samples.every((n) => typeof n === 'number' && Number.isFinite(n))) return null;
-  return { timeMs: parsed.timeMs, samples: parsed.samples };
-}
+type AnySaveShape = Partial<Omit<SaveDataV7, 'version'>> & { version?: unknown };
 
 /**
- * Ghost keys lost their `::variantId` suffix when the adaptive variants were
- * removed, and this is where an existing save catches up rather than losing
- * its personal bests (CLAUDE.md #8 — progress is never lost).
+ * Carries personal bests across the removal of the ghost feature, and
+ * across the older loss of the `::variantId` key suffix — a save never
+ * loses progress (CLAUDE.md #8).
  *
- * Only the canonical `::standard` traces carry forward: a trace recorded in
- * a `gentle` or `bold` cut was run through geometry that no longer exists,
- * so replaying it against the one remaining shape would show a ghost
- * clipping walls. Those are dropped, which costs a player a replay overlay
- * and nothing else. Where a save somehow holds both, the faster wins.
+ * Three shapes can turn up here: a v7 `number`, a v6 `{ timeMs, samples }`
+ * record, and a v5-or-older key of the form `levelId::variantId`. Only the
+ * canonical `::standard` times carry forward from that last one; a time set
+ * in a `gentle` or `bold` cut was set on geometry that no longer exists and
+ * is not comparable with anything. Where a save holds several candidates
+ * for one level, the fastest wins.
  */
-function sanitizeGhosts(raw: unknown): Record<string, GhostRecord> {
+function sanitizeLevelBests(raw: unknown): Record<string, number> {
   if (!raw || typeof raw !== 'object') return {};
-  const result: Record<string, GhostRecord> = {};
+  const result: Record<string, number> = {};
+  const offer = (levelId: string, timeMs: number): void => {
+    const existing = result[levelId];
+    if (existing === undefined || timeMs < existing) result[levelId] = timeMs;
+  };
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    const record = sanitizeGhostRecord(value);
-    if (!record) continue;
+    const timeMs =
+      typeof value === 'number'
+        ? value
+        : typeof (value as { timeMs?: unknown } | null)?.timeMs === 'number'
+          ? (value as { timeMs: number }).timeMs
+          : null;
+    if (timeMs === null || !Number.isFinite(timeMs) || timeMs < 0) continue;
+
     const legacy = key.indexOf('::');
     if (legacy === -1) {
-      const existing = result[key];
-      if (!existing || record.timeMs < existing.timeMs) result[key] = record;
+      offer(key, timeMs);
       continue;
     }
     if (key.slice(legacy + 2) !== 'standard') continue;
-    const levelId = key.slice(0, legacy);
-    const existing = result[levelId];
-    if (!existing || record.timeMs < existing.timeMs) result[levelId] = record;
+    offer(key.slice(0, legacy), timeMs);
   }
   return result;
 }
@@ -203,17 +204,32 @@ function sanitizeDaily(value: unknown): DailyRecord {
   };
 }
 
-/** A v1/v2 save (or anything unrecognized) migrates forward with sane shop defaults and no ghost data yet — never a hard failure, same "fall back to a clean save" posture v1 already had for a fully malformed payload. */
-function parseSave(raw: unknown): SaveDataV6 {
+/**
+ * Reads any save this game has ever written and returns the current shape.
+ *
+ * EVERY FIELD IS MIGRATED, not just the two that describe progress. This
+ * used to bail out to `{...emptySave(), completedLevels, lastLevelId}` the
+ * moment `version` did not match the current one, which quietly threw away
+ * credits, owned cosmetics, processed purchase tokens and every best time
+ * on the first launch after a version bump — a player who had bought a skin
+ * lost it to a release that had nothing to do with skins. CLAUDE.md #8 says
+ * progress is never lost, and that includes what was paid for.
+ *
+ * Bailing out is unnecessary because every field below is sanitized
+ * independently and falls back to its own empty value: an older save simply
+ * has nothing to offer the fields it predates, and a malformed one is
+ * rejected field by field rather than wholesale. The only cross-version
+ * rename so far (`ghosts` -> `levelBests`) is handled where it is read.
+ *
+ * A payload with no `completedLevels` array at all is not a save of any
+ * version — that is the one case that still starts clean.
+ */
+function parseSave(raw: unknown): SaveDataV7 {
   const parsed = raw as AnySaveShape | null;
   if (!parsed || !Array.isArray(parsed.completedLevels)) return emptySave();
 
   const completedLevels = sanitizeStringArray(parsed.completedLevels);
   const lastLevelId = typeof parsed.lastLevelId === 'string' ? parsed.lastLevelId : null;
-
-  if (parsed.version !== SAVE_VERSION) {
-    return { ...emptySave(), completedLevels, lastLevelId };
-  }
 
   return {
     version: SAVE_VERSION,
@@ -222,7 +238,8 @@ function parseSave(raw: unknown): SaveDataV6 {
     credits: Number.isInteger(parsed.credits) && (parsed.credits as number) >= 0 ? (parsed.credits as number) : 0,
     inventory: sanitizeInventory(parsed.inventory),
     processedPurchaseTokens: sanitizeStringArray(parsed.processedPurchaseTokens),
-    ghosts: sanitizeGhosts(parsed.ghosts),
+    // `ghosts` is the v6 field name; a v7 save writes `levelBests`.
+    levelBests: sanitizeLevelBests(parsed.levelBests ?? (parsed as { ghosts?: unknown }).ghosts),
     sectorBests: sanitizeSectorBests(parsed.sectorBests),
     daily: sanitizeDaily(parsed.daily),
   };
@@ -260,18 +277,8 @@ function mergeInventory(local: InventoryData, cloud: InventoryData): InventoryDa
   };
 }
 
-/** Per key, keep whichever side actually ran faster — a ghost's whole point is being a personal best, so unlike the "never regress" fields above, a slower run genuinely should lose here rather than union. */
-function mergeGhosts(local: Record<string, GhostRecord>, cloud: Record<string, GhostRecord>): Record<string, GhostRecord> {
-  const result: Record<string, GhostRecord> = { ...local };
-  for (const [key, cloudGhost] of Object.entries(cloud)) {
-    const localGhost = result[key];
-    if (!localGhost || cloudGhost.timeMs < localGhost.timeMs) result[key] = cloudGhost;
-  }
-  return result;
-}
-
-/** Per key, keep whichever side actually ran faster — same "faster wins" rule as `mergeGhosts`, just without a samples payload to carry along. */
-function mergeSectorBests(local: Record<string, number>, cloud: Record<string, number>): Record<string, number> {
+/** Per key, keep whichever side actually ran faster — a personal best is the one field where a slower run genuinely should lose rather than union with the other side. */
+function mergeBestTimes(local: Record<string, number>, cloud: Record<string, number>): Record<string, number> {
   const result: Record<string, number> = { ...local };
   for (const [key, cloudTimeMs] of Object.entries(cloud)) {
     const localTimeMs = result[key];
@@ -298,7 +305,7 @@ function mergeDaily(local: DailyRecord, cloud: DailyRecord): DailyRecord {
   };
 }
 
-function mergeSaves(local: SaveDataV6, cloud: SaveDataV6): SaveDataV6 {
+function mergeSaves(local: SaveDataV7, cloud: SaveDataV7): SaveDataV7 {
   return {
     version: SAVE_VERSION,
     completedLevels: unionArrays(local.completedLevels, cloud.completedLevels),
@@ -306,8 +313,8 @@ function mergeSaves(local: SaveDataV6, cloud: SaveDataV6): SaveDataV6 {
     credits: Math.max(local.credits, cloud.credits),
     inventory: mergeInventory(local.inventory, cloud.inventory),
     processedPurchaseTokens: unionArrays(local.processedPurchaseTokens, cloud.processedPurchaseTokens),
-    ghosts: mergeGhosts(local.ghosts, cloud.ghosts),
-    sectorBests: mergeSectorBests(local.sectorBests, cloud.sectorBests),
+    levelBests: mergeBestTimes(local.levelBests, cloud.levelBests),
+    sectorBests: mergeBestTimes(local.sectorBests, cloud.sectorBests),
     daily: mergeDaily(local.daily, cloud.daily),
   };
 }
@@ -324,7 +331,7 @@ function mergeSaves(local: SaveDataV6, cloud: SaveDataV6): SaveDataV6 {
  * to sane defaults, field by field" is still an open `TODO.md` item.
  */
 class SaveServiceController {
-  private data: SaveDataV6 = parseSave(readJson(STORAGE_KEY));
+  private data: SaveDataV7 = parseSave(readJson(STORAGE_KEY));
   private cloudSyncStarted = false;
 
   private persist(): void {
@@ -430,17 +437,17 @@ class SaveServiceController {
     this.persist();
   }
 
-  // --- Ghost (keyed by level id — see `GhostService`) ---
+  // --- Per-level best time (LevelSelectScene's BEST column) ---
 
-  getGhost(key: string): GhostRecord | null {
-    return this.data.ghosts[key] ?? null;
+  getLevelBestMs(levelId: string): number | null {
+    return this.data.levelBests[levelId] ?? null;
   }
 
   /** No-ops unless this beats the stored best (or there is none yet) — "personal best" is enforced here, once, rather than trusted to every caller. */
-  saveGhostIfBest(key: string, timeMs: number, samples: readonly number[]): void {
-    const existing = this.data.ghosts[key];
-    if (existing && existing.timeMs <= timeMs) return;
-    this.data.ghosts[key] = { timeMs, samples: [...samples] };
+  saveLevelBestIfFaster(levelId: string, timeMs: number): void {
+    const existing = this.data.levelBests[levelId];
+    if (existing !== undefined && existing <= timeMs) return;
+    this.data.levelBests[levelId] = timeMs;
     this.persist();
   }
 
@@ -450,7 +457,7 @@ class SaveServiceController {
     return this.data.sectorBests[sectorId] ?? null;
   }
 
-  /** No-ops unless this beats the stored best (or there is none yet) — same enforcement posture as `saveGhostIfBest`. */
+  /** No-ops unless this beats the stored best (or there is none yet) — same enforcement posture as `saveLevelBestIfFaster`. */
   saveSectorBestIfFaster(sectorId: string, timeMs: number): void {
     const existing = this.data.sectorBests[sectorId];
     if (existing !== undefined && existing <= timeMs) return;
@@ -473,7 +480,7 @@ class SaveServiceController {
     return this.data.daily;
   }
 
-  /** No-ops unless this beats today's stored time — same enforcement posture as `saveGhostIfBest`. */
+  /** No-ops unless this beats today's stored time — same enforcement posture as `saveLevelBestIfFaster`. */
   saveDailyResult(date: string, timeMs: number, deaths: number): void {
     const daily = this.getDaily(date);
     if (daily.bestTimeMs !== null && daily.bestTimeMs <= timeMs) return;

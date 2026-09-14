@@ -1,11 +1,10 @@
 import Phaser from 'phaser';
 import { PALETTE } from '@/config/palette';
-import { hexToCss } from '@/utils/color';
+import { hexToCss, lerpColor } from '@/utils/color';
 import { t } from '@/i18n/ui';
 import { LocaleState } from '@/i18n/Locale';
 import { FxSettings } from '@/fx/FxSettings';
 import { AudioSettings } from '@/audio/AudioSettings';
-import { GhostSettings } from '@/gameplay/GhostSettings';
 import { DomTextOverlay } from '@/ui/DomTextOverlay';
 import { buildScreenTopbar, buildSectionBand, attachEscape, SCREEN_TOPBAR_H } from '@/ui/ScreenChrome';
 import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
@@ -122,23 +121,11 @@ export class SettingsScene extends Phaser.Scene {
     });
 
     // ---- right column ---------------------------------------------------
-    buildSectionBand(this, this.domText, rightX, top, rightW, t('settingsSectionGame'), PALETTE.system, PALETTE.systemDim);
-    this.buildToggleRow(rightX, top + afterBand, rightW, rowH, {
-      title: t('ghostReplay'),
-      desc: t('settingsGhostDesc'),
-      accent: PALETTE.system,
-      track: PALETTE.systemDim,
-      value: () => GhostSettings.enabled,
-      toggle: () => GhostSettings.toggle(),
-      glyph: (g, x, cy) => {
-        g.fillRect(x + 1, cy - 6, 12, 2);
-        g.fillRect(x + 1, cy + 4, 12, 2);
-        g.fillRect(x + 1, cy - 6, 2, 12);
-        g.fillRect(x + 11, cy - 6, 2, 12);
-      },
-    });
-
-    const langY = pictureY;
+    // The "ИГРА" section used to sit above this with one switch in it — the
+    // ghost replay — and went when the ghost did (owner: "давай уберём
+    // функцию призрак, мне кажется она бесполезна"). Language starts the
+    // column now rather than leaving an empty band where it was.
+    const langY = top;
     buildSectionBand(this, this.domText, rightX, langY, rightW, t('settingsSectionLanguage'), PALETTE.cyan, PALETTE.cyanDim);
     this.buildLanguageRow(rightX, langY + afterBand, rightW, rowH);
 
@@ -202,20 +189,31 @@ export class SettingsScene extends Phaser.Scene {
       0.5,
     );
 
-    const swW = 30;
+    // A SWITCH THAT ACTUALLY SLIDES.
+    //
+    // The knob always sat on the correct side, but it jumped there in the
+    // same frame the colours changed, and a 14px jump under a simultaneous
+    // recolour does not read as movement at all — the owner saw only the
+    // colour ("логичнее будет при переключении тумблера чтобы он не только
+    // менял цвет включен/выключен, но и тумблер передвигался влево/вправо").
+    // Now `slide` runs 0 -> 1 over 130ms and every part of the switch is
+    // drawn from it, track and border colours included, so the two halves
+    // of the change happen together and at a speed the eye can follow.
+    const swW = 32;
     const swH = 16;
     const swX = x + w - 8 - swW;
     const swY = y + (h - swH) / 2;
+    const travel = swW - 2 - 14;
     const sw = this.add.graphics();
+    const slide = { t: opts.value() ? 1 : 0 };
     const paint = (): void => {
-      const on = opts.value();
       sw.clear();
-      sw.fillStyle(on ? opts.track : PALETTE.metalMid, 1);
+      sw.fillStyle(lerpColor(PALETTE.metalMid, opts.track, slide.t), 1);
       sw.fillRect(swX, swY, swW, swH);
-      sw.lineStyle(1, on ? opts.accent : PALETTE.metalEdge, 1);
+      sw.lineStyle(1, lerpColor(PALETTE.metalEdge, opts.accent, slide.t), 1);
       sw.strokeRect(swX + 0.5, swY + 0.5, swW - 1, swH - 1);
-      sw.fillStyle(on ? opts.accent : PALETTE.textDisabled, 1);
-      sw.fillRect(on ? swX + swW - 15 : swX + 1, swY + 1, 14, 14);
+      sw.fillStyle(lerpColor(PALETTE.textDisabled, opts.accent, slide.t), 1);
+      sw.fillRect(Math.round(swX + 1 + travel * slide.t), swY + 1, 14, 14);
     };
     paint();
 
@@ -223,7 +221,15 @@ export class SettingsScene extends Phaser.Scene {
     zone.on('pointerup', () => {
       playSfx('uiClick');
       opts.toggle();
-      paint();
+      this.tweens.killTweensOf(slide);
+      this.tweens.add({
+        targets: slide,
+        t: opts.value() ? 1 : 0,
+        duration: 130,
+        ease: 'Quad.easeOut',
+        onUpdate: paint,
+        onComplete: paint,
+      });
     });
   }
 

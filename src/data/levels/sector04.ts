@@ -44,7 +44,11 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     // ground, before anything else happens. Every fake above it is the same
     // sentence said about a ledge instead of a floor.
     gaps: [[12, 14]],
-    spikeColumns: [],
+    // THE FLOOR UNDER THE FALSE STAIRCASE. Eleven spikes, in plain sight
+    // from the spawn, and they are what makes the staircase above them a
+    // real question instead of a detour — see the staircase's own note in
+    // `traps`.
+    spikeColumns: [34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44],
     // The climb turns back on itself at the top for the same reason sector
     // 01's does: a straight staircase at this pitch parks the exit in the
     // top-right corner behind the pause button. Folding it inwards also
@@ -63,13 +67,40 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     exitRow: 7,
     traps: [
       ...trapdoor('flp-01', 12, 3),
-      // Each fake sits one hop further right than the real tier at the same
-      // height — the tempting shortcut, every time. Ordinary ground is under
-      // all three, so the first lesson costs a climb; by the third the
-      // player is reading the tiles instead of trusting them.
+      // Two singles along the real climb: each sits one hop further right
+      // than the real tier at the same height — the tempting shortcut,
+      // every time. Ordinary ground is under both, so falling through one
+      // costs the climb and nothing else.
       { type: 'fake-platform', id: 'fakep-01', col: 28, row: 16, width: 4 },
-      { type: 'fake-platform', id: 'fakep-02', col: 35, row: 13, width: 4 },
       { type: 'fake-platform', id: 'fakep-03', col: 28, row: 10, width: 4 },
+
+      // THE FALSE STAIRCASE — five rungs, none of them real, over a bed of
+      // spikes. Asked for directly: "сделай фальшивую лестницу с фальшивыми
+      // блоками, чтобы типо можно было забраться наверх по ним, но они были
+      // фантомными, и сделать под ними шипы. Сейчас легко проходится и не
+      // умирается" (owner).
+      //
+      // It reads as the short way up. The real climb doubles back on itself
+      // four times across the middle of the screen; this goes straight from
+      // the floor to the exit's own tier in five even hops, and its bottom
+      // rung is two rows off the ground where a single jump obviously
+      // reaches it. Every rung is a decoy.
+      //
+      // WHY THE SPIKES UNDER IT ARE STILL HONEST, given that a decoy is
+      // drawn with the real slab's own texture (CLAUDE.md #4): the player
+      // cannot read the rungs, but they can read the floor. Eleven static
+      // spikes lie under the whole staircase, visible from the spawn point,
+      // never hidden and never switched off — so the cost of being wrong is
+      // on screen before the first jump, which is exactly what CLAUDE.md
+      // #4's closing question asks. The real route is untouched and needs
+      // none of this; taking the staircase is a choice to gamble on tiles
+      // you have been shown you cannot verify, with the price written
+      // underneath.
+      { type: 'fake-platform', id: 'fakes-01', col: 34, row: 20, width: 3 },
+      { type: 'fake-platform', id: 'fakes-02', col: 38, row: 17, width: 3 },
+      { type: 'fake-platform', id: 'fakes-03', col: 42, row: 14, width: 3 },
+      { type: 'fake-platform', id: 'fakes-04', col: 38, row: 11, width: 3 },
+      { type: 'fake-platform', id: 'fakes-05', col: 34, row: 8, width: 3 },
     ],
   },
   {
@@ -93,8 +124,15 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
       // decisions rather than one long dash. A floor that looks identical
       // whether or not it will kill you in half a second is the sector's
       // thesis stated plainly.
-      { type: 'electric-floor', id: 'ef-01', col: 13, width: 6, row: 22 },
-      { type: 'electric-floor', id: 'ef-02', col: 27, width: 6, row: 22 },
+      // A LONG IDLE, because at idle the plate is now invisible and that is
+      // the whole trap. On the default cycle it was only ever dark for 900
+      // of every 1950ms, so a player walking up to it met it lit more often
+      // than not, which is the same thing as marking it. At 2400 it spends
+      // two thirds of its cycle indistinguishable from the floor either
+      // side of it, and the 500ms warning flare — twice `MIN_WARNING_MS` —
+      // is still the only thing that decides whether crossing is safe.
+      { type: 'electric-floor', id: 'ef-01', col: 13, width: 6, row: 22, timing: { idleMs: 2400, warningMs: 500, activeMs: 500, cooldownMs: 250 } },
+      { type: 'electric-floor', id: 'ef-02', col: 27, width: 6, row: 22, timing: { idleMs: 2400, warningMs: 500, activeMs: 500, cooldownMs: 250 } },
       { type: 'laser', id: 'laser-01', col: 38, topRow: 16, bottomRow: 21 },
     ],
   },
@@ -167,23 +205,26 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     traps: [
       ...dropSpike('mspike-01', 14, 21, 22),
       ...dropSpike('mspike-02', 24, 21, 22),
-      // The last one lands immediately after the pit, so stopping dead is
-      // not available once the jump is taken — the player has to brake
-      // *before* committing to it.
+      // FIRED FROM THE LIP OF THE PIT, so the spike appears while the
+      // player is already in the air over it.
       //
-      // Ten columns of lead, not six, and a full second on the ground: at
-      // six the spike fell while the player was already two strides from
-      // the lip, which is not a decision, and it had retracted again before
-      // anyone could land on it. At ten they watch it drop for the whole
-      // approach and it is still there when a jump taken on momentum puts
-      // them on top of it.
+      // Five columns of lead, not ten. At ten the whole fall happened
+      // during the run-up — "третьи шипы падают слишком рано, ещё не
+      // успеваю добежать" (owner) — and what waited at the far side was a
+      // spike standing still, which is a wall, not an ambush. At five the
+      // trigger's left edge sits on column 29, the last solid tile before
+      // the pit: cross it at a run, take the jump, and the spike winks into
+      // existence overhead mid-flight, hangs its `warningMs`, and is
+      // falling as the landing arrives — "можно сделать чтобы в прыжке над
+      // пропастью появлялся шип" (owner).
       //
-      // Its trigger also used to be a two-column line at 30-31 — inside the
-      // pit — so it fired only if a jump arc happened to clip it, and never
-      // at all for a player who walked up and stopped. Every ambush in the
-      // campaign now uses the shared `approach` band, which is the full
-      // lead wide and sits on the floor the player is actually running on.
-      ...dropSpike('mspike-03', 34, 21, 22, { lead: 10, activeMs: 1000 }),
+      // What keeps it inside CLAUDE.md #4.2: the spike is not lethal while
+      // it hangs (`AmbushSpikeTrap`'s HANG_MS), so the telegraph is intact
+      // and visible; what the player loses is the option to answer it by
+      // stopping, because they already jumped. That costs the attempt and
+      // never the run — the pit is crossable from a standstill, and the
+      // second time through, braking before the lip is the answer.
+      ...dropSpike('mspike-03', 34, 21, 22, { lead: 5, activeMs: 1000 }),
     ],
   },
   {
@@ -247,6 +288,22 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
       // again here with everything else going on at once.
       { col: 22, row: 19, width: 3 },
       { col: 34, row: 19, width: 5 },
+      // THE STEP THAT WAS MISSING, and without it this level was a dead
+      // end. From the right-hand ground the only way up was 34/19, and
+      // from there the exit tier is six rows up — twice a jump. The one
+      // link between them was the crumbling ledge at 29-31/16, away to the
+      // left, and `orbit-01` sweeps columns 31.8-35.2 across rows
+      // 14.8-18.2, which is precisely that gap: measured live, 30 staggered
+      // attempts to make that hop landed it 0 times, 7 of them fatal and
+      // the rest in the pit. "Когда ты попадаешь на правую сторону ты уже
+      // никак не можешь пройти, шип нельзя перепрыгнуть" (owner) — a
+      // softlock, and CLAUDE.md #4.4 does not bend.
+      //
+      // Columns 36-39 clear the orbit by less than a tile, so the climb
+      // runs right along the spike's reach without ever needing to cross
+      // it. The left-hand route over the crumbling ledge and under the
+      // orbit is still there and still the short way.
+      { col: 36, row: 16, width: 4 },
       { col: 34, row: 13, width: 6 },
     ],
     playerStartCol: 2,

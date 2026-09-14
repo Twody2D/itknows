@@ -78,7 +78,7 @@ describe('SaveService', () => {
       SaveService.markCompleted('sector-01-level-01');
       expect(YandexGamesService.setPlayerData).toHaveBeenCalledWith({
         save: JSON.stringify({
-          version: 6,
+          version: 7,
           completedLevels: ['sector-01-level-01'],
           lastLevelId: null,
           credits: 0,
@@ -94,7 +94,7 @@ describe('SaveService', () => {
             equippedTrail: 'data_trail',
           },
           processedPurchaseTokens: [],
-          ghosts: {},
+          levelBests: {},
           sectorBests: {},
           daily: { date: '', bestTimeMs: null, bestDeaths: null, continuesUsed: 0 },
         }),
@@ -146,7 +146,7 @@ describe('SaveService', () => {
             equippedTrail: 'data_trail',
           },
           processedPurchaseTokens: ['tok-1'],
-          ghosts: {},
+          levelBests: {},
           sectorBests: {},
         }),
       });
@@ -191,44 +191,47 @@ describe('SaveService', () => {
     });
   });
 
-  describe('ghosts', () => {
-    it('has no ghost for a level that has never been beaten', () => {
-      expect(SaveService.getGhost('sector-01-level-01')).toBeNull();
+  describe('per-level best time', () => {
+    it('has no best for a level that has never been beaten', () => {
+      expect(SaveService.getLevelBestMs('sector-01-level-01')).toBeNull();
     });
 
-    it('stores the first recorded run as the best', () => {
-      SaveService.saveGhostIfBest('sector-01-level-01', 5000, [0, 10, 20, 0]);
-      expect(SaveService.getGhost('sector-01-level-01')).toEqual({ timeMs: 5000, samples: [0, 10, 20, 0] });
+    it('stores the first clear as the best', () => {
+      SaveService.saveLevelBestIfFaster('sector-01-level-01', 5000);
+      expect(SaveService.getLevelBestMs('sector-01-level-01')).toBe(5000);
     });
 
-    it('replaces the stored ghost with a strictly faster run', () => {
-      SaveService.saveGhostIfBest('sector-01-level-01', 5000, [0, 10, 20, 0]);
-      SaveService.saveGhostIfBest('sector-01-level-01', 4000, [0, 11, 21, 1]);
-      expect(SaveService.getGhost('sector-01-level-01')).toEqual({ timeMs: 4000, samples: [0, 11, 21, 1] });
+    it('replaces the stored best with a strictly faster run', () => {
+      SaveService.saveLevelBestIfFaster('sector-01-level-01', 5000);
+      SaveService.saveLevelBestIfFaster('sector-01-level-01', 4000);
+      expect(SaveService.getLevelBestMs('sector-01-level-01')).toBe(4000);
     });
 
-    it('keeps the existing ghost when a new run is not faster', () => {
-      SaveService.saveGhostIfBest('sector-01-level-01', 4000, [0, 11, 21, 1]);
-      SaveService.saveGhostIfBest('sector-01-level-01', 4000, [0, 99, 99, 0]);
-      SaveService.saveGhostIfBest('sector-01-level-01', 6000, [0, 99, 99, 0]);
-      expect(SaveService.getGhost('sector-01-level-01')).toEqual({ timeMs: 4000, samples: [0, 11, 21, 1] });
+    it('keeps the existing best when a new run is not faster', () => {
+      SaveService.saveLevelBestIfFaster('sector-01-level-01', 4000);
+      SaveService.saveLevelBestIfFaster('sector-01-level-01', 4000);
+      SaveService.saveLevelBestIfFaster('sector-01-level-01', 6000);
+      expect(SaveService.getLevelBestMs('sector-01-level-01')).toBe(4000);
     });
 
-    it('keeps ghosts for different levels independent', () => {
-      SaveService.saveGhostIfBest('sector-01-level-01', 4000, [0, 1, 2, 0]);
-      SaveService.saveGhostIfBest('sector-02-level-03', 9000, [0, 3, 4, 1]);
-      expect(SaveService.getGhost('sector-01-level-01')).toEqual({ timeMs: 4000, samples: [0, 1, 2, 0] });
-      expect(SaveService.getGhost('sector-02-level-03')).toEqual({ timeMs: 9000, samples: [0, 3, 4, 1] });
+    it('keeps levels independent', () => {
+      SaveService.saveLevelBestIfFaster('sector-01-level-01', 4000);
+      SaveService.saveLevelBestIfFaster('sector-02-level-03', 9000);
+      expect(SaveService.getLevelBestMs('sector-01-level-01')).toBe(4000);
+      expect(SaveService.getLevelBestMs('sector-02-level-03')).toBe(9000);
     });
 
     /**
-     * Ghost keys used to carry a `::variantId` suffix. When the adaptive
-     * variants were removed the key became the level id alone, and a save
-     * written before that still holds the old shape — so `parseSave` folds
-     * the canonical ones forward instead of silently losing every personal
-     * best (CLAUDE.md #8).
+     * Two migrations meet in this field, and a personal best must survive
+     * both (CLAUDE.md #8 — progress is never lost).
+     *
+     * Keys once carried a `::variantId` suffix, dropped when the adaptive
+     * variants were removed; values were once `{ timeMs, samples }` records
+     * backing the ghost replay, dropped when the ghost itself was removed
+     * at the owner's request. A save written before either change still
+     * holds the old shapes.
      */
-    describe('keys written before the variants were removed', () => {
+    describe('saves written before the ghost was removed', () => {
       const cloudSave = (ghosts: Record<string, unknown>): void => {
         vi.mocked(YandexGamesService.isAvailable).mockReturnValue(true);
         vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
@@ -244,16 +247,22 @@ describe('SaveService', () => {
         });
       };
 
-      it('carries a canonical trace forward onto the level id', async () => {
-        cloudSave({ 'sector-01-level-01::standard': { timeMs: 7000, samples: [0, 5, 5, 0] } });
+      it('keeps the time out of a v6 ghost record and drops the trace', async () => {
+        cloudSave({ 'sector-01-level-01': { timeMs: 7000, samples: [0, 5, 5, 0] } });
         await SaveService.syncWithCloud();
-        expect(SaveService.getGhost('sector-01-level-01')).toEqual({ timeMs: 7000, samples: [0, 5, 5, 0] });
+        expect(SaveService.getLevelBestMs('sector-01-level-01')).toBe(7000);
       });
 
-      it('drops a trace recorded in geometry that no longer exists', async () => {
+      it('carries a canonical pre-variant key forward onto the level id', async () => {
+        cloudSave({ 'sector-01-level-01::standard': { timeMs: 7000, samples: [0, 5, 5, 0] } });
+        await SaveService.syncWithCloud();
+        expect(SaveService.getLevelBestMs('sector-01-level-01')).toBe(7000);
+      });
+
+      it('drops a time set on geometry that no longer exists', async () => {
         cloudSave({ 'sector-01-level-01::gentle': { timeMs: 3000, samples: [0, 5, 5, 0] } });
         await SaveService.syncWithCloud();
-        expect(SaveService.getGhost('sector-01-level-01')).toBeNull();
+        expect(SaveService.getLevelBestMs('sector-01-level-01')).toBeNull();
       });
 
       it('keeps the faster one when a save holds both shapes of the key', async () => {
@@ -262,7 +271,13 @@ describe('SaveService', () => {
           'sector-01-level-01': { timeMs: 4200, samples: [0, 1, 1, 0] },
         });
         await SaveService.syncWithCloud();
-        expect(SaveService.getGhost('sector-01-level-01')).toEqual({ timeMs: 4200, samples: [0, 1, 1, 0] });
+        expect(SaveService.getLevelBestMs('sector-01-level-01')).toBe(4200);
+      });
+
+      it('drops a corrupt entry instead of ever returning it', async () => {
+        cloudSave({ 'sector-01-level-01': { timeMs: -1, samples: [0, 1] } });
+        await SaveService.syncWithCloud();
+        expect(SaveService.getLevelBestMs('sector-01-level-01')).toBeNull();
       });
     });
 
@@ -271,70 +286,38 @@ describe('SaveService', () => {
         vi.mocked(YandexGamesService.isAvailable).mockReturnValue(true);
       });
 
-      it('adopts a cloud-only ghost this device has never recorded', async () => {
+      const cloudBests = (levelBests: Record<string, number>): void => {
         vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
           save: JSON.stringify({
-            version: 6,
+            version: 7,
             completedLevels: [],
             lastLevelId: null,
             credits: 0,
             inventory: null,
             processedPurchaseTokens: [],
-            ghosts: { 'sector-01-level-01': { timeMs: 7000, samples: [0, 5, 5, 0] } },
+            levelBests,
           }),
         });
+      };
+
+      it('adopts a cloud-only best this device has never set', async () => {
+        cloudBests({ 'sector-01-level-01': 7000 });
         await SaveService.syncWithCloud();
-        expect(SaveService.getGhost('sector-01-level-01')).toEqual({ timeMs: 7000, samples: [0, 5, 5, 0] });
+        expect(SaveService.getLevelBestMs('sector-01-level-01')).toBe(7000);
       });
 
-      it('keeps this device\'s faster ghost over a slower cloud one', async () => {
-        SaveService.saveGhostIfBest('sector-01-level-01', 3000, [0, 1, 1, 0]);
-        vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
-          save: JSON.stringify({
-            version: 6,
-            completedLevels: [],
-            lastLevelId: null,
-            credits: 0,
-            inventory: null,
-            processedPurchaseTokens: [],
-            ghosts: { 'sector-01-level-01': { timeMs: 7000, samples: [0, 5, 5, 0] } },
-          }),
-        });
+      it("keeps this device's faster time over a slower cloud one", async () => {
+        SaveService.saveLevelBestIfFaster('sector-01-level-01', 3000);
+        cloudBests({ 'sector-01-level-01': 7000 });
         await SaveService.syncWithCloud();
-        expect(SaveService.getGhost('sector-01-level-01')).toEqual({ timeMs: 3000, samples: [0, 1, 1, 0] });
+        expect(SaveService.getLevelBestMs('sector-01-level-01')).toBe(3000);
       });
 
-      it('adopts the cloud ghost when it is faster than this device\'s own', async () => {
-        SaveService.saveGhostIfBest('sector-01-level-01', 9000, [0, 1, 1, 0]);
-        vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
-          save: JSON.stringify({
-            version: 6,
-            completedLevels: [],
-            lastLevelId: null,
-            credits: 0,
-            inventory: null,
-            processedPurchaseTokens: [],
-            ghosts: { 'sector-01-level-01': { timeMs: 4000, samples: [0, 5, 5, 0] } },
-          }),
-        });
+      it("adopts the cloud time when it beats this device's own", async () => {
+        SaveService.saveLevelBestIfFaster('sector-01-level-01', 9000);
+        cloudBests({ 'sector-01-level-01': 4000 });
         await SaveService.syncWithCloud();
-        expect(SaveService.getGhost('sector-01-level-01')).toEqual({ timeMs: 4000, samples: [0, 5, 5, 0] });
-      });
-
-      it('drops a corrupt ghost entry instead of ever returning it', async () => {
-        vi.mocked(YandexGamesService.getPlayerData).mockResolvedValue({
-          save: JSON.stringify({
-            version: 6,
-            completedLevels: [],
-            lastLevelId: null,
-            credits: 0,
-            inventory: null,
-            processedPurchaseTokens: [],
-            ghosts: { 'sector-01-level-01': { timeMs: -1, samples: [0, 1] } },
-          }),
-        });
-        await SaveService.syncWithCloud();
-        expect(SaveService.getGhost('sector-01-level-01')).toBeNull();
+        expect(SaveService.getLevelBestMs('sector-01-level-01')).toBe(4000);
       });
     });
   });
@@ -440,7 +423,7 @@ describe('SaveService', () => {
           credits: 0,
           inventory: null,
           processedPurchaseTokens: [],
-          ghosts: {},
+          levelBests: {},
           sectorBests: { 'sector-01': 30000, 'sector-02': 90000 },
         }),
       });
