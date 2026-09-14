@@ -47,6 +47,7 @@ export class TouchControls {
 
   private readonly onPointerMove: (pointer: Phaser.Input.Pointer) => void;
   private readonly onPointerUp: (pointer: Phaser.Input.Pointer) => void;
+  private readonly onResize: () => void;
 
   constructor(scene: Phaser.Scene, input: InputState) {
     this.scene = scene;
@@ -69,7 +70,11 @@ export class TouchControls {
     scene.input.on('pointerupoutside', this.onPointerUp);
 
     this.layout();
-    scene.scale.on('resize', () => this.layout());
+    // `scene.scale` is the GAME's ScaleManager, not the scene's own emitter:
+    // it outlives every scene, so this subscription has to be taken back in
+    // `destroy()` (see the note there) or it fires into a torn-down scene.
+    this.onResize = () => this.layout();
+    scene.scale.on('resize', this.onResize);
   }
 
   private onMoveDown(pointer: Phaser.Input.Pointer): void {
@@ -219,6 +224,16 @@ export class TouchControls {
     this.scene.input.off('pointermove', this.onPointerMove);
     this.scene.input.off('pointerup', this.onPointerUp);
     this.scene.input.off('pointerupoutside', this.onPointerUp);
+
+    // The one that was missing, and it was not harmless. Every death
+    // restarts this scene, and each restart used to leave another live
+    // `resize` handler behind on the game-wide ScaleManager, holding zones
+    // that no longer exist. The next viewport change then ran `layout()`
+    // on all of them — and on a phone a viewport change is not a rare
+    // event: the address bar sliding away is one, so is a rotation, so is
+    // the keyboard opening. Measured before the fix: four resizes after a
+    // few deaths threw four TypeErrors out of `refreshHitArea`.
+    this.scene.scale.off('resize', this.onResize);
 
     this.graphics.destroy();
     this.moveZone.destroy();
