@@ -250,7 +250,6 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[], levelSeed: number, gro
             // as its neighbours now, in a state that says it will not hold
             // (`drawPlatformSlabCracked`).
             texture: def.row === groundRow ? groundTopKey(levelSeed, def.col + i) : 'tile-platform-slab-cracked',
-            asFloor: def.row === groundRow,
             // A trapdoor in the ground row brings its own sub-surface rock:
             // the runs either side stop at its columns, so without this the
             // level draws a black shaft under a floor that still reads as
@@ -571,11 +570,12 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
         .setOrigin(0, 0);
     }
 
-    // One bright rim spanning the whole run, on top of the per-column seam
-    // lines — a run of ground has to read as a single big "safe to stand"
-    // platform from a distance, not a dotted line you only see up close
-    // (VISUAL RESET v1 #8).
-    scene.add.rectangle(runLeft + runWidth / 2, surfaceTop, runWidth, 2, PALETTE.cyan, 0.85).setOrigin(0.5, 0);
+    // NO RIM RECTANGLE HERE ANY MORE. A run of ground still reads as one
+    // bright "safe to stand" edge (VISUAL RESET v1 #8) — the lip is just
+    // drawn into every ground tile now instead of laid over the run as one
+    // long shape. Overlaid shapes had to meet the trapdoors' and the
+    // sliding slabs' own rims, and the pixel they shared came out unpainted;
+    // see `drawGroundTop` for the tick that produced.
 
     const runHeight = (LEVEL_HEIGHT_TILES - def.groundRow) * TILE_SIZE;
     const collider = scene.add.rectangle(runLeft + runWidth / 2, surfaceTop + runHeight / 2, runWidth, runHeight, 0, 0);

@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { PALETTE } from '@/config/palette';
 
 export interface MovingPlatformConfig {
   id: string;
@@ -9,10 +8,10 @@ export interface MovingPlatformConfig {
   /** Display/body width in pixels — the sprite's 10px tile texture is stretched to fit. */
   widthPx: number;
   /**
-   * Draw it as a length of floor rather than a mechanical slab: ground
-   * texture, plus the bright cyan lip a run of ground carries. For a slab
-   * that slides along the ground row, where what the level is actually
-   * showing is a hole in the floor moving, not a vehicle.
+   * Draw it as a length of floor rather than a mechanical slab — the ground
+   * texture, bright lip and all. For a slab that slides along the ground
+   * row, where what the level is actually showing is a hole in the floor
+   * moving, not a vehicle.
    */
   asFloor?: boolean | undefined;
   /**
@@ -51,7 +50,6 @@ export class MovingPlatformTrap {
   private lastX: number;
   private lastY: number;
   private tween: Phaser.Tweens.Tween | null = null;
-  private readonly rim: Phaser.GameObjects.Rectangle | null;
   private readonly scene: Phaser.Scene;
   private readonly config: MovingPlatformConfig;
   private armed: boolean;
@@ -81,12 +79,6 @@ export class MovingPlatformTrap {
     this.lastX = config.from.x;
     this.lastY = config.from.y;
 
-    this.rim = config.asFloor
-      ? scene.add
-          .rectangle(config.from.x, config.from.y - 5, config.widthPx, 2, PALETTE.cyan, 0.85)
-          .setOrigin(0.5, 0)
-      : null;
-
     if (!this.armed) this.tween = this.startTween(true);
   }
 
@@ -111,7 +103,6 @@ export class MovingPlatformTrap {
 
   /** Movement since the last call — apply to a passenger standing on top. */
   consumeDelta(): { dx: number; dy: number } {
-    this.rim?.setPosition(this.gameObject.x, this.gameObject.y - 5);
     const dx = this.gameObject.x - this.lastX;
     const dy = this.gameObject.y - this.lastY;
     this.lastX = this.gameObject.x;
@@ -121,7 +112,6 @@ export class MovingPlatformTrap {
 
   destroy(): void {
     this.tween?.stop();
-    this.rim?.destroy();
     this.gameObject.destroy();
   }
 }

@@ -61,6 +61,26 @@ export function drawGroundTop(ctx: CanvasRenderingContext2D, light: boolean): vo
     ctx.fillRect(TILE_SIZE / 2 - 1.5, 0, 3, 2);
     ctx.shadowBlur = 0;
   }
+
+  // THE BRIGHT LIP LIVES HERE, IN THE TILE, and that is the whole point of
+  // this line. It used to be painted over the finished floor as one long
+  // `Rectangle` per run of ground, with a second one per trapdoor and per
+  // sliding slab — and where two of those met, the shared pixel came out
+  // unpainted: the ground's own dim lip showing through a one-pixel gap in
+  // the bright one. On the owner's screen every virtual pixel is drawn
+  // three to four wide, so that gap was a tick mark, sitting precisely at
+  // the seam between the floor and the thing that was about to drop out of
+  // it — measured at world col 37 on BOOT, 15/25/35/42 on DROP, 40 on BEAM,
+  // and so on down the list. A mark that appears exactly where a trapdoor
+  // starts is the one mark this floor must never carry.
+  //
+  // Tiles are textured quads and butt together exactly; overlaid shapes did
+  // not. So the lip is part of the material now, every tile carries its
+  // own, and there is no seam left to leave a gap in. The colors are the
+  // old two passes in the old order (dim under bright), so the floor looks
+  // exactly as it did — it just no longer has a joint.
+  ctx.fillStyle = hexToCss(PALETTE.cyan, 0.85);
+  ctx.fillRect(0, 0, TILE_SIZE, 2);
 }
 
 export function drawGroundEdge(ctx: CanvasRenderingContext2D, side: 'left' | 'right'): void {
@@ -119,6 +139,11 @@ export function drawPlatformSlab(ctx: CanvasRenderingContext2D, bolt: boolean): 
   ctx.fillStyle = hexToCss(PALETTE.metalEdge);
   ctx.fillRect(0, 0, TILE_SIZE, 3);
   ctx.fillStyle = hexToCss(PALETTE.cyanDim, 0.9);
+  ctx.fillRect(0, 0, TILE_SIZE, 2);
+  // The same bright lip the ground carries, for the same reason — see
+  // `drawGroundTop`. Both passes, in both places, or the two materials stop
+  // matching.
+  ctx.fillStyle = hexToCss(PALETTE.cyan, 0.85);
   ctx.fillRect(0, 0, TILE_SIZE, 2);
   // The underside — the one honest difference from ground, which has none.
   ctx.fillStyle = hexToCss(PALETTE.outline, 0.55);

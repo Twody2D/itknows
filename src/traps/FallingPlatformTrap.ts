@@ -1,5 +1,4 @@
 import Phaser from 'phaser';
-import { PALETTE } from '@/config/palette';
 import { TILE_SIZE } from '@/config/display';
 
 export interface FallingPlatformConfig {
@@ -25,20 +24,6 @@ export interface FallingPlatformConfig {
    * announces itself is a floor nobody walks on.
    */
   texture?: string | undefined;
-  /**
-   * True when this sits in the ground row and has to pass for ground:
-   * it then carries the bright cyan lip every run of floor has, so the
-   * level's edge reads as one unbroken line across it.
-   *
-   * False for a stone hanging in mid-air over a pit (sector 02's
-   * FREEFALL), which carries no lip of its own: it takes
-   * `tile-platform-slab-cracked` instead (see `Level.ts`), the same slab
-   * its neighbours are drawn with, fractured. The player can still tell
-   * which stones fall — they have to be able to, these hang over pits —
-   * but the row reads as one material rather than as patches of floor
-   * dropped into a run of platforms.
-   */
-  asFloor?: boolean | undefined;
   /**
    * Default (unset/false): the ordinary floor that sinks once it is stood
    * on — the player is already on top of it when it starts to go.
@@ -72,9 +57,6 @@ export interface FallingPlatformConfig {
 }
 
 type State = 'armed' | 'solid' | 'doomed' | 'falling' | 'gone';
-
-/** Width of the bright cyan lip `Level.ts` paints along every run of ground. */
-const RIM_HEIGHT = 2;
 
 /**
  * Downward acceleration of a slab that has let go, px/s².
@@ -123,16 +105,17 @@ const FALL_ACCEL = 1100;
  * должно быть") — a floor that reassembles itself reads as a bug, and it
  * quietly turns a trap into a waiting game.
  *
- * A floor in the ground row carries its own cyan lip and its own
- * sub-surface rock, because `Level.ts` paints both per contiguous run and a
- * trapdoor is not part of one — without them it would be a bright edge with
- * a notch in it over a black shaft, which is the one tell it must not have.
+ * A floor in the ground row brings its own sub-surface rock, because
+ * `Level.ts` paints that per contiguous run and a trapdoor is not part of
+ * one — without it the slab would be solid-looking floor over a black
+ * shaft, which is the one tell it must not have. The bright lip needs no
+ * such handling: it is painted into the ground tile itself, so a trapdoor
+ * drawn with that tile simply has one (see `art/drawTiles.ts`).
  */
 export class FallingPlatformTrap {
   readonly type = 'falling-platform';
   readonly id: string;
   readonly gameObject: Phaser.Physics.Arcade.Sprite;
-  private readonly rim: Phaser.GameObjects.Rectangle | null;
   private readonly shaft: Phaser.GameObjects.TileSprite | null;
   private readonly body: Phaser.Physics.Arcade.Body;
 
@@ -169,12 +152,6 @@ export class FallingPlatformTrap {
     this.body = this.gameObject.body as Phaser.Physics.Arcade.Body;
     this.body.setAllowGravity(false);
     this.body.setImmovable(true);
-
-    this.rim = config.asFloor
-      ? scene.add
-          .rectangle(config.x, config.y - TILE_SIZE / 2, TILE_SIZE, RIM_HEIGHT, PALETTE.cyan, 0.85)
-          .setOrigin(0.5, 0)
-      : null;
 
     // Behind everything drawn at the default depth (the slab included, so
     // it sinks *in front of* the rock for the frame the two overlap), but
@@ -257,12 +234,10 @@ export class FallingPlatformTrap {
     }
 
     this.gameObject.x = this.originX + Math.sin(this.timerMs * 0.08) * 1.2;
-    this.syncRim();
     if (this.gameObject.y - this.originY > 200) {
       this.state = 'gone';
       this.timerMs = 0;
       this.gameObject.setVisible(false);
-      this.rim?.setVisible(false);
       this.body.setAccelerationY(0);
       this.body.setVelocityY(0);
     }
@@ -273,13 +248,8 @@ export class FallingPlatformTrap {
     this.body.setAccelerationY(FALL_ACCEL);
   }
 
-  private syncRim(): void {
-    this.rim?.setPosition(this.gameObject.x, this.gameObject.y - TILE_SIZE / 2);
-  }
-
   destroy(): void {
     this.shaft?.destroy();
-    this.rim?.destroy();
     this.gameObject.destroy();
   }
 }
