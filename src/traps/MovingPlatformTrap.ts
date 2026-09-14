@@ -64,7 +64,7 @@ export class MovingPlatformTrap {
     this.gameObject = scene.physics.add.sprite(
       config.from.x,
       config.from.y,
-      config.asFloor ? 'tile-ground-top-s3' : 'tile-moving-platform',
+      config.asFloor ? 'tile-ground-top' : 'tile-moving-platform',
     );
     this.gameObject.setDisplaySize(config.widthPx, 10);
     const body = this.gameObject.body as Phaser.Physics.Arcade.Body;

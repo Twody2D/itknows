@@ -86,21 +86,12 @@ export function generateTileTextures(scene: Phaser.Scene): void {
   // traps (falling/disappearing/electric-floor) key off it directly; the
   // position-aware variants below are only for `Level.ts`'s static ground.
   const groundTop = makeCanvas(TILE_SIZE, TILE_SIZE);
-  drawGroundTop(groundTop.ctx, 0, false);
-  addOrReplaceCanvas(scene, 'tile-ground', groundTop.canvas);
+  drawGroundTop(groundTop.ctx, false);
   addOrReplaceCanvas(scene, 'tile-ground-top', groundTop.canvas);
 
-  // Four seam variants (irregular panel breaks), each with a lit and unlit version.
-  const seams = [0, 1, 2, 3] as const;
-  for (const seam of seams) {
-    const plain = makeCanvas(TILE_SIZE, TILE_SIZE);
-    drawGroundTop(plain.ctx, seam, false);
-    addOrReplaceCanvas(scene, `tile-ground-top-s${seam}`, plain.canvas);
-
-    const lit = makeCanvas(TILE_SIZE, TILE_SIZE);
-    drawGroundTop(lit.ctx, seam, true);
-    addOrReplaceCanvas(scene, `tile-ground-top-s${seam}-light`, lit.canvas);
-  }
+  const groundTopLight = makeCanvas(TILE_SIZE, TILE_SIZE);
+  drawGroundTop(groundTopLight.ctx, true);
+  addOrReplaceCanvas(scene, 'tile-ground-top-light', groundTopLight.canvas);
 
   const groundEdge = makeCanvas(TILE_SIZE, TILE_SIZE);
   drawGroundEdge(groundEdge.ctx);

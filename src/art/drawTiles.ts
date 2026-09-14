@@ -22,7 +22,7 @@ export const EXIT_VISUAL_HEIGHT_TILES = 5;
  * panels instead of one tiny repeating unit — same reproducible-from-position
  * discipline CLAUDE.md #4.6 asks of gameplay RNG, applied to the world's look.
  */
-export function drawGroundTop(ctx: CanvasRenderingContext2D, seam: 0 | 1 | 2 | 3, light: boolean): void {
+export function drawGroundTop(ctx: CanvasRenderingContext2D, light: boolean): void {
   ctx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
   ctx.fillStyle = hexToCss(PALETTE.metalDark);
   ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
@@ -37,29 +37,23 @@ export function drawGroundTop(ctx: CanvasRenderingContext2D, seam: 0 | 1 | 2 | 3
   ctx.fillStyle = hexToCss(PALETTE.cyanDim, 0.9);
   ctx.fillRect(0, 0, TILE_SIZE, 2);
 
-  // Panel seam(s) — position varies by variant so consecutive tiles don't all
-  // look like their own tiny panel; seam 3 has none (mid-panel), the rest cut
-  // the tile at a different point.
+  // NO PANEL SEAMS. The surface used to carry a per-column dark hairline in
+  // one of four positions, so a run would read as panels of varying width
+  // rather than one unit repeated. It cost more than it bought.
   //
-  // NEVER ON THE OUTER PIXELS. Seam 0 used to draw on x=0 and x=TILE_SIZE-1,
-  // so whenever it landed next to another tile that also seamed its facing
-  // edge, the two 1px lines met and the floor showed a 2px dark tick —
-  // darker and twice as wide as any seam is meant to be. Measured on DROP at
-  // x=198-199. It means nothing, it is scattered at random, and a player who
-  // has learned that this floor gives way reads it as a mark: "тёмная
-  // засечка... я вижу стык где будет яма" (owner). Inset by one, the seams
-  // still divide the run into panels and two tiles can never pool into one
-  // heavier line.
-  ctx.fillStyle = hexToCss(PALETTE.metalDark, 0.45);
-  if (seam === 0) {
-    ctx.fillRect(1, 4, 1, TILE_SIZE - 4);
-    ctx.fillRect(TILE_SIZE - 2, 4, 1, TILE_SIZE - 4);
-  } else if (seam === 1) {
-    ctx.fillRect(3, 4, 1, TILE_SIZE - 4);
-  } else if (seam === 2) {
-    ctx.fillRect(7, 4, 1, TILE_SIZE - 4);
-  }
-
+  // The game runs at a fixed virtual height of 270 and is stretched to the
+  // window, so on a real screen every one of those 1px lines is drawn 3-4px
+  // wide — the owner's window measured 1880x900, a scale of 3.33. What he
+  // saw was a floor ruled with dark vertical ticks at irregular intervals,
+  // and on a floor that can give way at any column, a tick is a mark:
+  // "тёмная засечка... я вижу стык где будет яма". Three rounds went into
+  // hunting a seam that was never in one place, because it was in all of
+  // them.
+  //
+  // The surface keeps its variety where it cannot be mistaken for a
+  // warning: the lamp below, and the lit/unlit split across columns. The
+  // only vertical marks left on the floor are the ones that MEAN something
+  // — `drawGroundEdge`'s warm lip at the edge of a real hole.
   if (light) {
     ctx.fillStyle = hexToCss(PALETTE.cyan);
     ctx.shadowColor = hexToCss(PALETTE.cyan, 0.95);
@@ -70,7 +64,7 @@ export function drawGroundTop(ctx: CanvasRenderingContext2D, seam: 0 | 1 | 2 | 3
 }
 
 export function drawGroundEdge(ctx: CanvasRenderingContext2D): void {
-  drawGroundTop(ctx, 0, false);
+  drawGroundTop(ctx, false);
   // A dark drop-off cap plus a warm warning sliver right at the lip — a gap
   // must read as a hazard boundary at a glance, not just a slightly darker
   // pixel (VISUAL RESET v1 #9: danger has to be legible to a kid, not just
@@ -87,12 +81,13 @@ export function drawGroundEdge(ctx: CanvasRenderingContext2D): void {
 }
 
 export function drawGroundFill(ctx: CanvasRenderingContext2D): void {
+  // Flat. The sub-surface rock used to be edged with a darker line on both
+  // sides, which in a tiled sprite repeats as a dark tick every 10px — the
+  // same false ruling the surface carried, one row lower. See
+  // `drawGroundTop` for why none of it survives.
   ctx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
   ctx.fillStyle = hexToCss(PALETTE.metalDark);
   ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
-  ctx.fillStyle = hexToCss(PALETTE.metalDark, 0.6);
-  ctx.fillRect(0, 0, 1, TILE_SIZE);
-  ctx.fillRect(TILE_SIZE - 1, 0, 1, TILE_SIZE);
 }
 
 /** A floating structural slab — visually distinct from ground so "what I can stand on" reads at a glance. */

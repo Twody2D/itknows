@@ -96,28 +96,22 @@ function groundRuns(def: LevelDef): Array<[number, number]> {
 }
 
 /**
- * Picks a ground-top texture key per column from a level-seeded hash instead
- * of `col % N` — panel seams and lights land at irregular positions so a run
- * of tiles reads as variable-width panels, not one unit repeated (art-
- * direction reset, gameplay-screen pass). Deterministic: same level, same
- * column, same key, every run (CLAUDE.md #4.6's reproducibility discipline).
+ * Picks a ground-top texture key per column from a level-seeded hash so the
+ * lamps along a run land at irregular positions rather than on a beat.
+ * Deterministic: same level, same column, same key, every run (CLAUDE.md
+ * #4.6's reproducibility discipline).
+ *
+ * Lamps are all that is left to vary. The panel seams that used to be here
+ * are gone, and `drawGroundTop` carries the full account of why: a 1px
+ * hairline becomes a 3-4px dark tick once the 270-tall virtual screen is
+ * stretched to a real window, and a dark tick on a floor that can give way
+ * is read as a warning.
  */
 function groundTopKey(levelSeed: number, col: number): string {
-  const seamRoll = hash01(levelSeed + col * 7919);
-  const seam = seamRoll < 0.3 ? 0 : seamRoll < 0.55 ? 1 : seamRoll < 0.8 ? 2 : 3;
-  // NO SCUFFED-PANEL VARIANT. There used to be one on 5% of columns: a dark
-  // notch with a warm sliver above it — drawn, as it happens, in the same
-  // `dangerAlt` the level uses to mark the lip of a hole. Decoration was
-  // speaking the traps' language, and a player who has learned to read this
-  // floor reads it: a scuff a column or two ahead of a trapdoor (DROP had
-  // one at column 38, with the door at 39-41) is indistinguishable from the
-  // level telling you where the floor is about to go. "Я вижу стык где
-  // будет яма" — and the honest answer is that there was something to see,
-  // it just did not mean anything. Panel seams and lights carry all the
-  // variety the surface needs without saying anything about danger.
   const lightRoll = hash01(levelSeed + col * 2609 + 2);
-  return lightRoll < 0.12 ? `tile-ground-top-s${seam}-light` : `tile-ground-top-s${seam}`;
+  return lightRoll < 0.12 ? 'tile-ground-top-light' : 'tile-ground-top';
 }
+
 
 /**
  * Builds every trap def into a live instance. Runs in two passes because
