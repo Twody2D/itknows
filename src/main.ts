@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { GameState } from '@/core/GameState';
 import '@/ui/fonts';
 import { PALETTE } from '@/config/palette';
 import { PHYSICS } from '@/config/physics';
@@ -111,6 +112,9 @@ new OrientationGate((blocked) => {
 // CLAUDE.md #Phase 0).
 if (import.meta.env.DEV) {
   (window as unknown as { __game: Phaser.Game }).__game = game;
+  // The session counters, for the same verification scripts — the attempt
+  // and sector totals are only otherwise visible as rendered HUD glyphs.
+  (window as unknown as { __gameState: typeof GameState }).__gameState = GameState;
   void import('@/dev/ShopDevTools').then(({ ShopDevTools }) => {
     (window as unknown as { __shopDev: typeof ShopDevTools }).__shopDev = ShopDevTools;
   });

@@ -83,3 +83,48 @@ describe('GameState clock while paused', () => {
     expect(GameState.elapsedMs()).toBeLessThan(20);
   });
 });
+
+/**
+ * The sector counters survive a retry; only a different sector clears them.
+ *
+ * `GameplayScene.create` used to call `startSector()` whenever the level id
+ * ended in `-level-01`, and `create()` runs again on every death-restart —
+ * so every death on the first level of a sector wiped the sector's own
+ * totals, and the Sector Complete screen reported none of them. Measured
+ * live on BOOT: four deaths, `sector.deaths` still 0, while `run.deaths`
+ * counted 1-2-3-4 correctly. The owner saw the half that shows: "смерти
+ * неправильно считаются, то ли от ловушек, то ли от падения не засчитывает"
+ * — the cause was never the cause of death, it was which level he was on.
+ *
+ * The scene now compares `sectorIdOf(levelId)` against
+ * `GameState.currentSectorId`, the same shape of test `startRun()` already
+ * used for the level. These cover the store's half of that contract.
+ */
+describe('GameState sector totals', () => {
+  it('keeps counting deaths across restarts of the same level', () => {
+    GameState.startSector();
+    GameState.registerDeath();
+    GameState.registerDeath();
+    // A death-restart re-enters the scene; nothing about the sector changed.
+    GameState.startRun();
+    GameState.registerDeath();
+    expect(GameState.run.deaths).toBe(1);
+    expect(GameState.sector.deaths).toBe(3);
+  });
+
+  it('clears only when a new sector actually starts', () => {
+    GameState.startSector();
+    GameState.registerDeath();
+    GameState.registerDeath();
+    expect(GameState.sector.deaths).toBe(2);
+    GameState.startSector();
+    expect(GameState.sector.deaths).toBe(0);
+  });
+
+  it('names no sector until a level is entered, so the first one counts as a change', () => {
+    // A non-empty default made the "did the sector change?" test answer no
+    // on the very first level of the session — the same trap
+    // `currentLevelId` documents.
+    expect(GameState.currentSectorId).not.toBe('sector-01');
+  });
+});

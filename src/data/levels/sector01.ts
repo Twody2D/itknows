@@ -1,12 +1,5 @@
 import type { LevelDef } from '@/gameplay/LevelDef';
-import {
-  AMBUSH_TIMING,
-  AMBUSH_TRIGGER_LEAD,
-  dropSpike,
-  floorSpikes,
-  shiftingPit,
-  trapdoor,
-} from './ambush';
+import { dropSpike, floorSpikes, shiftingPit, trapdoor } from './ambush';
 
 /**
  * SECTOR 01 — SYSTEM BOOT. The ground is not your friend.
@@ -94,26 +87,15 @@ export const SECTOR_01_LEVELS: LevelDef[] = [
     playerStartCol: 2,
     exitCol: 43,
     traps: [
-      {
-        type: 'moving-spike',
-        id: 'mspike-01',
-        ambush: true,
-        fromCol: 26,
-        fromRow: 11,
-        toCol: 26,
-        toRow: 21,
-        timing: AMBUSH_TIMING,
-        loop: false,
-      },
-      {
-        type: 'trigger',
-        id: 'mspike-01-trigger',
-        col: 26 - AMBUSH_TRIGGER_LEAD,
-        row: 19,
-        width: 2,
-        height: 3,
-        targetId: 'mspike-01',
-      },
+      // Built by the shared helper rather than by hand, and that is a fix,
+      // not tidying. The hand-written pair had a trigger two columns wide
+      // starting three before the spike — so its right edge stopped a whole
+      // column short of the hazard, and the approach it was supposed to
+      // measure was 233ms against a 320ms warning: the spike landed after
+      // the player had gone past. The band was also three tiles tall
+      // instead of `APPROACH_BAND_TILES`, the exact hole a jumping player
+      // sails through (see that constant). `dropSpike` derives all of it.
+      ...dropSpike('mspike-01', 26, 21, 22, { fromRow: 11 }),
       // The sector's main idea, met once, at its plainest: a long clear
       // run-up, nothing else on screen, and the whole flash visible before
       // the floor goes.

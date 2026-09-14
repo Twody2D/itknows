@@ -35,7 +35,7 @@ import { selectVariant } from '@/ai/DifficultyDirector';
 import { Commentator } from '@/ai/Commentator';
 import { SystemVoice } from '@/ai/SystemVoice';
 import { personalityTag } from '@/ai/SystemPersonality';
-import { isSectorFinale, sectorNumberOf } from '@/gameplay/sectors';
+import { isSectorFinale, sectorIdOf, sectorNumberOf } from '@/gameplay/sectors';
 import type { SectorCompleteData } from '@/scenes/SectorCompleteScene';
 import { TutorialHints } from '@/ui/TutorialHints';
 import { fadeIn } from '@/ui/SceneFade';
@@ -158,7 +158,19 @@ export class GameplayScene extends Phaser.Scene {
       GameState.currentLevelId = this.levelDef.id;
       GameState.startRun();
     }
-    if (this.levelDef.id.endsWith('-level-01')) GameState.startSector();
+    // ONLY WHEN THE SECTOR ACTUALLY CHANGES, never on a retry. This used to
+    // read `id.endsWith('-level-01')`, and `create()` runs again on every
+    // death-restart — so each death on the first level of a sector reset the
+    // sector's own counters, and the Sector Complete screen reported none of
+    // them. Measured live on BOOT: four deaths, `sector.deaths` still 0,
+    // while `run.deaths` climbed 1-2-3-4 correctly (owner: "смерти
+    // неправильно считаются... не засчитывает"). Same shape of test as
+    // `startRun()` above, against the same kind of id.
+    const sectorId = sectorIdOf(this.levelDef.id);
+    if (GameState.currentSectorId !== sectorId) {
+      GameState.currentSectorId = sectorId;
+      GameState.startSector();
+    }
     GameState.currentVariantId = this.variantId;
 
     this.level = buildLevel(this, this.levelDef);

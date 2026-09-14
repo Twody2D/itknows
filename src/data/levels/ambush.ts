@@ -82,20 +82,32 @@ export const AMBUSH_TRIGGER_LEAD = 3;
 export const TRAPDOOR_LEAD = 1;
 
 /**
- * Timing for a DROP spike specifically.
+ * THERE IS NO SEPARATE DROP TIMING ANY MORE, and the reason is worth
+ * keeping.
  *
- * `warningMs` is 560 against the shared 320 because the window now holds two
- * things instead of one: the spike hangs visible and still for the first
- * 250ms (`AmbushSpikeTrap`'s `HANG_MS`, the telegraph) and falls through the
- * remaining 310ms — lethal the whole way down, which is the change the owner
- * asked for after watching one pass through the android harmlessly.
+ * A `warningMs` of 560 lived here on the theory that a drop spike needs a
+ * longer window than the rest: 250ms of telegraph plus 310ms of falling.
+ * What it actually produced was a hazard that arrives after the player has
+ * gone. Measured on a running player (`AMBUSH_TRIGGER_LEAD` is 318ms of
+ * approach):
  *
- * The lead is unchanged, and that is the point: a player who crosses the
- * trigger and keeps running arrives at ~318ms, which is 68ms into the fall.
- * The spike comes down ON them rather than waiting on the floor for them,
- * and stopping at the line still leaves the whole 250ms hang to react to.
+ * - A spike bank crossed at 298ms after its trigger and only turned lethal
+ *   at 567ms — 269ms of nothing, with the spikes still under the floor as
+ *   the player ran over them ("шип который из земли вылазит вылазит слишком
+ *   долго, успеваю пробежать" — owner).
+ * - A drop spike was lethal on time, at 267ms, and irrelevant anyway: on
+ *   `Cubic.easeIn` over 560ms it had covered 13% of its fall when the player
+ *   passed underneath, hanging 92px over their head. Lethal and nowhere
+ *   near them ("ловушка сверху падает слишком долго, я успеваю пробежать").
+ *
+ * Both are the same mistake — a window stretched past the approach it is
+ * supposed to match — so both go back to the shared `AMBUSH_TIMING`, which
+ * is written as the approach: at 320ms the bank snaps up into the player's
+ * path as they arrive, and the spike is 82% of the way down and still
+ * accelerating. The drop spike's own telegraph rule is unchanged and still
+ * enforced by `AmbushSpikeTrap` (lethal only after `HANG_MS`, which at 320
+ * is the first 48% of a visible, obviously-committed fall).
  */
-export const AMBUSH_DROP_TIMING = { ...AMBUSH_TIMING, warningMs: 560 } as const;
 
 /** How long a shifting pit takes to reach its new position — it has to finish before the player's take-off. */
 export const PIT_SHIFT_MS = 420;
@@ -153,7 +165,7 @@ export function approach(
  * A spike that falls out of nothing onto `landRow`, fired by walking into
  * the run-up. Invisible until it appears overhead, where it hangs in sight
  * for the telegraph and then falls — lethal from the first frame of the
- * fall (`AmbushSpikeTrap`, `AMBUSH_DROP_TIMING`).
+ * fall (`AmbushSpikeTrap`, `AMBUSH_TIMING`).
  */
 export function dropSpike(
   id: string,
@@ -171,7 +183,7 @@ export function dropSpike(
       fromRow: opts.fromRow ?? Math.max(landRow - 10, 1),
       toCol: col,
       toRow: landRow,
-      timing: opts.activeMs ? { ...AMBUSH_DROP_TIMING, activeMs: opts.activeMs } : AMBUSH_DROP_TIMING,
+      timing: opts.activeMs ? { ...AMBUSH_TIMING, activeMs: opts.activeMs } : AMBUSH_TIMING,
       loop: false,
     },
     approach(`${id}-trigger`, id, col, opts.triggerRow ?? surfaceRow, opts.lead ?? AMBUSH_TRIGGER_LEAD, opts.from ?? 'left'),
@@ -200,7 +212,7 @@ export function floorSpikes(
       // Out of sight below the floor, up to one row above it.
       hiddenRow: surfaceRow + 1,
       lethalRow: surfaceRow - 1,
-      timing: opts.activeMs ? { ...AMBUSH_DROP_TIMING, activeMs: opts.activeMs } : AMBUSH_DROP_TIMING,
+      timing: opts.activeMs ? { ...AMBUSH_TIMING, activeMs: opts.activeMs } : AMBUSH_TIMING,
       loop: false,
     },
     approach(`${id}-trigger`, id, col, opts.triggerRow ?? surfaceRow, opts.lead ?? AMBUSH_TRIGGER_LEAD, opts.from ?? 'left'),

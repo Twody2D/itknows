@@ -10,7 +10,12 @@ export interface RunStats {
 }
 
 class GameStateStore {
-  currentSectorId = 'sector-01';
+  /**
+   * Empty until a level is actually entered, for the same reason
+   * `currentLevelId` is — a non-empty starting value makes the "did the
+   * sector change?" test answer no on the very first level of the session.
+   */
+  currentSectorId = '';
   /**
    * Empty until a level is actually entered. It used to start out naming the
    * first level of the campaign, which is the level a fresh save resumes on

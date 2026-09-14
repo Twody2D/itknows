@@ -238,18 +238,26 @@ function buildTraps(scene: Phaser.Scene, defs: TrapDef[], levelSeed: number, gro
             holdMs: def.holdMs,
             fallSpeed: def.fallSpeed,
             armed: def.armed,
-            // In the ground row: the exact tile the floor either side would
-            // have used at this column, so a trapdoor is not a
-            // different-looking patch of floor (owner: "сделай, чтобы яма,
-            // которая разрушается, не отличалась по внешнему виду с обычной
-            // землёй").
+            // IDENTICAL TO WHAT IT SITS AMONG, either way. In the ground
+            // row, the exact tile the floor either side would have used at
+            // this column (owner: "сделай, чтобы яма, которая разрушается,
+            // не отличалась по внешнему виду с обычной землёй"); in the
+            // air, the ordinary slab, taking its bolt from the same hash a
+            // real platform at this column would — so the two are the same
+            // pixels, not merely the same shape.
             //
-            // Up in the air: the platform slab, cracked. It used to take the
-            // ground tile there too, which put patches of FLOOR in a row of
-            // SLABS — "стало видно стыки земли где яма будет". Same object
-            // as its neighbours now, in a state that says it will not hold
-            // (`drawPlatformSlabCracked`).
-            texture: def.row === groundRow ? groundTopKey(levelSeed, def.col + i) : 'tile-platform-slab-cracked',
+            // The crack is gone by the owner's decision, recorded in
+            // CLAUDE.md #4: "сделай чтобы блоки на которые я наступаю и они
+            // падали выглядели также как обычная платформа без отличий".
+            // It is the same call he made about `fake-platform` — a tell
+            // you can read is a tell you route around, and then the trap
+            // asks nothing.
+            texture:
+              def.row === groundRow
+                ? groundTopKey(levelSeed, def.col + i)
+                : hash01(levelSeed + (def.col + i) * 4111 + 3) < 0.3
+                  ? 'tile-platform-slab-bolt'
+                  : 'tile-platform-slab',
             // A trapdoor in the ground row brings its own sub-surface rock:
             // the runs either side stop at its columns, so without this the
             // level draws a black shaft under a floor that still reads as

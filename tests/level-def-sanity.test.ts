@@ -8,7 +8,8 @@ import { LEVEL_HEIGHT_TILES, exitRowOf } from '@/gameplay/LevelDef';
 import type { LevelDef } from '@/gameplay/LevelDef';
 import { MAX_JUMP_RISE_PX, REACH_AT_SAME_HEIGHT_PX } from '@/gameplay/jumpPhysics';
 import { LEVEL_WIDTH_TILES, TILE_SIZE } from '@/config/display';
-import { PLAYER_HURT_BOX_HEIGHT } from '@/config/physics';
+import { MIN_WARNING_MS, PHYSICS, PLAYER_HURT_BOX_HEIGHT } from '@/config/physics';
+import { DEFAULT_TRAP_TIMING } from '@/traps/TrapTiming';
 import { TRAPDOOR_LEAD } from '@/data/levels/ambush';
 
 /**
@@ -437,5 +438,86 @@ describe.each([
       }
     }
     expect(problems, problems.join('; ')).toEqual([]);
+  });
+});
+
+/**
+ * An ambush's warning must not outlast the run-up it is measured against.
+ *
+ * `AMBUSH_TRIGGER_LEAD` is `warningMs` written as distance: the trigger
+ * stands that many columns before the hazard so a player who crosses it at
+ * `moveSpeed` arrives in the frame the hazard turns lethal. Stretch
+ * `warningMs` past that approach and the trap fires behind them.
+ *
+ * That is exactly what a 560ms window did. Measured live on a running
+ * player: a spike bank on PATROL was crossed 298ms after its trigger and
+ * only became lethal at 567ms, with the spikes still under the floor as he
+ * ran over them; a drop spike on GRID CORE was lethal on time but had
+ * covered 13% of its `Cubic.easeIn` fall by the time he passed, hanging
+ * 92px above his head. Both read to the owner as the same thing — "вылазит
+ * слишком долго, успеваю пробежать", "падает слишком долго, я успеваю
+ * пробежать".
+ *
+ * So the window is bounded on both ends: never under `MIN_WARNING_MS`
+ * (CLAUDE.md #4.2), never longer than the approach that is supposed to
+ * deliver the player into it.
+ */
+describe('ambush timing matches the approach it is built on', () => {
+  /**
+   * Only hazards a trigger springs FROM THE RUN-UP — a band whose far edge
+   * touches the hazard's own columns, which is the shape `approach()`
+   * builds. Two other things are deliberately out of scope: a trap on a
+   * clock (sector 03's pistons, the patrol spikes), which telegraphs by
+   * repeating in plain sight and has no approach to match, and a trigger
+   * placed away from its hazard on purpose — ASCENT drops a spike onto the
+   * tile the next hop needs while the player watches from the tier below,
+   * where the long warning is the point and nobody is running underneath.
+   */
+  const ambushes = [
+    ...SECTOR_01_LEVELS,
+    ...SECTOR_02_LEVELS,
+    ...SECTOR_03_LEVELS,
+    ...SECTOR_04_LEVELS,
+    ...SECTOR_05_LEVELS,
+  ].flatMap((level) => {
+    const traps = level.traps ?? [];
+    const columnsOf = (trap: (typeof traps)[number]): [number, number] | null => {
+      if (trap.type === 'spike-bank') return [trap.col, trap.col + trap.width - 1];
+      if (trap.type === 'moving-spike' && trap.ambush) return [trap.fromCol, trap.fromCol];
+      return null;
+    };
+    return traps.flatMap((trap) => {
+      const cols = columnsOf(trap);
+      if (!cols) return [];
+      const band = traps.find((t) => t.type === 'trigger' && t.targetId === trap.id);
+      if (!band || band.type !== 'trigger') return [];
+      const touchesFromLeft = band.col + band.width === cols[0];
+      const touchesFromRight = band.col === cols[1] + 1;
+      if (!touchesFromLeft && !touchesFromRight) return [];
+      return [
+        {
+          level: level.id,
+          id: trap.id,
+          lead: band.width,
+          warningMs: (trap as { timing?: { warningMs: number } }).timing?.warningMs ?? DEFAULT_TRAP_TIMING.warningMs,
+        },
+      ];
+    });
+  });
+
+  it('finds the sprung hazards to check', () => {
+    expect(ambushes.length).toBeGreaterThan(5);
+    // PATROL's floor bank and BOOT's drop spike are the two the owner
+    // reported running straight through; both must be in scope.
+    expect(ambushes.some((a) => a.level === 'sector-01-level-03')).toBe(true);
+    expect(ambushes.some((a) => a.level === 'sector-01-level-01')).toBe(true);
+  });
+
+  it.each(ambushes)('$level/$id is telegraphed, and lands while the player is still there', ({ lead, warningMs }) => {
+    expect(warningMs).toBeGreaterThanOrEqual(MIN_WARNING_MS);
+    const approachMs = ((lead * TILE_SIZE + TILE_SIZE / 2) / PHYSICS.moveSpeed) * 1000;
+    // A few ms of slack for the rounding between "35px at 110px/s" and the
+    // whole number a timing table actually carries.
+    expect(warningMs).toBeLessThanOrEqual(Math.ceil(approachMs) + 5);
   });
 });
