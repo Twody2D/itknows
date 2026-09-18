@@ -78,7 +78,7 @@ describe('SaveService', () => {
       SaveService.markCompleted('sector-01-level-01');
       expect(YandexGamesService.setPlayerData).toHaveBeenCalledWith({
         save: JSON.stringify({
-          version: 7,
+          version: 8,
           completedLevels: ['sector-01-level-01'],
           lastLevelId: null,
           credits: 0,
@@ -96,6 +96,13 @@ describe('SaveService', () => {
           processedPurchaseTokens: [],
           levelBests: {},
           sectorBests: {},
+          // Empty although a level is completed: `markCompleted` records
+          // progress, and the star for clearing a level is awarded by the
+          // `level:completed` handler (`shop/EconomyRewards.ts`), which this
+          // test never fires. The backfill that gives an old save one star
+          // per cleared level runs in `parseSave`, on saves written before
+          // stars existed — not here.
+          levelStars: {},
           daily: { date: '', bestTimeMs: null, bestDeaths: null, continuesUsed: 0 },
         }),
       });

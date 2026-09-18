@@ -30,6 +30,7 @@ const UI_STRINGS = {
   levelsNew: { ru: 'НОВЫЙ', en: 'NEW' },
   levelsDone: { ru: 'ПРОЙДЕН', en: 'CLEARED' },
   levelsSectorBest: { ru: 'ЛУЧШЕЕ ПО СЕКТОРУ', en: 'SECTOR BEST' },
+  levelsSectorStars: { ru: 'ЗВЁЗДЫ СЕКТОРА', en: 'SECTOR STARS' },
   levelsNoBest: { ru: 'ЕЩЁ НЕ ПРОЙДЕН ЦЕЛИКОМ', en: 'NOT CLEARED YET' },
   levelsChallengeReset: { ru: 'ДО СБРОСА', en: 'RESETS IN' },
   /** For the daily card on a squeezed map, where the full phrase cannot be shrunk into the title row and stay readable. */

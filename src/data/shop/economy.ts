@@ -14,5 +14,13 @@ export const EARN_AMOUNTS = {
   rewardedAd: 20,
 } as const;
 
-export type CreditEarnReason = 'level_complete' | 'sector_complete' | 'zero_deaths' | 'rewarded_ad' | 'purchase' | 'dev';
+export type CreditEarnReason =
+  | 'level_complete'
+  | 'sector_complete'
+  | 'zero_deaths'
+  | 'rewarded_ad'
+  | 'purchase'
+  /** A star earned for the first time — see `STAR_CREDITS` in `gameplay/stars.ts`, which owns the amount because it owns the rule. */
+  | 'star'
+  | 'dev';
 export type CreditSpendReason = 'shop_item' | 'dev';

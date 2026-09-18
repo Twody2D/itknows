@@ -60,6 +60,21 @@ export interface LevelDef {
   exitRow?: number;
   /** Dynamic traps (all 18 non-static-spike types) — optional, empty by default. */
   traps?: TrapDef[];
+  /**
+   * Target clear time in ms for the level's third star (`gameplay/stars.ts`).
+   *
+   * Leave it out and the target is derived from the level's own geometry,
+   * walked along the route the solver proves passable (`gameplay/parTime.ts`)
+   * — which is what every level should normally do, so the target follows the
+   * level when the level changes. Set it only where that estimate is wrong
+   * about the level's real pace, and only after playing it: the derivation
+   * can see distance and height but not, say, a hazard whose window opens
+   * once every four seconds on the one ledge worth standing on.
+   *
+   * It can be set higher or lower, but never below the physical floor for the
+   * route — `tests/par-time.test.ts` rejects a target no player could meet.
+   */
+  starTimeMs?: number;
 }
 
 /** Total playfield height in tiles — matches VIRTUAL_HEIGHT / TILE_SIZE exactly. */

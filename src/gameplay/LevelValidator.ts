@@ -3,7 +3,14 @@ import type { LevelDef } from './LevelDef';
 import { exitRowOf } from './LevelDef';
 import { MAX_JUMP_RISE_PX, maxHorizontalReach } from './jumpPhysics';
 
-interface Segment {
+/**
+ * One standable surface: a contiguous run of ground, or a platform.
+ *
+ * Exported because `parTime.ts` walks the solved path to estimate how long a
+ * clean run takes, and the only honest source for "which surfaces does the
+ * player actually cross" is the same graph that proves the level passable.
+ */
+export interface Segment {
   label: string;
   fromCol: number;
   toCol: number;
@@ -161,7 +168,12 @@ function canReach(from: Segment, to: Segment): boolean {
  * this check is unconditionally invalid; a level passing it still needs the
  * trap placements themselves to be honest by construction.
  */
-export function validateLevel(def: LevelDef): ValidationResult {
+interface SolveOutcome extends ValidationResult {
+  /** Spawn surface to exit surface, inclusive — present only when `valid`. */
+  path?: Segment[];
+}
+
+function solve(def: LevelDef): SolveOutcome {
   const { segments: platforms, rides } = platformSegments(def);
   const segments = [...groundSegments(def), ...platforms];
 
@@ -193,25 +205,54 @@ export function validateLevel(def: LevelDef): ValidationResult {
 
   const visited = new Set<Segment>([startSegment]);
   const queue: Segment[] = [startSegment];
+  // Which surface each one was first reached from — turns the same BFS that
+  // answers "is there a path" into one that can also hand back the path.
+  // Breadth-first, so the recovered route is the one crossing the fewest
+  // surfaces, which is the right one to estimate a clean run against.
+  const cameFrom = new Map<Segment, Segment>();
+
+  const pathTo = (end: Segment): Segment[] => {
+    const path: Segment[] = [end];
+    for (let at = cameFrom.get(end); at !== undefined; at = cameFrom.get(at)) path.unshift(at);
+    return path;
+  };
 
   while (queue.length > 0) {
     const current = queue.shift() as Segment;
     if (current === exitSegment) {
-      return { valid: true };
+      return { valid: true, path: pathTo(current) };
     }
+    const reach = (other: Segment): void => {
+      visited.add(other);
+      cameFrom.set(other, current);
+      queue.push(other);
+    };
     for (const other of segments) {
       if (visited.has(other)) continue;
-      if (canReach(current, other)) {
-        visited.add(other);
-        queue.push(other);
-      }
+      if (canReach(current, other)) reach(other);
     }
     for (const other of ridesFrom(current)) {
       if (visited.has(other)) continue;
-      visited.add(other);
-      queue.push(other);
+      reach(other);
     }
   }
 
   return { valid: false, reason: `no jump-reachable path from start to exit (checked ${segments.length} segments)` };
+}
+
+/**
+ * The surfaces a clean run crosses, spawn to exit, or `null` for a level the
+ * solver cannot complete.
+ *
+ * Same search as `validateLevel` — deliberately, because a route derived from
+ * a second, looser model would eventually disagree with the one that decides
+ * whether the level ships at all.
+ */
+export function solvePath(def: LevelDef): Segment[] | null {
+  return solve(def).path ?? null;
+}
+
+export function validateLevel(def: LevelDef): ValidationResult {
+  const { valid, reason } = solve(def);
+  return reason === undefined ? { valid } : { valid, reason };
 }

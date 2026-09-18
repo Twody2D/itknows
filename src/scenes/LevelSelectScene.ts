@@ -8,7 +8,7 @@ import { buildScreenTopbar, attachEscape } from '@/ui/ScreenChrome';
 import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
 import { fadeIn } from '@/ui/SceneFade';
 import { playSfx } from '@/audio/SfxManager';
-import { LEVELS_PER_SECTOR, SECTOR_COUNT, isLevelUnlocked, levelIdFor, sectorIdOf, sectorName } from '@/gameplay/sectors';
+import { LEVELS_PER_SECTOR, SECTOR_COUNT, levelIdFor, sectorIdOf, sectorName, sectorNumberOf } from '@/gameplay/sectors';
 import { SaveService } from '@/services/SaveService';
 import { InventoryService } from '@/services/InventoryService';
 import { playerTexturePrefix } from '@/data/shop/skinVisuals';
@@ -17,6 +17,8 @@ import { currentChallengeTimeMs, getDailyChallenge } from '@/gameplay/DailyChall
 import { DAILY_LIVES } from '@/services/SaveService';
 import { rebuildOnResize } from '@/ui/relayout';
 import { BAR_W, TITLE_MAX_PX, TITLE_X, sectorHeaderLayout } from '@/config/sectorHeaderLayout';
+import { STAR_PX, drawStarRow, starRowWidth } from '@/ui/StarRow';
+import { MAX_STARS, canPlayLevel, starGateFor } from '@/gameplay/stars';
 import { addCheckGlyph, addChevronGlyph, addDiamondGlyph, addPlayTriangle } from '@/ui/glyphs';
 
 /**
@@ -25,14 +27,15 @@ import { addCheckGlyph, addChevronGlyph, addDiamondGlyph, addPlayTriangle } from
  * blown up into a single lit PLAY card, instead of six identical numbered
  * buttons.
  *
- * One deliberate departure from the mockup, because the drawing would
- * otherwise state something the game does not do: **no chips**. The mockup's
- * three-chip row counts collectibles that do not exist in this game. The card
- * shows what the save really holds instead: cleared or not, and the personal
- * best time from the player's own save.
+ * The mockup's middle row is filled at last. It drew three chips per tile,
+ * counting collectibles this game does not have, so for a long time the tile
+ * carried only its number and its best time and the row sat empty. Stars
+ * (`gameplay/stars.ts`) are what the save can really count, and they go
+ * exactly where the chips were.
  *
- * The padlocks are real (`isLevelUnlocked`) — a locked tile gets no hit zone
- * at all, so it cannot be tapped past.
+ * The padlocks are real (`canPlayLevel`) — a locked tile gets no hit zone at
+ * all, so it cannot be tapped past — and they name which of the two locks is
+ * shut: the level before it, or the sector's star gate.
  */
 const SMALL_SLOTS: [number, number][] = [
   [44, 60],
@@ -51,6 +54,12 @@ const SHOWCASE = { x: 44, y: 150, w: 76, h: 88 };
  * shrunk past that floor and gave way to the short form even on a wide canvas.
  */
 const DAILY = { x: 298, y: 158, w: BIG.w, h: 62 };
+/**
+ * The SYSTEM column's stats box. Grown from the mockup's 80 to carry the
+ * sector's star count under the best time; it ends at 254 on a 270-tall
+ * canvas, which is the same bottom margin the map's own tiles keep.
+ */
+const STATS_BOX_H = 96;
 /** The mockup's own content zone: 12..468, with SYSTEM's column at 492. */
 const MAP_X = 12;
 const MAP_W = 456;
@@ -334,7 +343,8 @@ export class LevelSelectScene extends Phaser.Scene {
 
   private buildSmallCard(levelId: string, number: number, mx: number, y: number, h: number): void {
     const done = SaveService.isCompleted(levelId);
-    const unlocked = isLevelUnlocked(levelId, (id: string) => SaveService.isCompleted(id));
+    const totalStars = SaveService.getTotalStars();
+    const unlocked = canPlayLevel(levelId, (id: string) => SaveService.isCompleted(id), totalStars);
     const best = done ? this.bestTimeText(levelId) : null;
     const x = this.sx(mx);
     const w = this.sw(SMALL_W);
@@ -347,7 +357,12 @@ export class LevelSelectScene extends Phaser.Scene {
     this.items.push(g);
 
     if (!unlocked) {
-      this.buildLockedTile(x, y, w, h, number);
+      // Two different reasons a tile can be shut, and the player has to be
+      // told which: the level before it is unfinished, or the sector asks for
+      // stars they have not collected (`gameplay/stars.ts`). A padlock that
+      // means both means neither.
+      const gate = starGateFor(sectorNumberOf(levelId));
+      this.buildLockedTile(x, y, w, h, number, totalStars < gate ? gate : null);
       return;
     }
 
@@ -359,14 +374,15 @@ export class LevelSelectScene extends Phaser.Scene {
       this.items.push(badge);
     }
 
-    // Number and status read as one block, centred in the tile. The mockup
-    // top-aligns its own tiles because theirs carry three rows (number, chip
-    // row, time); ours carry two, and pinning the number to the top and the
-    // status to the bottom left a 40px hole down the middle of every tile —
-    // six of those are what made the screen look stretched out.
+    // Number, stars and status as one block, centred in the tile. This is
+    // the mockup's own three-row tile at last: it always had a middle row
+    // (number, chips, time), and ours carried two because there was nothing
+    // real to count in the middle — the comment that used to stand here said
+    // so, and said the missing row left a 40px hole down every tile. Stars
+    // are what goes in it.
     this.pixel(
       x + 7,
-      y + h / 2 - 8,
+      y + h / 2 - 14,
       String(number).padStart(2, '0'),
       done ? PALETTE.textMuted : PALETTE.textDisabled,
       3,
@@ -375,9 +391,10 @@ export class LevelSelectScene extends Phaser.Scene {
       undefined,
       { sizePx: this.st(22) },
     );
+    this.items.push(drawStarRow(this, x + 7, y + h / 2 + 2, SaveService.getLevelStars(levelId), MAX_STARS));
     this.pixel(
       x + 7,
-      y + h / 2 + 16,
+      y + h / 2 + 20,
       best ?? (done ? t('levelsDone') : t('levelsNew')),
       done ? PALETTE.cyan : PALETTE.labelMuted,
       1,
@@ -395,7 +412,7 @@ export class LevelSelectScene extends Phaser.Scene {
    * and no hit zone at all — the level really is shut until the one before it
    * is cleared (`isLevelUnlocked`), so the tile must not answer a tap.
    */
-  private buildLockedTile(x: number, y: number, w: number, h: number, number: number): void {
+  private buildLockedTile(x: number, y: number, w: number, h: number, number: number, starGate: number | null): void {
     const cx = x + w / 2;
     const top = y + Math.round((h - 43) / 2);
 
@@ -411,6 +428,15 @@ export class LevelSelectScene extends Phaser.Scene {
 
     this.pixel(cx, top + 34, String(number).padStart(2, '0'), PALETTE.textDisabled, 2, 0.5, 0.5, undefined, {
       sizePx: this.st(16),
+    });
+
+    // A star gate names its price. Without the number the padlock says only
+    // "no", and the player has no way to find out what would change that.
+    if (starGate === null) return;
+    const starX = cx - Math.round((starRowWidth(1) + 4 + 18) / 2);
+    this.items.push(drawStarRow(this, starX, y + h - 16, 1, 1, { earnedColor: PALETTE.goldEdge }));
+    this.pixel(starX + starRowWidth(1) + 4, y + h - 16 + Math.floor(STAR_PX / 2), String(starGate), PALETTE.goldEdge, 1, 0, 0.5, undefined, {
+      sizePx: this.st(11),
     });
   }
 
@@ -460,6 +486,20 @@ export class LevelSelectScene extends Phaser.Scene {
     this.pixel(x + 8, y + h - 14, best ?? t('levelsNew'), PALETTE.cyanDim, 1, 0, 0.5, undefined, {
       sizePx: this.st(10),
     });
+    // Right end of the same row as the best time. The empty star is drawn in
+    // the card's own dim cyan rather than the gold used on the small tiles:
+    // against this lit face, `goldDim` is nearly the same value as `reward`
+    // and the row would read as three earned stars.
+    this.items.push(
+      drawStarRow(
+        this,
+        x + w - 8 - starRowWidth(MAX_STARS),
+        y + h - 14 - Math.floor(STAR_PX / 2),
+        SaveService.getLevelStars(levelId),
+        MAX_STARS,
+        { emptyColor: PALETTE.cyanDim },
+      ),
+    );
 
     this.hit(x, y, w, h + 4, () => this.startLevel(levelId));
   }
@@ -599,10 +639,34 @@ export class LevelSelectScene extends Phaser.Scene {
 
     const box = this.add.graphics();
     box.fillStyle(PALETTE.metalDark, 1);
-    box.fillRect(this.sysX, 158, colW, 80);
+    box.fillRect(this.sysX, 158, colW, STATS_BOX_H);
     box.lineStyle(1, PALETTE.metalMid, 1);
-    box.strokeRect(this.sysX + 0.5, 158.5, colW - 1, 79);
+    box.strokeRect(this.sysX + 0.5, 158.5, colW - 1, STATS_BOX_H - 1);
     this.items.push(box);
+
+    // The sector's star count, pinned to the bottom of the box and drawn
+    // BEFORE the best time above it, so the one early return below (a sector
+    // with no recorded time yet) cannot skip it. It goes here rather than in
+    // the header row: that row was just cleared of an overlap, and a third
+    // element in it would spend the room the fix bought.
+    const sectorLevels = this.levelsOfSector();
+    const sectorStars = SaveService.getSectorStars(sectorLevels);
+    const starsY = 158 + STATS_BOX_H - 22;
+    this.pixel(this.sysX + 8, starsY, t('levelsSectorStars'), PALETTE.labelMuted, 1, 0, 0.5, undefined, { sizePx: 9 });
+    this.items.push(
+      drawStarRow(this, this.sysX + 8, starsY + 8, sectorStars === 0 ? 0 : 1, 1, { scale: 1 }),
+    );
+    this.pixel(
+      this.sysX + 8 + starRowWidth(1) + 4,
+      starsY + 8 + Math.floor(STAR_PX / 2),
+      `${sectorStars} / ${sectorLevels.length * MAX_STARS}`,
+      sectorStars === 0 ? PALETTE.textDisabled : PALETTE.reward,
+      1,
+      0,
+      0.5,
+      undefined,
+      { sizePx: 11 },
+    );
 
     const bestLabel = this.pixel(this.sysX + 8, 166, t('levelsSectorBest'), PALETTE.labelMuted, 1, 0, 0, colW - 16, {
       sizePx: 9,

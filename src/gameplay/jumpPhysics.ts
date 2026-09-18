@@ -14,6 +14,29 @@ export const REACH_AT_SAME_HEIGHT_PX = PHYSICS.moveSpeed * (TIME_TO_APEX + TIME_
 export const REACH_AT_APEX_PX = PHYSICS.moveSpeed * TIME_TO_APEX;
 
 /**
+ * Seconds a full-held jump spends in the air before landing on a surface
+ * `risePx` above the takeoff point (zero or negative for level ground).
+ *
+ * The same two-phase flight as `maxHorizontalReach` below, expressed as time
+ * rather than distance — they describe one jump, and they live together so
+ * one cannot drift from the other. Returns 0 for a rise the jump cannot
+ * make, matching `maxHorizontalReach`'s own answer for the unreachable case.
+ */
+export function jumpAirTimeSec(risePx: number): number {
+  if (risePx > MAX_JUMP_RISE_PX) return 0;
+  const dropFromApex = MAX_JUMP_RISE_PX - Math.max(0, risePx);
+  return TIME_TO_APEX + Math.sqrt((2 * dropFromApex) / FALL_GRAVITY);
+}
+
+/**
+ * Seconds to fall `dropPx` from rest — walking off an edge rather than
+ * jumping. Descending uses `fallGravityMultiplier`, same as `Player.ts`.
+ */
+export function fallTimeSec(dropPx: number): number {
+  return dropPx <= 0 ? 0 : Math.sqrt((2 * dropPx) / FALL_GRAVITY);
+}
+
+/**
  * Conservative horizontal reach for a jump from a surface to a target whose
  * surface is `riseAboveStartPx` higher than the start (negative or zero for
  * a target at or below the start). Mirrors the two-phase gravity model in

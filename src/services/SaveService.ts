@@ -1,10 +1,11 @@
 import { getAllLevels } from '@/gameplay/LevelFactory';
+import { MAX_STARS } from '@/gameplay/stars';
 import { readJson, writeJson } from '@/utils/safeStorage';
 import { YandexGamesService } from './YandexGamesService';
 
 const STORAGE_KEY = 'itknows.save.v1';
 const CLOUD_KEY = 'save';
-const SAVE_VERSION = 7;
+const SAVE_VERSION = 8;
 
 /** Everything the shop grants/tracks — `default`/`static`/`standard` are owned+equipped from a fresh save (CurrencyService/InventoryService read this, never a second save file). */
 export interface InventoryData {
@@ -69,8 +70,8 @@ function emptyDaily(date = ''): DailyRecord {
   return { date, bestTimeMs: null, bestDeaths: null, continuesUsed: 0 };
 }
 
-interface SaveDataV7 {
-  version: 7;
+interface SaveDataV8 {
+  version: 8;
   completedLevels: string[];
   lastLevelId: string | null;
   credits: number;
@@ -82,6 +83,15 @@ interface SaveDataV7 {
   levelBests: Record<string, number>;
   /** Keyed by `sector-01`-style id (`sectors.ts`'s `sectorIdOf`) — best `GameState.sectorElapsedMs()` ever posted for that sector, shown as BEST on `SectorCompleteScene`. No per-level split: a sector's time already blends whatever variant each of its levels happened to serve, so there's no single "canonical" sector run to isolate. */
   sectorBests: Record<string, number>;
+  /**
+   * Best stars ever earned per level id, 0-3 (`gameplay/stars.ts`).
+   *
+   * Stored rather than derived, because stars are earned by ONE visit and
+   * `levelBests` above is not: a best time is recorded even for a run with
+   * deaths, so a fast-but-fatal clear plus a slow clean one would otherwise
+   * add up to a third star neither run deserved.
+   */
+  levelStars: Record<string, number>;
   /** Today's Daily Challenge only — see `DailyRecord`. */
   daily: DailyRecord;
 }
@@ -100,7 +110,7 @@ function defaultInventory(): InventoryData {
   };
 }
 
-function emptySave(): SaveDataV7 {
+function emptySave(): SaveDataV8 {
   return {
     version: SAVE_VERSION,
     completedLevels: [],
@@ -110,6 +120,7 @@ function emptySave(): SaveDataV7 {
     processedPurchaseTokens: [],
     levelBests: {},
     sectorBests: {},
+    levelStars: {},
     daily: emptyDaily(),
   };
 }
@@ -141,7 +152,7 @@ function sanitizeInventory(raw: unknown): InventoryData {
 }
 
 /** Loose shape covering a v1/v2/v3/v4/v5 payload — `version` is the only field whose type actually conflicts between them, so it's widened here rather than intersected. */
-type AnySaveShape = Partial<Omit<SaveDataV7, 'version'>> & { version?: unknown };
+type AnySaveShape = Partial<Omit<SaveDataV8, 'version'>> & { version?: unknown };
 
 /**
  * Carries personal bests across the removal of the ghost feature, and
@@ -178,6 +189,31 @@ function sanitizeLevelBests(raw: unknown): Record<string, number> {
     }
     if (key.slice(legacy + 2) !== 'standard') continue;
     offer(key.slice(0, legacy), timeMs);
+  }
+  return result;
+}
+
+/**
+ * Star counts, clamped to the 0..`MAX_STARS` range whatever the payload
+ * claims, with `completedLevels` filling in for a save written before stars
+ * existed.
+ *
+ * THE BACKFILL IS THE POINT. A player arriving from v7 has cleared levels
+ * and no stars, and showing them 0/90 after they finished the campaign would
+ * read as lost progress, which CLAUDE.md #8 does not allow. One star is
+ * exactly what their save can still prove — that the level was cleared. The
+ * other two describe *how*, and no v7 save recorded that; inventing them
+ * would be worse than leaving them to be earned.
+ */
+function sanitizeLevelStars(raw: unknown, completedLevels: string[]): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const levelId of completedLevels) result[levelId] = 1;
+  if (raw && typeof raw === 'object') {
+    for (const [levelId, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof value !== 'number' || !Number.isFinite(value)) continue;
+      const stars = Math.min(MAX_STARS, Math.max(0, Math.floor(value)));
+      result[levelId] = Math.max(result[levelId] ?? 0, stars);
+    }
   }
   return result;
 }
@@ -224,7 +260,7 @@ function sanitizeDaily(value: unknown): DailyRecord {
  * A payload with no `completedLevels` array at all is not a save of any
  * version — that is the one case that still starts clean.
  */
-function parseSave(raw: unknown): SaveDataV7 {
+function parseSave(raw: unknown): SaveDataV8 {
   const parsed = raw as AnySaveShape | null;
   if (!parsed || !Array.isArray(parsed.completedLevels)) return emptySave();
 
@@ -241,6 +277,7 @@ function parseSave(raw: unknown): SaveDataV7 {
     // `ghosts` is the v6 field name; a v7 save writes `levelBests`.
     levelBests: sanitizeLevelBests(parsed.levelBests ?? (parsed as { ghosts?: unknown }).ghosts),
     sectorBests: sanitizeSectorBests(parsed.sectorBests),
+    levelStars: sanitizeLevelStars(parsed.levelStars, completedLevels),
     daily: sanitizeDaily(parsed.daily),
   };
 }
@@ -287,6 +324,15 @@ function mergeBestTimes(local: Record<string, number>, cloud: Record<string, num
   return result;
 }
 
+/** Per level, keep whichever side earned more — the mirror of `mergeBestTimes`, where the smaller number is the better one. */
+function mergeStars(local: Record<string, number>, cloud: Record<string, number>): Record<string, number> {
+  const result: Record<string, number> = { ...local };
+  for (const [levelId, cloudStars] of Object.entries(cloud)) {
+    result[levelId] = Math.max(result[levelId] ?? 0, cloudStars);
+  }
+  return result;
+}
+
 /**
  * Only the same date merges, and then conservatively: the faster time wins
  * and the continues taken on EITHER device count against the day's
@@ -305,7 +351,7 @@ function mergeDaily(local: DailyRecord, cloud: DailyRecord): DailyRecord {
   };
 }
 
-function mergeSaves(local: SaveDataV7, cloud: SaveDataV7): SaveDataV7 {
+function mergeSaves(local: SaveDataV8, cloud: SaveDataV8): SaveDataV8 {
   return {
     version: SAVE_VERSION,
     completedLevels: unionArrays(local.completedLevels, cloud.completedLevels),
@@ -315,6 +361,10 @@ function mergeSaves(local: SaveDataV7, cloud: SaveDataV7): SaveDataV7 {
     processedPurchaseTokens: unionArrays(local.processedPurchaseTokens, cloud.processedPurchaseTokens),
     levelBests: mergeBestTimes(local.levelBests, cloud.levelBests),
     sectorBests: mergeBestTimes(local.sectorBests, cloud.sectorBests),
+    // The opposite of `mergeBestTimes`: for a time the smaller number wins,
+    // for stars the larger one does. Same contract either way — progress
+    // never regresses by switching devices (CLAUDE.md #8).
+    levelStars: mergeStars(local.levelStars, cloud.levelStars),
     daily: mergeDaily(local.daily, cloud.daily),
   };
 }
@@ -331,7 +381,7 @@ function mergeSaves(local: SaveDataV7, cloud: SaveDataV7): SaveDataV7 {
  * to sane defaults, field by field" is still an open `TODO.md` item.
  */
 class SaveServiceController {
-  private data: SaveDataV7 = parseSave(readJson(STORAGE_KEY));
+  private data: SaveDataV8 = parseSave(readJson(STORAGE_KEY));
   private cloudSyncStarted = false;
 
   private persist(): void {
@@ -449,6 +499,33 @@ class SaveServiceController {
     if (existing !== undefined && existing <= timeMs) return;
     this.data.levelBests[levelId] = timeMs;
     this.persist();
+  }
+
+  // --- Stars (LevelSelectScene's tiles, and the gate on the later sectors) ---
+
+  getLevelStars(levelId: string): number {
+    return this.data.levelStars[levelId] ?? 0;
+  }
+
+  /** No-ops unless this run beat the stored count — same enforcement posture as `saveLevelBestIfFaster`, and the reason a later sloppy clear never costs a player a star they already have. */
+  saveLevelStarsIfBetter(levelId: string, stars: number): void {
+    const existing = this.data.levelStars[levelId] ?? 0;
+    if (stars <= existing) return;
+    this.data.levelStars[levelId] = stars;
+    this.persist();
+  }
+
+  getTotalStars(): number {
+    let total = 0;
+    for (const stars of Object.values(this.data.levelStars)) total += stars;
+    return total;
+  }
+
+  /** Stars collected in one sector — the level map's own header counter. */
+  getSectorStars(levelIds: readonly string[]): number {
+    let total = 0;
+    for (const levelId of levelIds) total += this.getLevelStars(levelId);
+    return total;
   }
 
   // --- Sector best time (SectorCompleteScene's BEST — see `sectorBests`'s own doc comment) ---
