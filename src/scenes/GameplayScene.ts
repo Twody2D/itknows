@@ -17,6 +17,8 @@ import { TrailFx } from '@/gameplay/TrailFx';
 import type { TrailKind } from '@/gameplay/TrailFx';
 import { buildLevel } from '@/gameplay/Level';
 import type { BuiltLevel } from '@/gameplay/Level';
+import type { FakeExit } from '@/traps/FakeExit';
+import { commentOnFakeExit } from '@/data/dialogues/fakeExit';
 import type { LevelDef } from '@/gameplay/LevelDef';
 import { getLevel, getNextLevelId } from '@/gameplay/LevelFactory';
 import { GameState } from '@/core/GameState';
@@ -539,7 +541,10 @@ export class GameplayScene extends Phaser.Scene {
       if (Phaser.Geom.Rectangle.Overlaps(feet, trigger.bounds)) trigger.fire();
     }
     for (const fakeExit of this.level.traps.fakeExits) {
-      if (Phaser.Geom.Rectangle.Overlaps(feet, fakeExit.zone)) fakeExit.reject();
+      if (Phaser.Geom.Rectangle.Overlaps(feet, fakeExit.zone) && fakeExit.swallow()) {
+        this.onSwallowedByFakeExit(fakeExit);
+        return;
+      }
     }
     if (!this.resolving && Phaser.Geom.Rectangle.Overlaps(feet, this.level.exitZone)) {
       this.onExitReached();
@@ -897,6 +902,55 @@ export class GameplayScene extends Phaser.Scene {
     if (fromSpawn <= 0) return 1;
     const remaining = Phaser.Math.Distance.Between(x, y, exit.centerX, exit.centerY);
     return Phaser.Math.Clamp(1 - remaining / fromSpawn, 0, 1);
+  }
+
+  /**
+   * The decoy door's whole payload: it takes the player and puts them back
+   * at the spawn point with the clock still running.
+   *
+   * WHAT IT COSTS AND WHAT IT DOES NOT. No life, no death, no restart — the
+   * attempt continues, hazards keep their own cycles, and the player lands
+   * on the tile the level itself opens on, so there is no way for this to
+   * strand anyone (CLAUDE.md #4.4) and no way for it to kill (#4.7). What
+   * it takes is the walk: on `MIRROR` that is twenty-five columns back past
+   * a spike pair and a piston, which is a real price for having trusted the
+   * wrong door and a recoverable one.
+   *
+   * WHY IT IS LEGIBLE RATHER THAN BAFFLING, which is the thing a silent
+   * teleport would get wrong: the door flares and closes on the player
+   * (`FakeExit.swallow`), the android is visibly pulled into it, the screen
+   * shakes once on arrival, and SYSTEM names the cause out loud in the same
+   * beat (`commentOnFakeExit`). Nothing about it can be read as the game
+   * having glitched.
+   *
+   * The player is `swallowed` — not `alive` — for the whole transit, which
+   * is what keeps the flight across the level from tripping triggers or
+   * touching hazards on the way (see `Player.beginSwallow`).
+   */
+  private onSwallowedByFakeExit(door: FakeExit): void {
+    if (this.resolving || !this.player.isAlive()) return;
+    this.player.beginSwallow();
+    playSfx('trapTrigger');
+
+    const spawnX = this.level.spawn.x;
+    const spawnY = this.level.spawn.y;
+
+    this.tweens.add({
+      targets: this.player,
+      x: door.gameObject.x,
+      y: door.gameObject.y + TILE_SIZE,
+      scale: 0.2,
+      alpha: 0.15,
+      duration: 220,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        this.player.endSwallow(spawnX, spawnY);
+        this.player.setScale(1);
+        this.player.setAlpha(1);
+        this.fx.shake(120, 0.004);
+        commentOnFakeExit();
+      },
+    });
   }
 
   private onExitReached(): void {

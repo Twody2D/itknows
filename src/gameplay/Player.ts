@@ -13,7 +13,7 @@ import type { DeathCause } from '@/core/EventBus';
 import { InventoryService } from '@/services/InventoryService';
 import { playerTexturePrefix } from '@/data/shop/skinVisuals';
 
-type LifeState = 'alive' | 'dead' | 'victory';
+type LifeState = 'alive' | 'dead' | 'victory' | 'swallowed';
 
 
 /**
@@ -121,6 +121,40 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.body.setVelocity(0, 0);
     this.body.enable = false;
     this.setAnim('victory');
+  }
+
+  /**
+   * Taken by the decoy door (`FakeExit`) — held still while it moves the
+   * player somewhere else, then put back down by `endSwallow`.
+   *
+   * Deliberately NOT `alive` for the duration, which is what makes the
+   * transit safe: every per-frame sweep in `GameplayScene` is gated on
+   * `isAlive()`, so a player being carried across the level cannot trip a
+   * trigger, be killed by a hazard they pass over, or re-enter the door
+   * that is currently holding them. It is also not `dead` — no life is
+   * spent and no death is recorded, which is the whole point of the trap
+   * (CLAUDE.md #4.7: a fake exit is never lethal).
+   */
+  beginSwallow(): void {
+    if (this.lifeState !== 'alive') return;
+    this.lifeState = 'swallowed';
+    this.body.setVelocity(0, 0);
+    this.body.enable = false;
+    this.setAnim('idle');
+  }
+
+  /** Puts the player back down at `x`/`y` with control returned — always paired with `beginSwallow`. */
+  endSwallow(x: number, y: number): void {
+    if (this.lifeState !== 'swallowed') return;
+    this.body.enable = true;
+    this.body.reset(x, y);
+    // Cleared, or a jump pressed in the instant before the door closed would
+    // still be sitting in the buffer and fire the moment control returns —
+    // at the far end of the level, where nothing asked for it.
+    this.lastJumpPressedAtMs = -Infinity;
+    this.lastGroundedAtMs = -Infinity;
+    this.jumpCutApplied = false;
+    this.lifeState = 'alive';
   }
 
   override preUpdate(time: number, delta: number): void {

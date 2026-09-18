@@ -137,15 +137,21 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       // the spawn — the level is a question about whether the player has
       // been reading or pattern-matching.
       { type: 'fake-exit', id: 'fake-exit-01', col: 27, row: 22 },
-      // AND IT IS GUARDED, which it was not before. On its own the decoy
-      // door only shook and flashed red when touched, which the owner read
-      // as nothing happening at all — "вообще не понятно зачем нужен
-      // перечёркнутый фиолетовый портал, у него буквально нет никаких
-      // функций". Now walking up to it springs a spike onto the doorway
-      // itself: the door still refuses entry and still costs no life by
-      // itself (CLAUDE.md #4.7 — a fake exit is never lethal), but the
-      // approach to it is a trap like any other, with its own `warningMs`
-      // of telegraph and a way out for anyone who reads it.
+      // AND IT IS GUARDED, which it was not before. Springing a spike onto
+      // the doorway was the first attempt at making this door matter, and
+      // it was not enough on its own: the door itself still only shook when
+      // touched, so the whole thing stayed skippable scenery — "этот
+      // фиолетовый портал бесполезен, либо полностью переделываем, либо
+      // убираем его" (owner). The door now takes whoever steps into it and
+      // puts them back at the spawn point with the clock running
+      // (`FakeExit.swallow`, CLAUDE.md #4.7's 2026-09-18 decision); this
+      // spike stays because it is what makes the approach itself a
+      // decision, with its own `warningMs` of telegraph and a way out for
+      // anyone who reads it.
+      //
+      // From this doorway the walk back is the level's whole first half
+      // again: twenty-five columns, the spike pair at 16-17 and `sbank-01`
+      // punching up through 22-24. Expensive, and never fatal.
       // `fromRow` 17, not the default: the patrolling spike sweeps row 15
       // across these columns, and two hazards may never share tiles
       // (`tests/level-def-sanity.test.ts`). Hanging it below the patrol

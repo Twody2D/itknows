@@ -11,9 +11,27 @@ export interface FakeExitConfig {
 /**
  * A decoy exit portal. Reuses the same "inactive" (unlit) texture the real
  * exit uses before it's reachable — the honest tell is that a fake exit
- * never glows the way the real one does (CLAUDE.md #4.7). Never lethal:
- * touching it just refuses entry with a small visual bump, never ends the
- * run or damages the player. Master-prompt §14 — use rarely, always fairly.
+ * never glows the way the real one does (CLAUDE.md #4.7). Master-prompt §14
+ * — use rarely, always fairly.
+ *
+ * IT TAKES THE PLAYER NOW, and does not merely refuse them. For two rounds
+ * this door only shook and flashed red when touched, and both times the
+ * owner's verdict was the same: "вообще не понятно зачем нужен
+ * перечёркнутый фиолетовый портал, у него буквально нет никаких функций",
+ * then "этот фиолетовый портал бесполезен, либо полностью переделываем,
+ * либо убираем его". A door that does nothing to you is scenery, and
+ * scenery is not worth walking over to check.
+ *
+ * So it works — just not the way its shape promises. It swallows whoever
+ * steps in and puts them back at the level's spawn point, clock still
+ * running (`GameplayScene.onSwallowedByFakeExit`). The cost is the whole
+ * walk back and every hazard on it, which on `MIRROR` is twenty-five
+ * columns, a spike pair and a piston.
+ *
+ * STILL NEVER LETHAL, which is the part CLAUDE.md #4.7 actually fixes: no
+ * life is spent, no death is recorded, the run is not ended, and the player
+ * is returned to a position the level itself guarantees is safe — it is the
+ * one they started from. Being wrong here costs time, and only time.
  */
 export class FakeExit {
   readonly type = 'fake-exit';
@@ -21,7 +39,7 @@ export class FakeExit {
   readonly gameObject: Phaser.GameObjects.Image;
   /** A plain rectangle swept by hand, never a physics body — see `TriggerTrap.bounds` for why an overlap zone under the player's feet is a trampoline. */
   readonly zone: Phaser.Geom.Rectangle;
-  private rejecting: Phaser.Tweens.Tween | null = null;
+  private closing: Phaser.Tweens.Tween | null = null;
 
   constructor(scene: Phaser.Scene, config: FakeExitConfig) {
     this.id = config.id;
@@ -32,29 +50,36 @@ export class FakeExit {
     this.zone = new Phaser.Geom.Rectangle(config.x - width / 2, config.y - height / 2, width, height);
   }
 
-  /** Called by the scene's contact sweep — visual refusal only, never lethal. */
-  reject(): void {
-    // The sweep calls this every frame the player stands in the doorway, so
-    // the refusal has to be one bump per visit, not a tween stacked per
-    // frame.
-    if (this.rejecting?.isPlaying()) return;
-    // A red rattle, not a fade. Fading out is what a thing does when it is
-    // disappearing; the owner read it as the door doing something to him
-    // ("зачем он моргает когда в нём стоишь"). A door that shakes and
-    // flashes red is one that refused, which is what actually happened.
+  /**
+   * Called by the scene's contact sweep. Returns `true` on the one frame it
+   * actually catches someone, so the scene runs the transit once rather
+   * than restarting it every frame the player stands in the doorway.
+   */
+  swallow(): boolean {
+    if (this.closing?.isPlaying()) return false;
+
+    // THE ONE MOMENT IT LIGHTS UP, and it is the wrong one. The unlit core
+    // is this door's honest tell and it never stops being unlit while the
+    // player is deciding (CLAUDE.md #4.7); the violet flare happens only
+    // after the choice is already made, so it reads as the door closing on
+    // someone rather than as an invitation.
     const restX = this.gameObject.x;
-    this.gameObject.setTint(PALETTE.danger);
-    this.rejecting = this.gameObject.scene.tweens.add({
+    this.gameObject.setTint(PALETTE.system);
+    this.closing = this.gameObject.scene.tweens.add({
       targets: this.gameObject,
+      scaleX: { from: 1, to: 1.12 },
+      scaleY: { from: 1, to: 0.9 },
       x: { from: restX - 1, to: restX + 1 },
       yoyo: true,
-      duration: 55,
-      repeat: 2,
+      duration: 90,
+      repeat: 1,
       onComplete: () => {
         this.gameObject.clearTint();
+        this.gameObject.setScale(1);
         this.gameObject.setX(restX);
       },
     });
+    return true;
   }
 
   destroy(): void {
