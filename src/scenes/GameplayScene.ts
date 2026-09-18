@@ -234,6 +234,16 @@ export class GameplayScene extends Phaser.Scene {
     // (CLAUDE.md #8).
     YandexGamesService.notifyLoadingReady();
     YandexGamesService.notifyGameplayStart();
+    // Paired with the `pauseClock()` in this scene's SHUTDOWN handler, for
+    // exactly the reason CLAUDE.md #8 pairs the two calls above: the clocks
+    // are wall clocks, so between two levels of one sector they kept running
+    // through the menu, the shop and the Sector Complete card — and the
+    // sector's time, which is a claim about how fast the sector was PLAYED,
+    // included minutes nobody played. Safe after the `startRun()`/
+    // `startSector()` calls above: while paused `nowMs()` is frozen at the
+    // moment of the pause, so a clock started there reads 0 the instant this
+    // resume compensates for the same interval.
+    GameState.resumeClock();
     this.events.on(Phaser.Scenes.Events.RESUME, this.handleResume, this);
 
     const spawnX = this.level.spawn.x;
@@ -289,6 +299,10 @@ export class GameplayScene extends Phaser.Scene {
       this.events.off(Phaser.Scenes.Events.RESUME, this.handleResume, this);
       MusicSequencer.stop();
       YandexGamesService.notifyGameplayStop();
+      // Leaving the level is leaving gameplay, whichever exit it was — the
+      // menu, the shop, the Sector Complete card, or the next level's load.
+      // See the matching `resumeClock()` in `create()`.
+      GameState.pauseClock();
       this.touchControls?.destroy();
       this.behaviorTracker.destroy();
       this.trailFx?.destroy();

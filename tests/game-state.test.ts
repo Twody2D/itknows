@@ -82,6 +82,31 @@ describe('GameState clock while paused', () => {
     GameState.resumeClock();
     expect(GameState.elapsedMs()).toBeLessThan(20);
   });
+
+  /**
+   * The gap between two levels of one sector — menu, shop, Sector Complete
+   * card. `GameplayScene`'s SHUTDOWN holds the clocks and its `create()`
+   * releases them, the same pairing CLAUDE.md #8 already requires of
+   * `notifyGameplayStop`/`Start`. The sector clock is the one that notices:
+   * it spans several levels, so without this it billed the sector for every
+   * minute spent in the menu between them.
+   */
+  it('does not count the time between two levels of one sector', () => {
+    GameState.startSector();
+    advance(5);
+    // Level one ends.
+    GameState.pauseClock();
+    const atExit = GameState.sectorElapsedMs();
+    // Menu and shop.
+    advance(40);
+    // Level two begins. The run clock restarts (new level), the sector clock
+    // does not — it has to carry level one's 5 ms and none of the 40.
+    GameState.startRun();
+    GameState.resumeClock();
+    expect(GameState.sectorElapsedMs()).toBeGreaterThanOrEqual(atExit);
+    expect(GameState.sectorElapsedMs()).toBeLessThan(atExit + 20);
+    expect(GameState.elapsedMs()).toBeLessThan(20);
+  });
 });
 
 /**
