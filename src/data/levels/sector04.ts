@@ -44,11 +44,13 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     // ground, before anything else happens. Every fake above it is the same
     // sentence said about a ledge instead of a floor.
     gaps: [[12, 14]],
-    // THE FLOOR UNDER THE FALSE STAIRCASE. Eleven spikes, in plain sight
-    // from the spawn, and they are what makes the staircase above them a
-    // real question instead of a detour — see the staircase's own note in
-    // `traps`.
-    spikeColumns: [34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44],
+    // THE FLOOR UNDER THE FALSE STAIRCASE. Six spikes, in plain sight from
+    // the spawn, and they are what makes the staircase above them a real
+    // question instead of a detour — see the staircase's own note in
+    // `traps`. Columns 22-27, not 34-44: see that note for why the whole
+    // staircase moved under the real climb instead of off to its own side
+    // of the screen.
+    spikeColumns: [22, 23, 24, 25, 26, 27],
     // The climb turns back on itself at the top for the same reason sector
     // 01's does: a straight staircase at this pitch parks the exit in the
     // top-right corner behind the pause button. Folding it inwards also
@@ -80,15 +82,39 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
       // фантомными, и сделать под ними шипы. Сейчас легко проходится и не
       // умирается" (owner).
       //
-      // It reads as the short way up. The real climb doubles back on itself
-      // four times across the middle of the screen; this goes straight from
-      // the floor to the exit's own tier in five even hops, and its bottom
-      // rung is two rows off the ground where a single jump obviously
-      // reaches it. Every rung is a decoy.
+      // COLUMNS 22-27, NOT 34-44. At 34-44 the whole staircase sat eleven
+      // columns clear of the real climb's own rightmost tier (28-31) — a
+      // player had to walk well past the real route, off toward the far
+      // wall, before the fake even became visible as an option, so the two
+      // were never actually competing for the same decision: "фантомная
+      // лестница находится слишком далеко от центрального подъёма, на неё
+      // даже не хочется прыгать" (owner). A first attempt threaded the
+      // rungs through the SAME columns as the real tiers, one row below
+      // each — and that read as one thick stacked block, not two separate
+      // staircases: "ghost floor выглядит очень странно между платформами
+      // нет расстояния, они буквально друг на друге стоят" (owner). A rung
+      // one row under a tier it shares columns with IS visually the same
+      // slab doubled, since both are a single tile thick.
+      //
+      // So each rung instead sits at a real tier's OWN row, offset a couple
+      // of columns to the side — the pattern `fakep-01`/`fakep-03` already
+      // use successfully below. fakes-01 is level with tier 1 (17-20/19) at
+      // 22-24, clear of it by two columns; fakes-02 is level with tier 2
+      // (21-24/16) at 25-27, clear by one; fakes-03 sits one row under
+      // tier 3 at 24-26/14 (tier 3 itself is at 28-31/13, so no column
+      // overlap either way); fakes-04 is level with tier 4 (21-24/10) at
+      // 25-27; fakes-05 sits one row under tier 5 at 24-26/8. Every rung
+      // reads as its own distinct platform and every one of them is within
+      // a hop or two of the real climb, not a screen away from it.
+      //
+      // It still reads as a shortcut: the real climb doubles back on itself
+      // four times; this only staggers left-right-left-right-left across
+      // six columns, and its bottom rung is two rows off the ground where a
+      // single jump obviously reaches it. Every rung is a decoy.
       //
       // WHY THE SPIKES UNDER IT ARE STILL HONEST, given that a decoy is
       // drawn with the real slab's own texture (CLAUDE.md #4): the player
-      // cannot read the rungs, but they can read the floor. Eleven static
+      // cannot read the rungs, but they can read the floor. Six static
       // spikes lie under the whole staircase, visible from the spawn point,
       // never hidden and never switched off — so the cost of being wrong is
       // on screen before the first jump, which is exactly what CLAUDE.md
@@ -96,11 +122,11 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
       // none of this; taking the staircase is a choice to gamble on tiles
       // you have been shown you cannot verify, with the price written
       // underneath.
-      { type: 'fake-platform', id: 'fakes-01', col: 34, row: 20, width: 3 },
-      { type: 'fake-platform', id: 'fakes-02', col: 38, row: 17, width: 3 },
-      { type: 'fake-platform', id: 'fakes-03', col: 42, row: 14, width: 3 },
-      { type: 'fake-platform', id: 'fakes-04', col: 38, row: 11, width: 3 },
-      { type: 'fake-platform', id: 'fakes-05', col: 34, row: 8, width: 3 },
+      { type: 'fake-platform', id: 'fakes-01', col: 22, row: 20, width: 3 },
+      { type: 'fake-platform', id: 'fakes-02', col: 25, row: 17, width: 3 },
+      { type: 'fake-platform', id: 'fakes-03', col: 24, row: 14, width: 3 },
+      { type: 'fake-platform', id: 'fakes-04', col: 25, row: 11, width: 3 },
+      { type: 'fake-platform', id: 'fakes-05', col: 24, row: 8, width: 3 },
     ],
   },
   {
@@ -127,12 +153,23 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
       // A LONG IDLE, because at idle the plate is now invisible and that is
       // the whole trap. On the default cycle it was only ever dark for 900
       // of every 1950ms, so a player walking up to it met it lit more often
-      // than not, which is the same thing as marking it. At 2400 it spends
-      // two thirds of its cycle indistinguishable from the floor either
-      // side of it, and the 500ms warning flare — twice `MIN_WARNING_MS` —
-      // is still the only thing that decides whether crossing is safe.
-      { type: 'electric-floor', id: 'ef-01', col: 13, width: 6, row: 22, timing: { idleMs: 2400, warningMs: 500, activeMs: 500, cooldownMs: 250 } },
-      { type: 'electric-floor', id: 'ef-02', col: 27, width: 6, row: 22, timing: { idleMs: 2400, warningMs: 500, activeMs: 500, cooldownMs: 250 } },
+      // than not, which is the same thing as marking it.
+      //
+      // 1200, NOT 2400. At 2400 the plate spent two thirds of its cycle
+      // dark, but the six columns of the plate itself only take ~545ms to
+      // cross at `moveSpeed` — so any crossing begun in roughly the first
+      // 1855ms of that idle window finished before the plate ever left it,
+      // meaning half of all crossings cleared the whole thing without the
+      // cycle so much as reaching `warning`: "уровень current раньше был
+      // сложнее и лучше, сейчас ловушки на полу срабатывают с задержкой,
+      // дольше чем раньше, успеваю полностью пробежать" (owner) — measured,
+      // not just felt. At 1200 that same arithmetic gives roughly 30%, and
+      // the plate is still dark just over half its cycle, so a glance still
+      // reads it as ordinary floor more often than not — the marking this
+      // was built to avoid stays avoided, but blind sprinting stops being
+      // the safe default it had become.
+      { type: 'electric-floor', id: 'ef-01', col: 13, width: 6, row: 22, timing: { idleMs: 1200, warningMs: 500, activeMs: 500, cooldownMs: 250 } },
+      { type: 'electric-floor', id: 'ef-02', col: 27, width: 6, row: 22, timing: { idleMs: 1200, warningMs: 500, activeMs: 500, cooldownMs: 250 } },
       { type: 'laser', id: 'laser-01', col: 38, topRow: 16, bottomRow: 21 },
     ],
   },
@@ -287,22 +324,37 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
       // side of it — same alternating crossing FREEFALL teaches, asked
       // again here with everything else going on at once.
       { col: 22, row: 19, width: 3 },
-      { col: 34, row: 19, width: 5 },
-      // THE STEP THAT WAS MISSING, and without it this level was a dead
-      // end. From the right-hand ground the only way up was 34/19, and
-      // from there the exit tier is six rows up — twice a jump. The one
-      // link between them was the crumbling ledge at 29-31/16, away to the
-      // left, and `orbit-01` sweeps columns 31.8-35.2 across rows
-      // 14.8-18.2, which is precisely that gap: measured live, 30 staggered
-      // attempts to make that hop landed it 0 times, 7 of them fatal and
-      // the rest in the pit. "Когда ты попадаешь на правую сторону ты уже
-      // никак не можешь пройти, шип нельзя перепрыгнуть" (owner) — a
-      // softlock, and CLAUDE.md #4.4 does not bend.
+      // COLUMN 30, NOT 34. From the right-hand ground the only way up used
+      // to be 34/19, and from there the exit tier is six rows up — twice a
+      // jump. The one link between them was the crumbling ledge at 29-31/16
+      // over on the left route, and `orbit-01` sweeps columns 31.8-35.2
+      // across rows 14.8-18.2, which is precisely that gap: measured live,
+      // 30 staggered attempts to make that hop landed it 0 times, 7 fatal
+      // and the rest in the pit. "Когда ты попадаешь на правую сторону ты
+      // уже никак не можешь пройти, шип нельзя перепрыгнуть" (owner) — a
+      // softlock, and CLAUDE.md #4.4 does not bend. So a right-hand tier
+      // has to exist — the fix below is about where, not whether.
+      { col: 30, row: 19, width: 4 },
+      // COLUMNS 30-33 AND 36-39, NOT 34-38 AND 36-39. The two tiers used to
+      // share columns 36-38, so a jump straight up from that shared band
+      // never left it — the flight path never crossed the orbit's reach
+      // (31.8-35.2) at all, a completely free staircase next to the one
+      // hazard the level is supposed to charge for crossing: "на уровне
+      // district ты сделал прям слишком лёгкую лестницу справа", and one
+      // round of narrowing the upper tier alone still left the *lower*
+      // tier's own right edge inside the safe overlap — "всё также легко
+      // проходится, с правой стороны платформы друг над другом без
+      // ловушки" (owner, both).
       //
-      // Columns 36-39 clear the orbit by less than a tile, so the climb
-      // runs right along the spike's reach without ever needing to cross
-      // it. The left-hand route over the crumbling ledge and under the
-      // orbit is still there and still the short way.
+      // Pulling the LOWER tier left instead closes that gap for good: 30-33
+      // sits entirely clear of 36-39, so no column on either tier lines up
+      // with a column on the other — reaching the upper tier from anywhere
+      // on the lower one now requires at least a few columns of rightward
+      // drift, and that drift crosses 31.8-35.2 while still low enough in
+      // the arc to be inside the orbit's row band too. There is no longer a
+      // straight-up jump that skips it. The left-hand route over the
+      // crumbling ledge is untouched and still the way to skip this fight
+      // entirely.
       { col: 36, row: 16, width: 4 },
       { col: 34, row: 13, width: 6 },
     ],

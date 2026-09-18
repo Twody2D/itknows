@@ -45,7 +45,7 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     traps: [
 
       ...floorSpikes('sbank-01', 26, 3, 22),
-      // TWO COLUMNS BEHIND THE PLAYER AT 0.8, not seven behind at 0.6.
+      // TWO COLUMNS BEHIND THE PLAYER AT 0.75, not seven behind at 0.6.
       //
       // At the old numbers the drone was a decoration: a clean run reached
       // the exit with it still twenty tiles back, so the thing the whole
@@ -56,7 +56,13 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       // it, which is CLAUDE.md #13 intact: it is never faster than they
       // are. What changed is that every pause — reading the spike pair,
       // timing the pit, waiting out the patrol — is now paid for.
-      { type: 'pursuer', id: 'pursuer-01', col: 5, row: 21, speedFactor: 0.8 },
+      //
+      // Eased once more to 0.75 across the whole sector — "во всём секторе
+      // 5 чуть уменьши скорость шарика который за мной летит" (owner) — a
+      // small trim, not a reversal: still faster than CHASE/PRESSURE's 0.65
+      // because this is the sector's opener and the one place a player
+      // meets the pursuer with no other hazard already in play.
+      { type: 'pursuer', id: 'pursuer-01', col: 5, row: 21, speedFactor: 0.75 },
       // ON THE FLOOR, not hovering two rows above it. At row 19 this spike
       // sat exactly at the android's chest — visibly through it — and could
       // not be stood under, jumped over comfortably, or ignored; it only
@@ -90,7 +96,12 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       // HUNTED's: this level's crossing REQUIRES standing still while the
       // slab comes back, so the drone has to price that wait without
       // making it unaffordable.
-      { type: 'pursuer', id: 'pursuer-01', col: 2, row: 21, speedFactor: 0.7 },
+      //
+      // Eased to 0.65 with the rest of the sector — "во всём секторе 5
+      // чуть уменьши скорость шарика который за мной летит" (owner) — same
+      // trim as PRESSURE, since both share the same "you must stand still
+      // here" shape and paid the same speed price for it.
+      { type: 'pursuer', id: 'pursuer-01', col: 2, row: 21, speedFactor: 0.65 },
       {
         type: 'moving-platform',
         id: 'movp-01',
@@ -191,7 +202,10 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       // plain geometry: every beam here is a wait, and the wait is now
       // being charged for. The ground between them is still wide enough to
       // take that wait — just not twice.
-      { type: 'pursuer', id: 'pursuer-01', col: 2, row: 21, speedFactor: 0.7 },
+      //
+      // Eased to 0.65 with the rest of the sector — "во всём секторе 5
+      // чуть уменьши скорость шарика который за мной летит" (owner).
+      { type: 'pursuer', id: 'pursuer-01', col: 2, row: 21, speedFactor: 0.65 },
       { type: 'laser', id: 'laser-01', col: 17, topRow: 16, bottomRow: 21 },
       { type: 'laser', id: 'laser-02', col: 24, topRow: 16, bottomRow: 21, initialIdleMs: 800 },
       // Columns 38-42, not 36-40: `sbank-01` punches up through 34-36, so
@@ -229,7 +243,17 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
       // being the shortcut it should have been.
       { col: 26, row: 13, width: 5 },
       { col: 33, row: 10, width: 4 },
-      { col: 26, row: 7, width: 5 },
+      // Columns 32-36, not 26-30. At 26-30 this tier sat directly above
+      // both the row-13 tier (26-30) AND `dp-01` (28-30, row 10) — three
+      // platforms in a straight vertical line, three rows apart each, which
+      // turned the mandatory `swing-01` transfer into an optional one: "три
+      // платформы друг на другом стоят там можно просто нажать 3 раза
+      // пробел и я окажусь на верху" (owner). Moved to sit above the row-10
+      // tier instead — which is what `swing-01`'s own placement already
+      // assumed ("over the left half of the row-10 tier... the tier above")
+      // — the vertical shortcut is gone and the swing is the only way up
+      // from row 10, exactly as documented below.
+      { col: 32, row: 7, width: 5 },
       // Row 5, not row 4. The exit door is drawn 50px tall from the surface
       // it stands on, so a row-4 landing pushed its top 10px off the screen
       // — the campaign's last door was the one door you could not see all

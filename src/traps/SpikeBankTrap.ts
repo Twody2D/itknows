@@ -48,6 +48,14 @@ export class SpikeBankTrap extends Trap {
     this.idleElapsedOverride = config.initialIdleMs ?? 0;
 
     this.gameObject = scene.physics.add.sprite(config.x, config.yHidden, 'tile-spike');
+    // `tile-spike` is drawn tips-up, for punching up out of a floor. A bank
+    // whose hidden position is ABOVE its lethal one (`yHidden < yLethal`)
+    // hangs from a ceiling and punches down instead — flip it once, at
+    // construction, so the tips point at the player it threatens rather
+    // than away from them ("шипы сверху переверни текстуру, чтобы они
+    // смотрели вниз", owner). A floor bank (`yHidden > yLethal`) is
+    // untouched.
+    if (this.yHidden < this.yLethal) this.gameObject.setFlipY(true);
     const body = this.gameObject.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
     body.setImmovable(true);

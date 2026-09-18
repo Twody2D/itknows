@@ -29,8 +29,8 @@ import { dropSpike, floorSpikes, shiftingPit } from './ambush';
 const MACHINE_TIMING = { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs: 250 } as const;
 
 /**
- * PISTON ROW's own cycle — the same honest 500ms telegraph, but up far more
- * of the time: 700ms of the 1850ms loop instead of 300ms of 1950ms.
+ * PISTON ROW's own cycle — up far more of the time than the sector default:
+ * 700ms of the loop instead of 300ms.
  *
  * Measured, because guessing is what got this wrong the first time. On the
  * old cycle each piston was lethal for 15% of its loop, so walking the row
@@ -40,11 +40,17 @@ const MACHINE_TIMING = { idleMs: 900, warningMs: 500, activeMs: 300, cooldownMs:
  * the same run loses far more often than it wins, and the level asks what
  * it was always supposed to ask: watch the row, then move.
  *
- * The warning is untouched at 500ms (twice `MIN_WARNING_MS`), so nothing
- * here is less readable — there is simply less floor that is safe by
- * default.
+ * `warningMs` cut from 500 to 380 one round later — "шипы должны появляться
+ * чуть быстрее" (owner). This is the punch-up tween's own duration
+ * (`SpikeBankTrap.onEnterPhase('warning')`), so a shorter number is a
+ * snappier rise, not a shorter telegraph: `Quint.easeIn` already spends most
+ * of it barely clearing the floor, and 380ms still clears `MIN_WARNING_MS`
+ * (250) with margin. Nothing else about the cycle moved — a piston is lethal
+ * for slightly more of a slightly shorter loop (700 of 1730ms, 40%, up from
+ * 38% of 1850ms), which is the same direction this level has always been
+ * tuned in, not a new axis.
  */
-const PISTON_TIMING = { idleMs: 400, warningMs: 500, activeMs: 700, cooldownMs: 250 } as const;
+const PISTON_TIMING = { idleMs: 400, warningMs: 380, activeMs: 700, cooldownMs: 250 } as const;
 
 export const SECTOR_03_LEVELS: LevelDef[] = [
   {

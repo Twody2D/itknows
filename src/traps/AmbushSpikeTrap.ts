@@ -91,6 +91,12 @@ export class AmbushSpikeTrap extends Trap {
     }
 
     this.gameObject = scene.physics.add.sprite(config.x, config.yHidden, 'tile-spike');
+    // `tile-spike` is drawn tips-up, for a floor spike planted in the
+    // ground. This one only ever falls from above and lands point-first —
+    // flipped once, here, rather than per-phase, since it never changes
+    // back ("шипы которые падают сверху чтобы у них текстура в другую
+    // сторону была", owner).
+    this.gameObject.setFlipY(true);
     const body = this.gameObject.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
     body.setImmovable(true);
