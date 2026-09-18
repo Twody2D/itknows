@@ -368,9 +368,12 @@ function buildTraps(
       }
 
       case 'fake-exit': {
+        // Same two expressions the real exit is placed with below, so the
+        // decoy lands on the surface line instead of 10px into it — it is
+        // meant to be indistinguishable (CLAUDE.md #4.7, owner 2026-09-18).
         const x = def.col * TILE_SIZE + TILE_SIZE;
-        const y = def.row * TILE_SIZE - (3 * TILE_SIZE) / 2;
-        const trap = new FakeExit(scene, { id: def.id, x, y });
+        const surfaceY = def.row * TILE_SIZE;
+        const trap = new FakeExit(scene, { id: def.id, x, surfaceY });
         result.fakeExits.push(trap);
         result.all.push(trap);
         break;

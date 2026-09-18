@@ -132,31 +132,33 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
     traps: [
 
       ...floorSpikes('sbank-01', 22, 3, 22),
-      // Straight ahead on the ground, where every exit for four sectors has
-      // been. The real one is above and to the right, lit, and visible from
-      // the spawn — the level is a question about whether the player has
-      // been reading or pattern-matching.
-      { type: 'fake-exit', id: 'fake-exit-01', col: 27, row: 22 },
-      // AND IT IS GUARDED, which it was not before. Springing a spike onto
-      // the doorway was the first attempt at making this door matter, and
-      // it was not enough on its own: the door itself still only shook when
-      // touched, so the whole thing stayed skippable scenery — "этот
-      // фиолетовый портал бесполезен, либо полностью переделываем, либо
-      // убираем его" (owner). The door now takes whoever steps into it and
-      // puts them back at the spawn point with the clock running
-      // (`FakeExit.swallow`, CLAUDE.md #4.7's 2026-09-18 decision); this
-      // spike stays because it is what makes the approach itself a
-      // decision, with its own `warningMs` of telegraph and a way out for
-      // anyone who reads it.
+      // COLUMN 43, NOT 27 — AND NOW IT IS AVOIDABLE, which is the whole
+      // repair.
       //
-      // From this doorway the walk back is the level's whole first half
-      // again: twenty-five columns, the spike pair at 16-17 and `sbank-01`
-      // punching up through 22-24. Expensive, and never fatal.
+      // At 27 this door stood across the only ground corridor: the climb
+      // starts at the row-19 tier (columns 34-38), so every route to the
+      // real exit walked through the decoy's catch area on the way there.
+      // A player did not choose it, they were processed by it — "портал
+      // невозможно обойти" (owner). A trap you cannot decline is a toll
+      // booth, and that is doubly wrong for one that costs the walk back.
+      //
+      // Column 43 is where every exit in sectors 01-04 sits, on the ground,
+      // at the far right, past everything. So the level asks its question
+      // properly now: at column 34 the climb goes up, and the habit of four
+      // sectors says keep running right. Turning up is free; the door only
+      // ever takes someone who walked past their own route to reach it.
+      //
+      // It is also, as of the same round, drawn exactly like the real thing
+      // — lit core, same glow, same anchoring (`FakeExit`, CLAUDE.md #4.7's
+      // 2026-09-18 decision). Unreadable and unavoidable would have been
+      // unfair; unreadable and avoidable is the question this level is
+      // named after.
+      { type: 'fake-exit', id: 'fake-exit-01', col: 43, row: 22 },
       // `fromRow` 17, not the default: the patrolling spike sweeps row 15
       // across these columns, and two hazards may never share tiles
-      // (`tests/level-def-sanity.test.ts`). Hanging it below the patrol
-      // also puts it right in the doorway's own frame, which is where it
-      // reads best.
+      // (`tests/level-def-sanity.test.ts`). It guards the corridor rather
+      // than the door — with the decoy moved to the far right, the run up
+      // to the climb is what this is for.
       ...dropSpike('dspike-01', 28, 21, 22, { fromRow: 17 }),
       { type: 'laser', id: 'laser-01', col: 31, topRow: 17, bottomRow: 21 },
       { type: 'moving-spike', id: 'mspike-01', fromCol: 27, fromRow: 15, toCol: 32, toRow: 15, travelMs: 1700 },
