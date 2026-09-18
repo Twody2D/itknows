@@ -332,6 +332,46 @@ export class DomTextOverlay {
   }
 
   /**
+   * The largest size up to `max` at which the whole of `text` fits `maxWidth`
+   * on ONE line, measured rather than estimated.
+   *
+   * The sibling above sizes to the longest *word*, which is what a wrapped
+   * block needs — its lines break anywhere, so only a word too wide to break
+   * is a problem. A single-line label has no breaks to hide behind: what it
+   * collides with is whatever sits beside it, and the number that decides
+   * that is the width of the entire string. The level map's sector title had
+   * neither measurement and simply ran into the progress bar
+   * (`LevelSelectScene.buildSectorHeader`).
+   */
+  lineFitSize(text: string, style: DomTextOptions, maxWidth: number, max: number, min = 7): number {
+    if (maxWidth <= 0 || text.trim().length === 0) return max;
+    const width = this.measureWidth(text, { ...style, sizePx: max });
+    if (width <= 0 || width <= maxWidth) return max;
+    return Math.max(min, Math.floor((max * maxWidth) / width));
+  }
+
+  /**
+   * The natural width in virtual px of `text` set in `style`, measured by
+   * rendering it off-screen rather than estimated from character counts —
+   * glyph widths differ, and this font's do not follow character count.
+   *
+   * A caller that needs to reserve room for a label (rather than shrink one
+   * to fit) has no other honest way to ask: the label does not exist yet.
+   */
+  measureWidth(text: string, style: DomTextOptions): number {
+    if (text.length === 0) return 0;
+    // Wrapping (or clamping) would make the probe report the box it is being
+    // fitted to instead of the text's own width.
+    const free = { ...style, color: 'transparent' };
+    delete free.wordWrapWidth;
+    delete free.clampLines;
+    const probe = this.add(-1000, -1000, text, free, 0, 0);
+    const width = probe.width;
+    probe.destroy();
+    return width;
+  }
+
+  /**
    * Fades the whole layer up from nothing, once, for a screen whose canvas
    * blocks animate in: the labels live outside the display list, so a Phaser
    * tween cannot reach them, and without this they would pop in fully lit

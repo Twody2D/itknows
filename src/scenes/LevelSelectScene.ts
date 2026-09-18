@@ -16,6 +16,7 @@ import { levelSelectComment } from '@/data/dialogues/levelSelect';
 import { currentChallengeTimeMs, getDailyChallenge } from '@/gameplay/DailyChallenge';
 import { DAILY_LIVES } from '@/services/SaveService';
 import { rebuildOnResize } from '@/ui/relayout';
+import { BAR_W, TITLE_MAX_PX, TITLE_X, sectorHeaderLayout } from '@/config/sectorHeaderLayout';
 import { addCheckGlyph, addChevronGlyph, addDiamondGlyph, addPlayTriangle } from '@/ui/glyphs';
 
 /**
@@ -247,26 +248,43 @@ export class LevelSelectScene extends Phaser.Scene {
   }
 
   private buildSectorHeader(cleared: number, total: number): void {
-    this.pixel(
-      150,
-      15,
-      `${t('levelSelectSector')} ${String(this.sector).padStart(2, '0')} · ${sectorName(this.sector)}`,
-      PALETTE.system,
-      1,
-      0,
-      0.5,
-      undefined,
-      { sizePx: 10 },
+    const counter = `${cleared} / ${total}`;
+    const counterStyle: DomTextOptions = {
+      color: hexToCss(PALETTE.cyan),
+      font: 'pixel',
+      letterSpacing: 1,
+      uppercase: true,
+      sizePx: 11,
+    };
+
+    // The progress block goes flush right and the title takes what is left —
+    // see `config/sectorHeaderLayout.ts` for why, and for what it replaced.
+    const { barX, counterX, titleMaxWidth } = sectorHeaderLayout(
+      this.scale.width,
+      this.domText.measureWidth(counter, counterStyle),
     );
 
-    const barX = Math.min(this.sysX - 100, 352);
+    // SIZED AGAINST THE BAR, not set at a fixed 10px and hoped for. Every
+    // other screen in the game already fits its type to the box it was given
+    // (`SectorCompleteScene`'s SYSTEM column, the shop's legend); this header
+    // never did, and it is about to get a star counter beside it as well.
+    const title = `${t('levelSelectSector')} ${String(this.sector).padStart(2, '0')} · ${sectorName(this.sector)}`;
+    const titleStyle: DomTextOptions = {
+      color: hexToCss(PALETTE.system),
+      font: 'pixel',
+      letterSpacing: 1,
+      uppercase: true,
+    };
+    const sizePx = this.domText.lineFitSize(title, titleStyle, titleMaxWidth, TITLE_MAX_PX);
+    this.pixel(TITLE_X, 15, title, PALETTE.system, 1, 0, 0.5, undefined, { sizePx });
+
     const bar = this.add.graphics();
     bar.fillStyle(PALETTE.metalMid, 1);
-    bar.fillRect(barX, 11, 60, 8);
+    bar.fillRect(barX, 11, BAR_W, 8);
     bar.fillStyle(PALETTE.cyan, 1);
-    bar.fillRect(barX, 11, Math.round((60 * cleared) / total), 8);
+    bar.fillRect(barX, 11, Math.round((BAR_W * cleared) / total), 8);
     this.items.push(bar);
-    this.pixel(barX + 66, 15, `${cleared} / ${total}`, PALETTE.cyan, 1, 0, 0.5, undefined, { sizePx: 11 });
+    this.pixel(counterX, 15, counter, PALETTE.cyan, 1, 0, 0.5, undefined, { sizePx: 11 });
   }
 
   private buildArrows(): void {
