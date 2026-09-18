@@ -431,7 +431,13 @@ export class GameplayScene extends Phaser.Scene {
     // whichever of its three exits the player takes.
     GameState.pauseClock();
     this.scene.pause();
-    this.scene.launch('PauseScene', { gameplaySceneKey: this.scene.key, levelId: this.levelDef.id });
+    this.scene.launch('PauseScene', {
+      gameplaySceneKey: this.scene.key,
+      levelId: this.levelDef.id,
+      // The HUD's own number, not `GameState.elapsedMs()` — see
+      // `PauseSceneData.attemptMs` for why the two differ after a death.
+      attemptMs: this.attemptElapsedMs,
+    });
   }
 
   /** Mirrors `pauseGame`'s stop — fired by `PauseScene`'s "Продолжить" resuming this scene directly (CLAUDE.md #8: pause never counts as gameplay, so the pair must be exact). */

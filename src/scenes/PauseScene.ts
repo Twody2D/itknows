@@ -16,6 +16,24 @@ import { addPlayTriangle } from '@/ui/glyphs';
 interface PauseSceneData {
   gameplaySceneKey: string;
   levelId: string;
+  /**
+   * The current attempt's clock, handed over by `GameplayScene.pauseGame`
+   * rather than read here from `GameState`.
+   *
+   * `GameState.elapsedMs()` is a different quantity: it is time on this
+   * LEVEL, and it deliberately survives a death-restart, because the Daily
+   * Challenge run and the level's completion time are both built on it.
+   * The card used to print that under the label «Время попытки», so after a
+   * handful of deaths the pause card read a minute while the HUD two inches
+   * away read five seconds — same screen, two different numbers, and the
+   * bigger one carrying the wrong label: "я только начал сектор 5, а у меня
+   * уже счётчик времени 1 минута" (owner, who reasonably read the excess as
+   * time carried over from earlier sectors).
+   *
+   * A snapshot is the right shape here, not a live reading: the clocks are
+   * frozen for as long as this card is up.
+   */
+  attemptMs: number;
 }
 
 /** Mockup 5a/5b: card height and vertical rhythm never change with width. */
@@ -337,7 +355,7 @@ export class PauseScene extends Phaser.Scene {
     const rightX = x + w - half;
 
     this.box(x, 66, w, 44, PALETTE.bgGraphite, PALETTE.cyanDim);
-    const clock = formatMmSsTenths(GameState.elapsedMs());
+    const clock = formatMmSsTenths(this.pauseData.attemptMs);
     const clockLabel = t('pauseAttemptTime');
     const oneLine =
       this.textWidth(clockLabel, { font: 'pixel', sizePx: 11, uppercase: true, letterSpacing: 1 }) +
