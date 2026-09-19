@@ -4,6 +4,7 @@ import type { LevelDef } from './LevelDef';
 import type { Segment } from './LevelValidator';
 import { solvePath } from './LevelValidator';
 import { MAX_JUMP_RISE_PX, fallTimeSec, jumpAirTimeSec, launchReach, usableLiftPx } from './jumpPhysics';
+import { effectiveWalkSpeed } from './conveyor';
 import { DEFAULT_TRAP_TIMING } from '@/traps/TrapTiming';
 import type { TrapDef } from '@/traps/TrapDef';
 
@@ -110,6 +111,32 @@ function hazardSpan(trap: TrapDef): { fromCol: number; toCol: number; cycleMs: n
 
 const walkSecPerCol = TILE_SIZE / PHYSICS.moveSpeed;
 
+/**
+ * Seconds to walk from one column to another, with the conveyors under that
+ * stretch taken into account.
+ *
+ * A belt adds to the player's ground speed going with it and subtracts going
+ * against it (`GameplayScene.carryOnConveyors` moves them by displacement, so
+ * the two simply sum). Modelling it is not a refinement — it is the
+ * difference between a target time and a broken promise: a level whose
+ * route runs ten tiles upstream against 60 px/s takes 2.0 s where the flat
+ * estimate says 0.9, and the third star would be unobtainable on a level
+ * that is otherwise fine, which is exactly what CLAUDE.md #4.8 forbids.
+ */
+function walkSec(fromCol: number, toCol: number, beltByCol: Map<number, number>): number {
+  if (fromCol === toCol) return 0;
+  const step = toCol > fromCol ? 1 : -1;
+  let seconds = 0;
+  for (let col = fromCol; col !== toCol; col += step) {
+    // Slowest of the two tiles a step spans, so a single upstream tile is
+    // never averaged away.
+    const belt = beltByCol.get(col + (step > 0 ? 1 : 0)) ?? beltByCol.get(col) ?? 0;
+    const speed = effectiveWalkSpeed(belt, step as 1 | -1);
+    seconds += TILE_SIZE / speed;
+  }
+  return seconds;
+}
+
 /** Where the player leaves `from` heading for `to`, and where they land on `to`. */
 function transferColumns(from: Segment, to: Segment, at: number): { departCol: number; landCol: number } {
   if (to.fromCol > from.toCol) return { departCol: from.toCol, landCol: to.fromCol };
@@ -147,6 +174,13 @@ export function parBreakdown(def: LevelDef): ParBreakdown | null {
     }
   }
 
+  // Belt speed under each column, for the walking legs below.
+  const beltByCol = new Map<number, number>();
+  for (const trap of def.traps ?? []) {
+    if (trap.type !== 'conveyor') continue;
+    for (let col = trap.col; col < trap.col + trap.width; col++) beltByCol.set(col, trap.speed);
+  }
+
   let seconds = 0;
   let at = def.playerStartCol;
 
@@ -155,7 +189,7 @@ export function parBreakdown(def: LevelDef): ParBreakdown | null {
     const to = path[i + 1] as Segment;
     const { departCol, landCol } = transferColumns(from, to, at);
 
-    seconds += Math.abs(departCol - at) * walkSecPerCol;
+    seconds += walkSec(at, departCol, beltByCol);
 
     const risePx = (from.row - to.row) * TILE_SIZE;
     const gapSec = Math.abs(landCol - departCol) * walkSecPerCol;
@@ -179,7 +213,7 @@ export function parBreakdown(def: LevelDef): ParBreakdown | null {
   }
 
   // The exit is reached by walking to it along the last surface.
-  seconds += Math.abs(def.exitCol - at) * walkSecPerCol;
+  seconds += walkSec(at, def.exitCol, beltByCol);
 
   const floorMs = Math.round(seconds * 1000);
 

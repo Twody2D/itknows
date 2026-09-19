@@ -6,6 +6,7 @@ import { SECTOR_04_LEVELS } from '@/data/levels/sector04';
 import { SECTOR_05_LEVELS } from '@/data/levels/sector05';
 import { SECTOR_06_LEVELS } from '@/data/levels/sector06';
 import { SECTOR_07_LEVELS } from '@/data/levels/sector07';
+import { SECTOR_08_LEVELS } from '@/data/levels/sector08';
 
 /**
  * Single registry of every handcrafted level, in play order.
@@ -30,6 +31,7 @@ const ALL_LEVELS: LevelDef[] = [
   ...SECTOR_05_LEVELS,
   ...SECTOR_06_LEVELS,
   ...SECTOR_07_LEVELS,
+  ...SECTOR_08_LEVELS,
 ];
 
 export function getLevel(id: string): LevelDef {

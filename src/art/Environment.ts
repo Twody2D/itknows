@@ -153,6 +153,24 @@ const SECTOR_THEMES: Record<number, SectorTheme> = {
     hazeMultiplier: 1.7,
     extraSystemNodes: 1,
   },
+  // 08 SORTING FLOOR — not a skyline any more but a works: low, wide, squat
+  // massing packed with pipework, and cold amber signals that read as
+  // indicator lamps on machinery rather than windows with anyone behind
+  // them. The one sector whose background is at the same scale as the thing
+  // the player is standing on.
+  8: {
+    ...BASE_THEME,
+    signalColor: PALETTE.reward,
+    signalAlpha: 0.42,
+    farHeavyChance: 0.45,
+    farWidthRange: [30, 78],
+    farHeightRange: [30, 84],
+    midHeightRange: [26, 62],
+    midPipeChance: 0.9,
+    cableCount: 6,
+    hazeMultiplier: 1.35,
+    extraSystemNodes: 0,
+  },
 };
 
 function themeFor(seedKey: string): SectorTheme {

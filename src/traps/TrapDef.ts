@@ -208,6 +208,33 @@ export type TrapDef =
     }
   | {
       /**
+       * A strip of floor that moves — the sector-08 mechanic, and the first
+       * thing in the game that changes what STANDING STILL means.
+       *
+       * Solid, standable, never lethal and never on a clock: it simply
+       * pulls whoever is on it, forever, at `speed` px/s (positive right,
+       * negative left). Every timed trap in sectors 02-07 is answered by
+       * waiting somewhere safe — a conveyor takes the safe tile out from
+       * under the player while they wait, so "when" and "where" stop being
+       * separate questions.
+       *
+       * `speed` is capped at `MAX_CONVEYOR_SPEED` (60, against the player's
+       * own 110) and the cap is an honesty rule, not taste: walking against
+       * the belt must stay possible, because `LevelValidator` counts a
+       * conveyor as ordinary footing and a strip nobody can cross would be
+       * a wall the solver cannot see.
+       */
+      type: 'conveyor';
+      id: string;
+      col: number;
+      /** Surface row — the player stands here. */
+      row: number;
+      width: number;
+      /** px/s, positive drags right. */
+      speed: number;
+    }
+  | {
+      /**
        * A spike on a fixed-radius arm, rotating at constant angular speed
        * forever — never slowing or reversing, unlike `swinging-spike`
        * below. Continuously visible; the steady, never-pausing sweep is

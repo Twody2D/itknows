@@ -422,6 +422,15 @@ export class GameplayScene extends Phaser.Scene {
       );
     }
 
+    // A conveyor is floor first and machinery second, exactly like a pad:
+    // ordinary one-way platform collision, and what makes it a belt is
+    // `carryOnConveyors` below.
+    for (const belt of traps.conveyors) {
+      this.physics.add.collider(this.player, belt.gameObject, undefined, (playerObj, platformObj) =>
+        this.isLandingOnPlatform(playerObj as Player, platformObj as Phaser.Physics.Arcade.Sprite),
+      );
+    }
+
     for (const gate of traps.timingGates) {
       this.physics.add.collider(this.player, gate.gameObject, undefined, () => !gate.isOpen());
     }
@@ -486,6 +495,7 @@ export class GameplayScene extends Phaser.Scene {
     for (const trap of this.level.traps.updatable) trap.update(time, delta);
     for (const pursuer of this.level.traps.pursuers) pursuer.update(this.player.x, delta);
     this.carryOnMovingPlatforms();
+    this.carryOnConveyors(delta);
     this.sweepCollapsedFooting();
     this.sweepZoneContacts();
     this.sweepLethalContact();
@@ -649,6 +659,29 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   /** Nudges the player by a moving platform's per-frame delta while standing on it. */
+  /**
+   * The belt drags whoever is standing on it.
+   *
+   * POSITION, NOT VELOCITY, and that is the same choice `carryOnMovingPlatforms`
+   * already made. `Player` drives itself with acceleration and then clamps
+   * its own speed to `PHYSICS.moveSpeed` every frame, so anything added to
+   * `velocity.x` from out here is thrown away the moment the player is at
+   * full tilt — the belt would do nothing exactly when it matters most, to a
+   * player who is running. Displacement composes with input instead of
+   * fighting it: walking with the belt is faster, against it slower, and
+   * standing still is not standing still.
+   */
+  private carryOnConveyors(delta: number): void {
+    if (!this.player.isAlive() || !this.player.isGrounded()) return;
+    const body = this.player.body;
+    const feet = this.bodyRect.setTo(body.x, body.y, body.width, body.height);
+    for (const belt of this.level.traps.conveyors) {
+      if (!Phaser.Geom.Rectangle.Overlaps(feet, belt.zone)) continue;
+      this.player.x += belt.carryPx(delta);
+      break;
+    }
+  }
+
   private carryOnMovingPlatforms(): void {
     for (const platform of this.level.traps.movingPlatforms) {
       const { dx, dy } = platform.consumeDelta();

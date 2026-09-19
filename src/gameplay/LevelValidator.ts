@@ -114,6 +114,19 @@ function platformSegments(def: LevelDef): {
         toCol: trap.col + trap.width - 1,
         row: trap.row,
       });
+    } else if (trap.type === 'conveyor') {
+      // Plain footing, and deliberately nothing more. The belt changes how
+      // long a crossing takes (`parTime.ts` does model that) but never what
+      // is reachable: it only moves a player who is ON THE GROUND, so the
+      // take-off velocity of every jump is the player's own and every reach
+      // in this file still holds. Counting the pull as extra range would
+      // certify jumps that only work downwind.
+      segments.push({
+        label: `conveyor-${trap.id}`,
+        fromCol: trap.col,
+        toCol: trap.col + trap.width - 1,
+        row: trap.row,
+      });
     } else if (trap.type === 'launch-pad') {
       // Real, permanent footing — the pad is solid at every phase — plus the
       // lift it grants to anything leaving it. Both matter: without the

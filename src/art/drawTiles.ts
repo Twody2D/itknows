@@ -185,6 +185,33 @@ export function drawMovingPlatformTile(ctx: CanvasRenderingContext2D): void {
   ctx.fillRect(0, TILE_SIZE - 1, TILE_SIZE, 1);
 }
 
+/**
+ * A conveyor tile — the sector-08 mechanic (`traps/ConveyorTrap.ts`).
+ *
+ * Drawn pointing RIGHT; a leftward belt is the same texture flipped, so the
+ * chevrons always read as the direction the floor is taking you. The strip
+ * is a `TileSprite` whose `tilePositionX` scrolls at the belt's own speed,
+ * which is why the chevrons are evenly spaced and tile seamlessly: the
+ * motion has to be the telegraph, the way a patrolling spike's motion is.
+ */
+export function drawConveyorTile(ctx: CanvasRenderingContext2D): void {
+  ctx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
+  ctx.fillStyle = hexToCss(PALETTE.metalDark);
+  ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+  // Rollers along the bottom, so the tile reads as machinery even standing still.
+  ctx.fillStyle = hexToCss(PALETTE.metalMid);
+  ctx.fillRect(0, TILE_SIZE - 3, TILE_SIZE, 3);
+  ctx.fillStyle = hexToCss(PALETTE.reward, 0.85);
+  ctx.fillRect(0, 0, TILE_SIZE, 2);
+  // One chevron per tile: two diagonals meeting at the right edge.
+  ctx.fillStyle = hexToCss(PALETTE.reward, 0.55);
+  for (let i = 0; i < 3; i++) {
+    ctx.fillRect(2 + i, 3 + i, 1, 1);
+    ctx.fillRect(2 + i, 7 - i, 1, 1);
+  }
+  ctx.fillRect(5, 5, 1, 1);
+}
+
 /** Small hunting drone — a red glowing core, deliberately simple/cheap to render. */
 export function drawPursuerIcon(ctx: CanvasRenderingContext2D, size: number): void {
   ctx.clearRect(0, 0, size, size);

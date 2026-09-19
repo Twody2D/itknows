@@ -23,6 +23,7 @@ import { Pursuer } from '@/traps/Pursuer';
 import { TimingGate } from '@/traps/TimingGate';
 import { FakeExit } from '@/traps/FakeExit';
 import { LaunchPadTrap } from '@/traps/LaunchPadTrap';
+import { ConveyorTrap } from '@/traps/ConveyorTrap';
 import { SpikeBankTrap } from '@/traps/SpikeBankTrap';
 import { SpikeWallTrap } from '@/traps/SpikeWallTrap';
 import { OrbitSpikeTrap } from '@/traps/OrbitSpikeTrap';
@@ -56,6 +57,7 @@ export interface BuiltTraps {
   pursuers: Pursuer[];
   fakeExits: FakeExit[];
   launchPads: LaunchPadTrap[];
+  conveyors: ConveyorTrap[];
   all: Array<{ destroy: () => void }>;
 }
 
@@ -139,6 +141,7 @@ function buildTraps(
     pursuers: [],
     fakeExits: [],
     launchPads: [],
+    conveyors: [],
     all: [],
   };
 
@@ -429,6 +432,23 @@ function buildTraps(
           result.all.push(trap);
         }
         triggerable.set(def.id, { trigger: () => pad.forEach((tile) => tile.trigger()) });
+        break;
+      }
+
+      case 'conveyor': {
+        // ONE object for the whole strip, unlike the per-tile banks above:
+        // the belt's animation is a single scrolling `tilePositionX`, so
+        // splitting it into tiles would only add seams and objects.
+        const trap = new ConveyorTrap(scene, {
+          id: def.id,
+          x: def.col * TILE_SIZE,
+          surfaceY: def.row * TILE_SIZE,
+          widthPx: def.width * TILE_SIZE,
+          speed: def.speed,
+        });
+        result.updatable.push(trap);
+        result.conveyors.push(trap);
+        result.all.push(trap);
         break;
       }
 

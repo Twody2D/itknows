@@ -7,6 +7,7 @@ import {
   drawGroundFill,
   drawGroundTop,
   drawMovingPlatformTile,
+  drawConveyorTile,
   drawPlatformSlab,
   drawPursuerIcon,
   drawSpikeTile,
@@ -129,6 +130,10 @@ export function generateTileTextures(scene: Phaser.Scene): void {
   const movingPlatform = makeCanvas(TILE_SIZE, TILE_SIZE);
   drawMovingPlatformTile(movingPlatform.ctx);
   addOrReplaceCanvas(scene, 'tile-moving-platform', movingPlatform.canvas);
+
+  const conveyor = makeCanvas(TILE_SIZE, TILE_SIZE);
+  drawConveyorTile(conveyor.ctx);
+  addOrReplaceCanvas(scene, 'tile-conveyor', conveyor.canvas);
 
   const pursuerSize = 8;
   const pursuer = makeCanvas(pursuerSize, pursuerSize);

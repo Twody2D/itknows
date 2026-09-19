@@ -211,6 +211,11 @@ describe.each([...getAllLevels()])('level def: $id', (level: LevelDef) => {
         trap.type === 'fake-platform'
       ) {
         rows.add(trap.row);
+      } else if (trap.type === 'conveyor') {
+        // A belt is footing like any platform — and on SORTED it is the ONLY
+        // footing on its tier, so leaving it out of this chain made a tier
+        // the player stands on look like a tier nobody can reach.
+        rows.add(trap.row);
       } else if (trap.type === 'launch-pad') {
         rows.add(trap.row);
         // A pad that fires once on a trigger is not a way up — the same rule
