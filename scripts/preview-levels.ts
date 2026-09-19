@@ -13,6 +13,7 @@ import { LEVEL_HEIGHT_TILES, exitRowOf } from '../src/gameplay/LevelDef';
 import type { LevelDef } from '../src/gameplay/LevelDef';
 import { validateLevel } from '../src/gameplay/LevelValidator';
 import { parBreakdown } from '../src/gameplay/parTime';
+import { trapsTheRouteNeverMeets } from '../src/gameplay/routeTrace';
 import { SECTOR_01_LEVELS } from '../src/data/levels/sector01';
 import { SECTOR_02_LEVELS } from '../src/data/levels/sector02';
 import { SECTOR_03_LEVELS } from '../src/data/levels/sector03';
@@ -155,6 +156,8 @@ const ALL = [
 ] as const;
 
 const unsolvable: string[] = [];
+/** Traps the proved route never brings the player near — reported, never fatal. */
+const unmet: string[] = [];
 
 console.log(LEGEND);
 for (const [, levels] of ALL) {
@@ -174,7 +177,31 @@ for (const [, levels] of ALL) {
           `${level.starTimeMs === undefined ? '' : ' (вручную)'} · пол ${(breakdown.floorMs / 1000).toFixed(1)}s`;
     console.log(`\n=== ${level.id} · ${level.name} · ${verdict}${star}`);
     console.log(render(level));
+    // TRAPS THE ROUTE NEVER MEETS. A spike three tiles from the exit on
+    // `sector-10-level-06` passed every test in the project and could not
+    // touch the player — the hop it guarded peaked fifteen pixels above it,
+    // on every attempt. The solver proves a route EXISTS and says nothing
+    // about what that route passes through, so nothing here could have caught
+    // it; the owner caught it by looking at the screen.
+    //
+    // REPORTED, NOT FATAL, and that is deliberate. This traces ONE route, and
+    // a level may legitimately have others — sector 07's OFFBEAT is built on
+    // a fast way under the spikes and a slow way around them, so a trap
+    // guarding the way the solver did not take is doing its job. The line
+    // below is a question to answer, not a verdict.
+    const missed = trapsTheRouteNeverMeets(level);
+    if (missed.length > 0) {
+      unmet.push(`${level.id}: ${missed.join(', ')}`);
+      console.log(`    ! маршрут не проходит рядом: ${missed.join(', ')}`);
+    }
   }
+}
+
+if (unmet.length > 0) {
+  console.log(`
+Ловушки, мимо которых доказанный маршрут не проходит (${unmet.length}):`);
+  for (const line of unmet) console.log(`  ${line}`);
+  console.log('Каждая обязана стеречь альтернативный путь — иначе это ловушка в пустоте.');
 }
 
 if (unsolvable.length > 0) {

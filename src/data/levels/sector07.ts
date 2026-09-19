@@ -373,11 +373,21 @@ export const SECTOR_07_LEVELS: LevelDef[] = [
       // Across the long row-11 tier, which was the one stretch of this
       // finale that asked nothing at all.
       { type: 'laser', id: 'laser-02', col: 25, topRow: 7, bottomRow: 10, initialIdleMs: 500 },
-      // AND GATE'S BARRIER ON THE LAST CLIMB. The sector closer should cite
-      // the cheap refusal as well as the expensive ones: shut, this costs
-      // the hop to the roof and nothing else, which is exactly the price
-      // `GATE` spent a whole level establishing.
-      { type: 'timing-gate', id: 'gate-01', col: 34, topRow: 4, bottomRow: 7 },
+      // A TIMING GATE WAS ADDED HERE AND TAKEN OUT THE SAME DAY. The idea was
+      // to have the sector closer cite `GATE`'s cheap refusal alongside the
+      // expensive ones, and the layout will not carry it.
+      //
+      // `routeTrace` flagged it first: the roof (columns 30-37, row 5) and the
+      // tier under it (32-38, row 8) overlap, so the last transfer is straight
+      // up at whatever column the player arrived on — column 32 — and a beam at
+      // 34 is never crossed. Moving it to the one real horizontal crossing,
+      // columns 29-31, fixes that and breaks something worse: the pit runs
+      // from 24 to 30 underneath, so a shut gate there does not cost the climb,
+      // it costs the life. The whole point of the citation was that this one
+      // is the cheap refusal.
+      //
+      // So there is no gate. A level that cannot ask a question honestly does
+      // not get to ask it.
     ],
   },
 ];

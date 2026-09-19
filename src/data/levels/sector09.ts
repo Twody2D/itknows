@@ -320,7 +320,16 @@ export const SECTOR_09_LEVELS: LevelDef[] = [
         toRow: 16,
         travelMs: 1400,
       },
-      { type: 'laser', id: 'laser-02', col: 38, topRow: 5, bottomRow: 10, initialIdleMs: 900 },
+      // ON THE LAST WALK TO THE DOOR. It was at column 38 — past the pad,
+      // past the row-10 tier, past everything, hanging in open sky where
+      // the player never goes. `routeTrace` found it the day it was
+      // written, which is the entire reason that module exists: the same
+      // mistake had just shipped three tiles from the exit of `TERMINAL`
+      // and only the owner's eye caught it.
+      //
+      // Column 28 is on the row-7 tier, between where the last hop lands
+      // (29) and the door (26), and off the exit column itself.
+      { type: 'laser', id: 'laser-02', col: 28, topRow: 3, bottomRow: 8, initialIdleMs: 900 },
     ],
   },
 ];
