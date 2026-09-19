@@ -59,6 +59,14 @@ export const PALETTE = {
   echoBody: 0xb8c4e0,
   echoVisor: 0xff7de0,
   coreVisor: 0x4d6fff,
+  /**
+   * `reference`, the star-gated skin. Hue ~84°, which is the widest gap left
+   * in the visor wheel: 34° from `reward` (50°) below it and 53° from
+   * `patrolVisor` (137°) above. The other wide gap, ~350°, was not an option
+   * — it sits next to the red `drawPlayerFrame` forces on hurt and death,
+   * and a skin that normally looks hurt would blunt that telegraph.
+   */
+  referenceVisor: 0xa8ff4d,
 
   /** Muted blue-gray for small secondary labels (TIME/BEST/leaderboard captions) — distinct from `textMuted` (much lighter) and `systemMuted` (purple-shifted). `SectorCompleteScene`, design round 2. */
   labelMuted: 0x8a93b0,

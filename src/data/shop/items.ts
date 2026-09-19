@@ -1,4 +1,5 @@
 import type { UiStringKey } from '@/i18n/ui';
+import { COLLECTOR_SKIN_STARS } from '@/gameplay/stars';
 
 /** Master-prompt §8 categories. `premium` covers both `remove_ads` and the `system_access` bundle — owned-only, never equipped. */
 export type ShopCategory = 'character' | 'death_fx' | 'system' | 'trail' | 'premium';
@@ -13,6 +14,11 @@ export type ShopRarity = 'common' | 'rare' | 'premium';
  * honesty rule). `campaign_complete` is real: the shop showroom redesign
  * (2026-09-06) gates the `core` skin on `SaveService.getCompletedLevels()`
  * already covering every level (`ShopScene`'s own check), no new save field.
+ * `stars` is real too (2026-09-19): `SaveService.getTotalStars()`, the rating
+ * the level map already shows. It is the one unlock that cannot be reached
+ * by paying — which is the whole reason it exists. Stars pay CREDITS
+ * (`gameplay/stars.ts`), so a catalogue that was only ever purchasable would
+ * end up with more money chasing it than there are things to buy.
  */
 export interface ShopItem {
   id: string;
@@ -24,7 +30,10 @@ export interface ShopItem {
   /** Yandex product id — omitted for a credits-only cosmetic. */
   productId?: string;
   rarity?: ShopRarity;
-  unlockCondition?: { kind: 'achievement' | 'daily_challenge'; id: string } | { kind: 'campaign_complete' };
+  unlockCondition?:
+    | { kind: 'achievement' | 'daily_challenge'; id: string }
+    | { kind: 'campaign_complete' }
+    | { kind: 'stars'; count: number };
 }
 
 /**
@@ -81,6 +90,19 @@ export const SHOP_ITEMS: ShopItem[] = [
     descriptionKey: 'shopSkinCoreDesc',
     rarity: 'premium',
     unlockCondition: { kind: 'campaign_complete' },
+  },
+  // Earned, never bought. The threshold is half of every star in the
+  // campaign, so it asks for two-starring the way through rather than
+  // three-starring anything — the same shape of demand the sector gates
+  // make (`gameplay/stars.ts`), and for the same reason: a price nobody
+  // reaches is not a goal.
+  {
+    id: 'reference',
+    category: 'character',
+    nameKey: 'shopSkinReference',
+    descriptionKey: 'shopSkinReferenceDesc',
+    rarity: 'premium',
+    unlockCondition: { kind: 'stars', count: COLLECTOR_SKIN_STARS },
   },
 
   // DEATH FX

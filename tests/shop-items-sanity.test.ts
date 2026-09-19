@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { SHOP_ITEMS, SYSTEM_ACCESS_BUNDLE } from '@/data/shop/items';
 import { CREDIT_PACKS } from '@/data/shop/creditPacks';
 import { UI_STRING_KEYS_FOR_TEST } from '@/i18n/ui';
+import { COLLECTOR_SKIN_STARS, MAX_STARS, starsAvailableThrough } from '@/gameplay/stars';
+import { SECTOR_COUNT } from '@/gameplay/sectors';
+import { SKIN_VISUALS } from '@/data/shop/skinVisuals';
 
 const VALID_CATEGORIES = new Set(['character', 'death_fx', 'system', 'trail', 'premium']);
 
@@ -49,6 +52,32 @@ describe('SHOP_ITEMS sanity', () => {
     expect(core!.unlockCondition).toEqual({ kind: 'campaign_complete' });
     expect(core!.priceCredits).toBeUndefined();
     expect(core!.productId).toBeUndefined();
+  });
+
+  it('the star-gated reference skin is earned, never sold', () => {
+    const skin = SHOP_ITEMS.find((i) => i.id === 'reference');
+    expect(skin).toBeDefined();
+    expect(skin!.unlockCondition).toEqual({ kind: 'stars', count: COLLECTOR_SKIN_STARS });
+    // The whole point of it: CREDITS cannot reach this one. Stars pay
+    // CREDITS, so a catalogue where everything is purchasable would just
+    // have more money chasing the same items.
+    expect(skin!.priceCredits).toBeUndefined();
+    expect(skin!.productId).toBeUndefined();
+  });
+
+  it('asks the reference skin for a number of stars the campaign can actually produce', () => {
+    expect(COLLECTOR_SKIN_STARS).toBeGreaterThan(0);
+    expect(COLLECTOR_SKIN_STARS).toBeLessThanOrEqual(starsAvailableThrough(SECTOR_COUNT) * 0.6);
+    expect(starsAvailableThrough(SECTOR_COUNT)).toBe(SECTOR_COUNT * 6 * MAX_STARS);
+  });
+
+  it('gives every character skin its own colours, so a new one is never an invisible purchase', () => {
+    const skins = SHOP_ITEMS.filter((i) => i.category === 'character' && i.id !== 'default');
+    for (const skin of skins) {
+      expect(SKIN_VISUALS[skin.id], `${skin.id} has no visuals`).toBeDefined();
+    }
+    const visors = skins.map((s) => SKIN_VISUALS[s.id]!.visor);
+    expect(new Set(visors).size, 'two skins share a visor colour').toBe(visors.length);
   });
 
   it('the SYSTEM ACCESS bundle exclusives exist as items but are not independently purchasable', () => {

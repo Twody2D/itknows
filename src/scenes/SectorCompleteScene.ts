@@ -7,10 +7,12 @@ import { PixelButton } from '@/ui/PixelButton';
 import { MenuTile } from '@/ui/MenuTile';
 import { DomTextOverlay, type DomTextHandle, type DomTextOptions } from '@/ui/DomTextOverlay';
 import { addPlayTriangle } from '@/ui/glyphs';
+import { STAR_PX, drawStarRow, starRowWidth } from '@/ui/StarRow';
+import { MAX_STARS } from '@/gameplay/stars';
 import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
 import { fadeIn } from '@/ui/SceneFade';
 import { personalityTag } from '@/ai/SystemPersonality';
-import { sectorIdOf, sectorNumberOf } from '@/gameplay/sectors';
+import { LEVELS_PER_SECTOR, levelIdFor, sectorIdOf, sectorNumberOf } from '@/gameplay/sectors';
 import { getAllLevels } from '@/gameplay/LevelFactory';
 import { AdsService } from '@/services/AdsService';
 import { CurrencyService } from '@/services/CurrencyService';
@@ -56,8 +58,10 @@ const REVEAL_MS = 260;
  * language the main menu already established, instead of the generic
  * `drawPanel` frame every other overlay uses. Two things the source design
  * asked for were deliberately left out rather than faked (CLAUDE.md #12):
- * a "sector collectible chips" readout (no such mechanic exists anywhere in
- * this game) — replaced with a real campaign-progress count; and per-frame
+ * a "sector collectible chips" readout (no such mechanic existed anywhere in
+ * this game) — replaced with a real campaign-progress count, and since
+ * joined by the sector's star tally, which is the thing per-sector worth
+ * collecting that the design was reaching for; and per-frame
  * entry-animation timing down to the millisecond — replaced with one
  * coordinated staggered reveal that hits the same beats without an input
  * buffer for the pre-interactive window (the buttons are just interactive
@@ -116,6 +120,7 @@ export class SectorCompleteScene extends Phaser.Scene {
     reveal.push(this.buildTimeBlock());
     reveal.push(this.buildDeathsBlock());
     reveal.push(this.buildBestBlock(previousBestMs, isNewRecord));
+    reveal.push(this.buildStarsBlock());
     reveal.push(this.buildLeaderboardPanel());
     reveal.push(this.buildCreditsBlock());
     if (width >= RIGHT_COLUMN_MIN_WIDTH) reveal.push(this.buildRightColumn(width));
@@ -298,6 +303,39 @@ export class SectorCompleteScene extends Phaser.Scene {
         repeat: 2,
       });
     }
+    return container;
+  }
+
+  /**
+   * The sector's star tally, in the 30px band between the deaths/best row and
+   * the credits row — the only space on this column the layout left free, and
+   * the right one: it reads straight after the two numbers that decide two of
+   * the three stars.
+   *
+   * It counts the WHOLE sector, not this run: the player has just finished
+   * the last level of six, and what they need to know is how much of the
+   * sector is still worth returning to.
+   */
+  private buildStarsBlock(): Phaser.GameObjects.Container {
+    const container = this.add.container(0, 0);
+    container.add(this.panel(16, 172, 216, 28, PALETTE.goldDim, PALETTE.bgGraphite));
+
+    const sector = sectorNumberOf(this.sectorData.completedLevelId);
+    const levelIds = Array.from({ length: LEVELS_PER_SECTOR }, (_, i) => levelIdFor(sector, i + 1));
+    const earned = SaveService.getSectorStars(levelIds);
+    const total = levelIds.length * MAX_STARS;
+
+    const label = t('levelsSectorStars').toUpperCase();
+    this.mono(26, 186, label, PALETTE.labelMuted, this.fit(label, 110, 10, { font: 'pixel', letterSpacing: 1 }), [0, 0.5]);
+
+    const count = `${earned} / ${total}`;
+    const countHandle = this.mono(222, 186, count, earned === 0 ? PALETTE.textDisabled : PALETTE.reward, 14, [1, 0.5], {
+      bold: true,
+      lineHeight: 1,
+    });
+    container.add(
+      drawStarRow(this, 222 - Math.ceil(countHandle.width) - 6 - starRowWidth(1), 186 - Math.floor(STAR_PX / 2), earned === 0 ? 0 : 1, 1),
+    );
     return container;
   }
 

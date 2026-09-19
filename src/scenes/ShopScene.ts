@@ -17,7 +17,7 @@ import { PurchaseManager } from '@/services/PurchaseManager';
 import { AdsService } from '@/services/AdsService';
 import { SaveService } from '@/services/SaveService';
 import { getAllLevels } from '@/gameplay/LevelFactory';
-import { LEVELS_PER_SECTOR } from '@/gameplay/sectors';
+import { LEVELS_PER_SECTOR, SECTOR_COUNT } from '@/gameplay/sectors';
 import { SHOP_ITEMS } from '@/data/shop/items';
 import type { ShopCategory, ShopItem, ShopRarity } from '@/data/shop/items';
 import { CREDIT_PACKS } from '@/data/shop/creditPacks';
@@ -598,29 +598,62 @@ export class ShopScene extends Phaser.Scene {
     if (item.unlockCondition.kind === 'campaign_complete') {
       return SaveService.getCompletedLevels().length >= getAllLevels().length;
     }
+    if (item.unlockCondition.kind === 'stars') {
+      return SaveService.getTotalStars() >= item.unlockCondition.count;
+    }
     return false;
   }
 
   /**
-   * A `campaign_complete` item has no price and no productId — it was never
-   * meant to be bought once its condition is met. Granting it the moment the
-   * shop notices keeps the UI in a real state (a "НАДЕТЬ" button) instead of
-   * a dead "КУПИТЬ" that `handleBuy` would no-op on. Idempotent.
+   * What a locked goal card asks for, as a line the player can act on.
+   *
+   * The string used to be a flat "5 СЕКТОРОВ" in the dictionary, which was
+   * true only while the campaign had five sectors — a number typed into a
+   * translation goes stale silently, and the shop would have kept promising
+   * five long after there were ten. Both numbers are read from the rules
+   * that enforce them instead.
+   */
+  private lockConditionText(item: ShopItem): string {
+    const condition = this.lockConditionOf(item);
+    if (condition === null) return '';
+    return 'stars' in condition
+      ? `${condition.stars} ${t('shopLockedStars')}`
+      : `${condition.sectors} ${t('shopLockedSectors')}`;
+  }
+
+  /** What a locked goal card asks for, drawn where a price would be. `null` for an item with no condition this shop can state. */
+  private lockConditionOf(item: ShopItem): { stars: number } | { sectors: number } | null {
+    if (item.unlockCondition?.kind === 'stars') return { stars: item.unlockCondition.count };
+    if (item.unlockCondition?.kind === 'campaign_complete') return { sectors: SECTOR_COUNT };
+    return null;
+  }
+
+  /**
+   * A progress-gated item has no price and no productId — it was never meant
+   * to be bought once its condition is met. Granting it the moment the shop
+   * notices keeps the UI in a real state (a "НАДЕТЬ" button) instead of a
+   * dead "КУПИТЬ" that `handleBuy` would no-op on. Idempotent.
+   *
+   * Once granted it stays granted, which matters for a threshold that can
+   * move: adding sectors raises what `campaign_complete` means, and a player
+   * who already met the old bar keeps the skin rather than watching it
+   * re-lock behind content that did not exist when they earned it.
    */
   private syncProgressUnlocks(): void {
     for (const item of SHOP_ITEMS) {
-      if (item.unlockCondition?.kind !== 'campaign_complete') continue;
+      if (item.unlockCondition === undefined) continue;
+      if (item.unlockCondition.kind !== 'campaign_complete' && item.unlockCondition.kind !== 'stars') continue;
       if (!this.isUnlocked(item) || this.isOwned(item)) continue;
       const slot = INVENTORY_CATEGORY[item.category];
       if (slot) InventoryService.unlock(slot, item.id);
     }
   }
 
-  /** Bundle-exclusive cosmetics show once owned; a `campaign_complete` item always shows, locked or not, as its own "???" goal card (master-prompt §28 — a real goal may be displayed, a fake purchase may not). */
+  /** Bundle-exclusive cosmetics show once owned; a progress-gated item always shows, locked or not, as its own "???" goal card (master-prompt §28 — a real goal may be displayed, a fake purchase may not). */
   private visibleItems(category: ShopCategory): ShopItem[] {
     return SHOP_ITEMS.filter((item) => {
       if (item.category !== category) return false;
-      if (item.unlockCondition?.kind === 'campaign_complete') return true;
+      if (this.lockConditionOf(item) !== null) return true;
       if (item.priceCredits !== undefined || item.productId !== undefined) return true;
       return this.isOwned(item);
     });
@@ -816,7 +849,7 @@ export class ShopScene extends Phaser.Scene {
 
     const stateY = plateMid + 6;
     if (!unlocked) {
-      this.pixel(labelX, stateY, t('shopLockedCondition'), PALETTE.system, 1, labelOrigin, 0.5, true, { sizePx: 9 });
+      this.pixel(labelX, stateY, this.lockConditionText(item), PALETTE.system, 1, labelOrigin, 0.5, true, { sizePx: 9 });
     } else if (equipped || owned) {
       this.pixel(
         labelX,
@@ -1250,7 +1283,7 @@ export class ShopScene extends Phaser.Scene {
     const balance = CurrencyService.getBalance();
 
     if (!unlocked) {
-      this.pixel(leftX, y, t('shopLockedCondition'), PALETTE.system, 1, 0, 0.5, true, { sizePx: 9 });
+      this.pixel(leftX, y, this.lockConditionText(item), PALETTE.system, 1, 0, 0.5, true, { sizePx: 9 });
       return;
     }
 

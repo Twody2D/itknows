@@ -176,7 +176,12 @@ const UI_STRINGS = {
   shopSystemSampleUnavailable: { ru: 'Тон ещё не настроен.', en: 'This tone isn’t wired up yet.' },
   shopCollection: { ru: 'СОБРАНО ОБЛИКОВ', en: 'SKINS COLLECTED' },
   shopLockedName: { ru: '???', en: '???' },
-  shopLockedCondition: { ru: '5 СЕКТОРОВ', en: '5 SECTORS' },
+  // Units only — the number in front comes from the rule that enforces it
+  // (`SECTOR_COUNT`, `COLLECTOR_SKIN_STARS`). It used to read "5 СЕКТОРОВ"
+  // whole, which was a campaign size typed into a translation: correct until
+  // a sector was added, and wrong silently ever after.
+  shopLockedSectors: { ru: 'СЕКТОРОВ', en: 'SECTORS' },
+  shopLockedStars: { ru: 'ЗВЁЗД', en: 'STARS' },
   shopOneTimePurchase: { ru: 'РАЗОВАЯ ПОКУПКА', en: 'ONE-TIME PURCHASE' },
   shopTrialRun: { ru: 'ПРОБНЫЙ ЗАБЕГ', en: 'TEST RUN' },
   shopDeathPreview: { ru: 'ПРЕВЬЮ', en: 'PREVIEW' },
@@ -260,8 +265,13 @@ const UI_STRINGS = {
     ru: 'Сигнал, который SYSTEM забыла. Он вернулся.',
     en: 'A signal SYSTEM forgot about. It came back.',
   },
+  shopSkinReference: { ru: 'ЭТАЛОН', en: 'REFERENCE' },
+  shopSkinReferenceDesc: { ru: 'Теперь сравнивают с тобой.', en: 'Now you are the benchmark.' },
   shopSkinCore: { ru: 'ЯДРО', en: 'CORE' },
-  shopSkinCoreDesc: { ru: 'То, что остаётся после сектора 5.', en: 'What is left after sector 5.' },
+  // Deliberately names no sector number: `core` unlocks on the WHOLE
+  // campaign, which was five sectors when this line was written and will not
+  // stay five. A description that counts is a description that goes stale.
+  shopSkinCoreDesc: { ru: 'То, что остаётся, когда пройдено всё.', en: 'What is left when everything is cleared.' },
 
   shopFxStatic: { ru: 'STATIC', en: 'STATIC' },
   shopFxStaticDesc: { ru: 'Стандартный эффект отключения.', en: 'The standard shutdown effect.' },

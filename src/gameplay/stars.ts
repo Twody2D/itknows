@@ -1,4 +1,4 @@
-import { LEVELS_PER_SECTOR, isLevelUnlocked, sectorNumberOf } from './sectors';
+import { LEVELS_PER_SECTOR, SECTOR_COUNT, isLevelUnlocked, sectorNumberOf } from './sectors';
 
 /**
  * Stars are the campaign's reason to play a level twice.
@@ -93,3 +93,16 @@ export function isSectorUnlocked(sectorNumber: number, totalStars: number): bool
 export function canPlayLevel(levelId: string, isCompleted: (id: string) => boolean, totalStars: number): boolean {
   return isLevelUnlocked(levelId, isCompleted) && isSectorUnlocked(sectorNumberOf(levelId), totalStars);
 }
+
+/**
+ * Stars that unlock the `reference` skin (`data/shop/items.ts`) — half of
+ * every star the campaign holds, derived rather than typed in so it follows
+ * the campaign when sectors are added.
+ *
+ * The same share the sector gates ask for, and the same reasoning: it is met
+ * by two-starring the way through, not by three-starring anything. It is the
+ * one item in the shop that money cannot reach, which is the point — stars
+ * pay CREDITS, so without something that only stars buy, the extra income
+ * would just chase a catalogue that was already affordable.
+ */
+export const COLLECTOR_SKIN_STARS = Math.round(starsAvailableThrough(SECTOR_COUNT) * GATE_FRACTION);

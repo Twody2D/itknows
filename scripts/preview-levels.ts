@@ -12,6 +12,7 @@
 import { LEVEL_HEIGHT_TILES, exitRowOf } from '../src/gameplay/LevelDef';
 import type { LevelDef } from '../src/gameplay/LevelDef';
 import { validateLevel } from '../src/gameplay/LevelValidator';
+import { parBreakdown } from '../src/gameplay/parTime';
 import { SECTOR_01_LEVELS } from '../src/data/levels/sector01';
 import { SECTOR_02_LEVELS } from '../src/data/levels/sector02';
 import { SECTOR_03_LEVELS } from '../src/data/levels/sector03';
@@ -144,7 +145,17 @@ for (const [, levels] of ALL) {
     const result = validateLevel(level);
     if (!result.valid) unsolvable.push(level.id);
     const verdict = result.valid ? 'solvable' : `UNSOLVABLE — ${result.reason ?? ''}`;
-    console.log(`\n=== ${level.id} · ${level.name} · ${verdict}`);
+    // The third star's target time, printed beside the verdict because both
+    // answer the same question about a level that was just edited: is it
+    // still passable, and what does it now ask for. Derived unless the level
+    // sets `starTimeMs` — `docs/level-editing.md` §4.1.
+    const breakdown = parBreakdown(level);
+    const star =
+      breakdown === null
+        ? ''
+        : ` · ★★★ ${((level.starTimeMs ?? breakdown.parMs) / 1000).toFixed(1)}s` +
+          `${level.starTimeMs === undefined ? '' : ' (вручную)'} · пол ${(breakdown.floorMs / 1000).toFixed(1)}s`;
+    console.log(`\n=== ${level.id} · ${level.name} · ${verdict}${star}`);
     console.log(render(level));
   }
 }
