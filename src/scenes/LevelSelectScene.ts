@@ -61,6 +61,8 @@ const DAILY = { x: 298, y: 158, w: BIG.w, h: 62 };
  * canvas, which is the same bottom margin the map's own tiles keep.
  */
 const STATS_BOX_H = 96;
+/** Height of SYSTEM's panel above the stats box — what its running line has to fit inside. */
+const SYS_BOX_H = 110;
 /** The mockup's own content zone: 12..468, with SYSTEM's column at 492. */
 const MAP_X = 12;
 const MAP_W = 456;
@@ -657,9 +659,9 @@ export class LevelSelectScene extends Phaser.Scene {
 
     const g = this.add.graphics();
     g.fillStyle(PALETTE.system, 0.12);
-    g.fillRect(this.sysX, 38, colW, 110);
+    g.fillRect(this.sysX, 38, colW, SYS_BOX_H);
     g.fillStyle(PALETTE.system, 1);
-    g.fillRect(this.sysX, 38, 2, 110);
+    g.fillRect(this.sysX, 38, 2, SYS_BOX_H);
     this.items.push(g);
 
     this.pixel(this.sysX + 8, 48, 'SYSTEM', PALETTE.system, 1, 0, 0.5, undefined, { sizePx: 10 });
@@ -668,12 +670,33 @@ export class LevelSelectScene extends Phaser.Scene {
     // is whatever keeps the longest word of the line whole in this column:
     // a word too wide to fit gets split mid-word by the browser's last-resort
     // wrap, which is how "ПОНРАВИТЬСЯ" came out as "ПОНРАВИТЬС / Я".
-    const comment = levelSelectComment(cleared, total);
+    const comment = levelSelectComment(cleared, total, this.sector);
     const commentStyle = { font: 'pixel' as const, uppercase: true, lineHeight: 1.5, letterSpacing: 0 };
+    // MEASURED, NOT GUESSED, and for the second time this month. `clampLines`
+    // was 6 — a number that was right for the short progress lines this panel
+    // used to carry and wrong the moment a sector premise moved in: at 480 px
+    // sector 10's line wanted 150 px of text in a 90 px box and was cut off
+    // mid-sentence, and sector 07's was cut at 105. Exactly the defect the
+    // stats box below had (`ui/textBlock.ts` exists because of it), and
+    // exactly the same cure: ask how much room there is, fit the size to it,
+    // and derive the clamp from the size instead of typing one in.
+    //
+    // Two things now guarantee the fit rather than one: this, and the
+    // authoring budget `PREMISE_MAX_CHARS` the lines themselves are held to.
+    // The clamp is the backstop; the budget is what keeps a premise from
+    // needing one.
+    const commentRoom = 38 + SYS_BOX_H - 56 - 6;
+    const commentSize = this.domText.blockFitSize(
+      comment,
+      { ...commentStyle, color: 'transparent' },
+      colW - 16,
+      commentRoom,
+      colW >= 110 ? 11 : 10,
+    );
     this.pixel(this.sysX + 8, 56, comment, PALETTE.systemLight, 1, 0, 0, colW - 16, {
       ...commentStyle,
-      sizePx: this.domText.wordFitSize(comment, { ...commentStyle, color: 'transparent' }, colW - 16, colW >= 110 ? 11 : 10),
-      clampLines: 6,
+      sizePx: commentSize,
+      clampLines: linesThatFit(commentRoom, commentSize, commentStyle.lineHeight),
     });
 
     const box = this.add.graphics();

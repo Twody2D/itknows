@@ -16,6 +16,30 @@ import { dropSpike, floorSpikes } from './ambush';
  *   05 VOID     — no floor, with the machinery still running (09)
  *   06 TERMINAL — the tallest climb in the game, one of everything
  *
+ * REBUILT 2026-09-19, AND THE TWO HALVES OF THE COMPLAINT NEEDED DIFFERENT
+ * REPAIRS. The owner played the finished campaign and said of the finale
+ * «тоже слишком лёгкий и непонятный».
+ *
+ * The first half was arithmetic: sixteen traps where sector 04 runs at
+ * twenty-two. A retrospective thinner than what it remembers is not a
+ * summary, it is an epilogue. Thirty now, and no stretch of any level is a
+ * walk — the additions follow whichever sector the level is citing, which is
+ * why VOID's three all sit in gaps (sector 09's rule: over a pit the fall
+ * already costs the attempt) and MACHINE's both stay clear of the pad's
+ * columns (sector 07's: the launch clause is paid once, by the bank).
+ *
+ * THE SECOND HALF WAS NOT FIXABLE HERE AT ALL, and that is worth writing
+ * down. The retrospective below is real, it is in this file, and a player
+ * has no way whatever to perceive it: by level fifty-five everything is
+ * familiar, so a citation you cannot name is just another corridor.
+ * Geometry can say what to do; it can never say why this screen differs from
+ * the last fifty. That is what SYSTEM has been for since sector 01, and it
+ * had never been asked — the level map's line was chosen from how many
+ * levels were cleared and said nothing about which sector they were in. So
+ * every sector now states its own premise once, on the map, while it is
+ * still untouched (`data/dialogues/levelSelect.ts`), and this one says out
+ * loud what the six levels below are doing.
+ *
  * WHY A RETROSPECTIVE AND NOT A NEW IDEA. A finale that introduces a
  * mechanic asks the player to learn something in the last six levels of a
  * sixty-level game and then never use it. Sector 05 closed the original
@@ -53,6 +77,22 @@ export const SECTOR_10_LEVELS: LevelDef[] = [
       // And sector 03's: a thing that does not care where the player is at
       // all, past the pit, guarding the foot of the climb.
       { type: 'laser', id: 'laser-01', col: 31, topRow: 17, bottomRow: 21 },
+      // ON THE LIP OF THE PIT, so crossing it is a decision and not a
+      // formality. Added 2026-09-19 with the rest of the sector: the finale
+      // ran at sixteen traps where sector 04 ran at twenty-two, and a
+      // retrospective that is thinner than what it remembers is not a
+      // summary, it is an epilogue.
+      {
+        type: 'spike-bank',
+        id: 'sbank-02',
+        col: 21,
+        width: 2,
+        hiddenRow: 23,
+        lethalRow: 21,
+        timing: { idleMs: 1600, warningMs: 500, activeMs: 600, cooldownMs: 400 },
+      },
+      // And on the tier past the beam, so the climb is not a reward.
+      { type: 'laser', id: 'laser-02', col: 35, topRow: 15, bottomRow: 18, initialIdleMs: 600 },
     ],
   },
   {
@@ -82,6 +122,19 @@ export const SECTOR_10_LEVELS: LevelDef[] = [
         row: 22,
         timing: { idleMs: 2400, warningMs: 500, activeMs: 500, cooldownMs: 250 },
       },
+      // BETWEEN THE TWO BEAMS, where the level used to hand out a free
+      // breath. The drone is behind, both beams are ahead, and the ground
+      // between them was the one place the player could stop thinking — on
+      // a level whose whole name is the argument that stopping costs.
+      {
+        type: 'spike-bank',
+        id: 'sbank-01',
+        col: 22,
+        width: 2,
+        hiddenRow: 23,
+        lethalRow: 21,
+        timing: { idleMs: 1500, warningMs: 500, activeMs: 600, cooldownMs: 400 },
+      },
     ],
   },
   {
@@ -110,6 +163,21 @@ export const SECTOR_10_LEVELS: LevelDef[] = [
       // turns up at column 16, so reaching this one means walking the whole
       // length of the level past the route that works.
       { type: 'fake-exit', id: 'fake-exit-01', col: 43, row: 22 },
+      // THREE CLOCKS ON THE ROUTE THAT WORKS, and none on the walk to the
+      // door that does not. That asymmetry is deliberate: the false exit is
+      // already a cost, and taxing the detour as well would turn a question
+      // into a punishment for having asked it.
+      { type: 'laser', id: 'laser-01', col: 14, topRow: 17, bottomRow: 21 },
+      {
+        type: 'spike-bank',
+        id: 'sbank-01',
+        col: 26,
+        width: 2,
+        hiddenRow: 17,
+        lethalRow: 15,
+        timing: { idleMs: 1700, warningMs: 500, activeMs: 600, cooldownMs: 400 },
+      },
+      { type: 'laser', id: 'laser-02', col: 30, topRow: 12, bottomRow: 15, initialIdleMs: 700 },
     ],
   },
   {
@@ -142,6 +210,13 @@ export const SECTOR_10_LEVELS: LevelDef[] = [
         lethalRow: 17,
         timing: { idleMs: 1500, warningMs: 900, activeMs: 1200, cooldownMs: 400 },
       },
+      // WHERE THE THROW PUTS YOU, AND WHERE IT LEAVES YOU. The belt, the pad
+      // and the bank were three machines that all finished at the same
+      // moment; these two carry the level past it. Both clear of the pad's
+      // columns — the launch clause (CLAUDE.md #4.5) is paid once, by the
+      // bank, and once is enough.
+      { type: 'laser', id: 'laser-01', col: 25, topRow: 13, bottomRow: 16 },
+      { type: 'laser', id: 'laser-02', col: 30, topRow: 12, bottomRow: 16, initialIdleMs: 800 },
     ],
   },
   {
@@ -165,6 +240,21 @@ export const SECTOR_10_LEVELS: LevelDef[] = [
       // player just crossed; the pad is the only way onto the last tier.
       { type: 'conveyor', id: 'belt-01', col: 14, row: 19, width: 5, speed: -55 },
       { type: 'launch-pad', id: 'pad-01', col: 28, row: 17, width: 3, liftTiles: 7 },
+      // SECTOR 09'S RULE, SINCE THIS LEVEL IS SECTOR 09: over a pit the fall
+      // already costs the attempt, so nothing here stands on a ledge. All
+      // three sit in gaps the player crosses — they ask when to leave, and
+      // the void answers for everything else.
+      { type: 'laser', id: 'laser-01', col: 12, topRow: 17, bottomRow: 21 },
+      { type: 'laser', id: 'laser-02', col: 20, topRow: 15, bottomRow: 19, initialIdleMs: 600 },
+      {
+        type: 'moving-spike',
+        id: 'mspike-01',
+        fromCol: 26,
+        fromRow: 13,
+        toCol: 26,
+        toRow: 17,
+        travelMs: 1400,
+      },
     ],
   },
   {
@@ -194,6 +284,31 @@ export const SECTOR_10_LEVELS: LevelDef[] = [
       // Across the last hop of the campaign, and off to the side of every
       // ledge it borders — the arc crosses it, the landings do not.
       { type: 'laser', id: 'laser-01', col: 33, topRow: 5, bottomRow: 9 },
+      // THE DENSEST SCREEN IN THE GAME, and it is the last one. Everything
+      // above is the vocabulary; these three are the sector's own argument
+      // made literal — there is no stretch of this climb, from the spawn
+      // tile to the door, where nothing is asked.
+      {
+        type: 'spike-bank',
+        id: 'sbank-01',
+        col: 8,
+        width: 2,
+        hiddenRow: 23,
+        lethalRow: 21,
+        timing: { idleMs: 1400, warningMs: 500, activeMs: 600, cooldownMs: 400 },
+      },
+      { type: 'laser', id: 'laser-02', col: 24, topRow: 12, bottomRow: 15 },
+      // Across the hop off the vanishing step onto the row-10 tier — the
+      // one jump in the campaign taken from a floor that is leaving.
+      {
+        type: 'moving-spike',
+        id: 'mspike-01',
+        fromCol: 34,
+        fromRow: 11,
+        toCol: 34,
+        toRow: 15,
+        travelMs: 1500,
+      },
     ],
   },
 ];

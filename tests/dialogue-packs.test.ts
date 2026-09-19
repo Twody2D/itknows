@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { PACKS } from '@/data/dialogues';
 import { FAKE_EXIT_LINES_FOR_TEST } from '@/data/dialogues/fakeExit';
+import { PREMISE_MAX_CHARS, SECTOR_PREMISE, levelSelectComment } from '@/data/dialogues/levelSelect';
+import { LEVELS_PER_SECTOR, SECTOR_COUNT } from '@/gameplay/sectors';
+import { LocaleState } from '@/i18n/Locale';
 
 const CATEGORIES = [
   'early_death',
@@ -62,5 +65,70 @@ describe('SYSTEM fake-exit lines', () => {
       expect(line.ru.length).toBeGreaterThan(0);
       expect(line.en.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('every sector says what it is, once, on the map', () => {
+  // The finale was built as a retrospective — one level per sector, in the
+  // order they were taught — and the owner played it and called it
+  // «непонятный». The structure was real and entirely imperceptible: by
+  // level fifty-five everything is familiar, so a citation the player cannot
+  // name is just another corridor. Geometry says what to do, never why this
+  // screen differs from the last fifty; SYSTEM says the second thing, and it
+  // now says it on the map while the sector is still untouched.
+  //
+  // This test exists so a sector added later cannot silently arrive without
+  // one and fall back to the generic line nobody would notice was generic.
+  it('has a premise line for every sector, in both locales', () => {
+    const missing: number[] = [];
+    for (let sector = 1; sector <= SECTOR_COUNT; sector++) {
+      LocaleState.current = 'ru';
+      const ru = levelSelectComment(0, LEVELS_PER_SECTOR, sector);
+      LocaleState.current = 'en';
+      const en = levelSelectComment(0, LEVELS_PER_SECTOR, sector);
+      LocaleState.current = 'ru';
+      const generic = { ru: levelSelectComment(0, LEVELS_PER_SECTOR), en: '' };
+      if (ru === generic.ru || ru.trim() === '' || en.trim() === '' || ru === en) missing.push(sector);
+    }
+    expect(missing, `sectors with no premise of their own: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('stops saying it once the player has started the sector', () => {
+    // A premise repeated is a premise nobody reads, and the map is read to
+    // check progress far more often than to be told what a sector is.
+    LocaleState.current = 'ru';
+    const untouched = levelSelectComment(0, LEVELS_PER_SECTOR, 10);
+    const started = levelSelectComment(1, LEVELS_PER_SECTOR, 10);
+    expect(started).not.toBe(untouched);
+    expect(started).toBe(levelSelectComment(1, LEVELS_PER_SECTOR));
+  });
+});
+
+describe('a sector premise fits the column it is printed in', () => {
+  // SYSTEM's panel on the level map is ~94 px wide and 86 px tall: six lines
+  // of 10 px uppercase at the narrowest supported width. The first drafts of
+  // sectors 07 and 10 ran to 72 and 99 characters and were measured live at
+  // 105 px and 150 px of text inside a 90 px box — cut off mid-sentence at
+  // 480 and spilling past the panel at 620.
+  //
+  // `LevelSelectScene` now derives both the size and the clamp from the room
+  // available, so nothing can spill. That is the backstop, not the fix: a
+  // clamp that fits shows the first half of a sentence, and the first half of
+  // a premise is the setup. The fix is that the lines are short enough not to
+  // need it, and this is what holds them there.
+  it('keeps every line inside the authoring budget, in both locales', () => {
+    const over: string[] = [];
+    for (const [sector, line] of Object.entries(SECTOR_PREMISE)) {
+      for (const locale of ['ru', 'en'] as const) {
+        const text = line[locale];
+        if (text.length > PREMISE_MAX_CHARS) over.push(`${sector}/${locale}: ${text.length} > ${PREMISE_MAX_CHARS}`);
+      }
+    }
+    expect(over, over.join('; ')).toEqual([]);
+  });
+
+  it('says something different for every sector', () => {
+    const ru = Object.values(SECTOR_PREMISE).map((l) => l.ru);
+    expect(new Set(ru).size).toBe(ru.length);
   });
 });
