@@ -298,17 +298,31 @@ export const SECTOR_10_LEVELS: LevelDef[] = [
         timing: { idleMs: 1400, warningMs: 500, activeMs: 600, cooldownMs: 400 },
       },
       { type: 'laser', id: 'laser-02', col: 24, topRow: 12, bottomRow: 15 },
-      // Across the hop off the vanishing step onto the row-10 tier — the
-      // one jump in the campaign taken from a floor that is leaving.
-      {
-        type: 'moving-spike',
-        id: 'mspike-01',
-        fromCol: 34,
-        fromRow: 11,
-        toCol: 34,
-        toRow: 15,
-        travelMs: 1500,
-      },
+      // A PATROLLING SPIKE STOOD AT COLUMN 34 HERE AND WAS REMOVED THE SAME
+      // DAY IT WAS ADDED. The owner saw it first — «бесполезный шип у
+      // портала» — and the arithmetic agrees exactly. The hop off the
+      // vanishing step leaves column 31 at row 13 and lands on the row-10
+      // tier; three tiles later the android is at its apex, feet at y=95 and
+      // hurt box from y=63. The spike ran rows 11 to 15, which is y=110 to
+      // y=160. Fifteen pixels of clear air, every single launch.
+      //
+      // WHAT THIS COSTS BEYOND NOTHING. A hazard that cannot touch the
+      // player is not neutral in a game whose whole contract is that what is
+      // on screen is what is true: it teaches the player to route around
+      // something that was never there, and the next spike they believe is
+      // decoration will be the one that kills them.
+      //
+      // The other four patrols added this round were checked by the same
+      // calculation rather than by eye, and all four do intersect the arc
+      // they guard: FIRST STEP at column 28 (11 px of overlap), NARROW at 25
+      // (32), SCAFFOLD at 26 (29), VOID at 26 (9). VOID's is the thin one and
+      // it is thin on purpose — it grazes the top of a flat jump.
+      //
+      // A spike at row 9 or 10 WOULD have caught this arc, and it is not
+      // there for a reason: column 34 is the lip of the landing ledge, so a
+      // hazard high enough to matter is a hazard standing on the only tile
+      // the jump can end on. That is the toll booth CONVEY had to be
+      // repaired of earlier today. Better nothing than a wall.
     ],
   },
 ];
