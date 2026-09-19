@@ -50,8 +50,18 @@ const HAZARD_WAIT_FRACTION = 0.5;
  * a level with no timed hazard (DROP, GHOST FLOOR) came out at 1.27x its own
  * floor while a hazard-heavy one got 2.4x — the levels with the least
  * cushion were the ones given the least slack.
+ *
+ * RAISED FROM 1.8 ON 2026-09-19, and by measurement rather than by feel. The
+ * owner played the finished campaign end to end and reported «сложно
+ * получить 3 звезды на уровнях». That run was sixty levels in eleven
+ * minutes — about 11 s a level including deaths, restarts and the menus in
+ * between — against a mean par of 9.0 s at 1.8x. So the third star was
+ * asking a player to beat their own natural pace on every level in the game
+ * AND never die, when never dying is already the second star's whole job.
+ * At 2.4 the mean par is about 11 s: the pace of somebody who knows the
+ * level, which is what the paragraph above says this number is for.
  */
-const FLOOR_SLACK = 1.8;
+const FLOOR_SLACK = 2.4;
 
 /** Columns a trap occupies, and the cycle a player may have to wait out, or `null` for a trap that costs no time to pass. */
 function hazardSpan(trap: TrapDef): { fromCol: number; toCol: number; cycleMs: number } | null {

@@ -131,7 +131,7 @@ export const SECTOR_10_LEVELS: LevelDef[] = [
       // whether they should get on: the belt feeds the pad, the pad throws
       // on its own 2300 ms cycle, and the spikes overhead run at 4000 so the
       // two never settle into a rhythm to memorise.
-      { type: 'conveyor', id: 'belt-01', col: 10, row: 22, width: 6, speed: 45 },
+      { type: 'conveyor', id: 'belt-01', col: 10, row: 22, width: 6, speed: 70 },
       { type: 'launch-pad', id: 'pad-01', col: 17, row: 22, width: 3, liftTiles: 6 },
       {
         type: 'spike-bank',
@@ -163,7 +163,7 @@ export const SECTOR_10_LEVELS: LevelDef[] = [
       // Sector 09's removal, with sector 08's floor and sector 06's pad
       // still running inside it. The belt pushes back toward the gap the
       // player just crossed; the pad is the only way onto the last tier.
-      { type: 'conveyor', id: 'belt-01', col: 14, row: 19, width: 5, speed: -45 },
+      { type: 'conveyor', id: 'belt-01', col: 14, row: 19, width: 5, speed: -55 },
       { type: 'launch-pad', id: 'pad-01', col: 28, row: 17, width: 3, liftTiles: 7 },
     ],
   },
@@ -188,7 +188,7 @@ export const SECTOR_10_LEVELS: LevelDef[] = [
     exitRow: 7,
     traps: [
       ...dropSpike('dspike-01', 10, 21, 22),
-      { type: 'conveyor', id: 'belt-01', col: 13, row: 22, width: 5, speed: 45 },
+      { type: 'conveyor', id: 'belt-01', col: 13, row: 22, width: 5, speed: 70 },
       { type: 'launch-pad', id: 'pad-01', col: 19, row: 22, width: 3, liftTiles: 7 },
       { type: 'disappearing-platform', id: 'dp-01', col: 29, row: 13, width: 3 },
       // Across the last hop of the campaign, and off to the side of every

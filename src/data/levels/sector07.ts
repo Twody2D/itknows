@@ -228,6 +228,20 @@ export const SECTOR_07_LEVELS: LevelDef[] = [
       // slab is at this end of its run. `LevelValidator` counts the ride, so
       // the route is proved — what it cannot prove, and what the level is
       // about, is leaving on the right beat.
+      //
+      // THE RIDE IS SHORT AND THE DECK IS WIDE, and both numbers come from
+      // the owner playing it: «долго приходится ждать чтобы платформа
+      // доехала и чтобы прям в тайминг». Two separate complaints, and
+      // they had two separate causes. The waiting was a 2600 ms one-way trip,
+      // so a missed beat cost 5.2 s of standing on a pad watching a slab —
+      // longer than most levels in the campaign take to finish. The timing
+      // was a four-tile deck: the arc is fixed the moment the pad fires
+      // (`Player.launch` disables the jump cut), so deck width IS the whole
+      // margin for error, and four tiles gave the narrowest one in the game.
+      //
+      // 1700 ms is 71 px/s, still well under the player's 110, so #13 holds
+      // and the slab remains something you outrun rather than chase. Five
+      // tiles is the width sector 06 already uses for its own landings.
       {
         type: 'moving-platform',
         id: 'movp-01',
@@ -235,8 +249,8 @@ export const SECTOR_07_LEVELS: LevelDef[] = [
         fromRow: 17,
         toCol: 28,
         toRow: 17,
-        width: 4,
-        travelMs: 2600,
+        width: 5,
+        travelMs: 1700,
       },
     ],
   },

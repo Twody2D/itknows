@@ -124,8 +124,8 @@ export const SECTOR_09_LEVELS: LevelDef[] = [
       // costs the attempt. The first one runs toward its far end, the second
       // back toward the edge the player just left — so one is answered by
       // moving early and the other by not landing late.
-      { type: 'conveyor', id: 'belt-01', col: 14, row: 19, width: 5, speed: 50 },
-      { type: 'conveyor', id: 'belt-02', col: 28, row: 15, width: 5, speed: -50 },
+      { type: 'conveyor', id: 'belt-01', col: 14, row: 19, width: 5, speed: 72 },
+      { type: 'conveyor', id: 'belt-02', col: 28, row: 15, width: 5, speed: -60 },
     ],
   },
   {
@@ -173,7 +173,7 @@ export const SECTOR_09_LEVELS: LevelDef[] = [
       // One of each, in the order the campaign taught them, up the frame:
       // a belt that pushes back the way you came, a step that will not be
       // there long, and a pad that decides when you leave.
-      { type: 'conveyor', id: 'belt-01', col: 14, row: 19, width: 5, speed: -45 },
+      { type: 'conveyor', id: 'belt-01', col: 14, row: 19, width: 5, speed: -55 },
       { type: 'disappearing-platform', id: 'dp-01', col: 28, row: 15, width: 3 },
       { type: 'launch-pad', id: 'pad-01', col: 34, row: 15, width: 3, liftTiles: 7 },
     ],

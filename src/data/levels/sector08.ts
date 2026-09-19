@@ -48,9 +48,14 @@ export const SECTOR_08_LEVELS: LevelDef[] = [
     exitCol: 38,
     exitRow: 16,
     traps: [
-      // Toward the hole, at 45 against the player's 110 — slow enough to walk
-      // out of, fast enough that doing nothing is an answer with a cost.
-      { type: 'conveyor', id: 'belt-01', col: 12, row: 22, width: 6, speed: 45 },
+      // Toward the hole, and AT THE CAP: the level that teaches the belt is
+      // the one that should be least ambiguous about what a belt is. At the
+      // old 45 the owner played this and said the strip was useless — «еле
+      // еле двигает тебя» — which it was: under half walking pace, so
+      // standing still drifted about as fast as reading the screen. At 72
+      // standing still is seven tiles a second toward the lip, and walking
+      // off is still 38 px/s, so the cost is real and the exit never is.
+      { type: 'conveyor', id: 'belt-01', col: 12, row: 22, width: 6, speed: 72 },
     ],
   },
   {
@@ -73,7 +78,7 @@ export const SECTOR_08_LEVELS: LevelDef[] = [
       // nothing chasing at all — stand still in front of the beam and the
       // ground quietly returns you to where you started. Walking on the spot
       // is a real action here, and it is the level's whole verb.
-      { type: 'conveyor', id: 'belt-01', col: 10, row: 22, width: 15, speed: -50 },
+      { type: 'conveyor', id: 'belt-01', col: 10, row: 22, width: 15, speed: -60 },
       { type: 'laser', id: 'laser-01', col: 20, topRow: 17, bottomRow: 21 },
     ],
   },
@@ -97,8 +102,8 @@ export const SECTOR_08_LEVELS: LevelDef[] = [
       // player lands decides which way they are sent, and only the right
       // half leads anywhere. It is the first level in the game whose
       // question is about the second half of a jump rather than the first.
-      { type: 'conveyor', id: 'belt-left', col: 14, row: 19, width: 6, speed: -50 },
-      { type: 'conveyor', id: 'belt-right', col: 20, row: 19, width: 6, speed: 50 },
+      { type: 'conveyor', id: 'belt-left', col: 14, row: 19, width: 6, speed: -60 },
+      { type: 'conveyor', id: 'belt-right', col: 20, row: 19, width: 6, speed: 72 },
     ],
   },
   {
@@ -121,7 +126,7 @@ export const SECTOR_08_LEVELS: LevelDef[] = [
       // the lip is moving. The plate is jumpable from its own edge (five
       // tiles against 5.8 of reach) — what the belt takes away is the pause
       // before the jump, not the jump.
-      { type: 'conveyor', id: 'belt-01', col: 16, row: 22, width: 11, speed: 50 },
+      { type: 'conveyor', id: 'belt-01', col: 16, row: 22, width: 11, speed: 72 },
       {
         type: 'electric-floor',
         id: 'ef-01',
@@ -153,9 +158,9 @@ export const SECTOR_08_LEVELS: LevelDef[] = [
       // overshooting puts you on the outbound belt with a cycle to walk back
       // against. Standing still has been the answer since sector 03 — this
       // is the level where it has to be earned every second.
-      { type: 'conveyor', id: 'belt-in', col: 15, row: 22, width: 6, speed: 40 },
+      { type: 'conveyor', id: 'belt-in', col: 15, row: 22, width: 6, speed: 60 },
       { type: 'launch-pad', id: 'pad-01', col: 21, row: 22, width: 2, liftTiles: 6 },
-      { type: 'conveyor', id: 'belt-out', col: 23, row: 22, width: 6, speed: 40 },
+      { type: 'conveyor', id: 'belt-out', col: 23, row: 22, width: 6, speed: 60 },
     ],
   },
   {
@@ -177,13 +182,13 @@ export const SECTOR_08_LEVELS: LevelDef[] = [
     exitCol: 35,
     exitRow: 6,
     traps: [
-      { type: 'conveyor', id: 'belt-ground', col: 8, row: 22, width: 7, speed: 45 },
+      { type: 'conveyor', id: 'belt-ground', col: 8, row: 22, width: 7, speed: 70 },
       { type: 'launch-pad', id: 'pad-01', col: 16, row: 22, width: 3, liftTiles: 8 },
       // Every tier above is part belt, part plain ledge, and the belts all
       // run AWAY from the next hop. The climb is the same shape as sector
       // 06's, and every landing on it is now a place you cannot simply stand.
-      { type: 'conveyor', id: 'belt-a', col: 22, row: 15, width: 5, speed: -45 },
-      { type: 'conveyor', id: 'belt-b', col: 33, row: 12, width: 4, speed: 45 },
+      { type: 'conveyor', id: 'belt-a', col: 22, row: 15, width: 5, speed: -55 },
+      { type: 'conveyor', id: 'belt-b', col: 33, row: 12, width: 4, speed: 70 },
     ],
   },
 ];
