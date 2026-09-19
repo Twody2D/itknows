@@ -84,15 +84,21 @@ describe('a trap the player can never reach', () => {
     // under the ceiling spikes and a slow way around them — so the bank on
     // the walk to the slow pad guards a route the solver did not take.
     //
-    // The other four predate the detector and are listed rather than fixed,
-    // because silently reworking levels the owner has played and approved is
-    // not a decision a test should make for him. The list may shrink; it must
-    // never grow without somebody saying why.
+    // The other three predate the detector and were each read and kept: the
+    // bank on `BRIDGE` charges for a hop that falls short of the ledge, the
+    // one on `OFFSET` for falling off the third tier, and the pair on
+    // `PISTON ROW` exist for a player who jumps, which is the behaviour that
+    // row is built to take away. Each says so in its own file now.
+    //
+    // `sector-04-level-06` was on this list and is not any more — its drop
+    // spike really was in the void, at column 44, past the exit and past the
+    // last tier, and has been moved onto the approach everyone walks.
+    //
+    // The list may shrink; it must never grow without somebody saying why.
     const known = new Set([
       'sector-02-level-05',
       'sector-03-level-02',
       'sector-03-level-04',
-      'sector-04-level-06',
       'sector-07-level-02',
     ]);
     const surprises: string[] = [];

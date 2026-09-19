@@ -110,6 +110,11 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
     exitRow: 10,
     traps: [
 
+      // UNDER THE THIRD TIER, and `pnpm levels` reports that the proved
+      // route never meets it — correctly, because the route climbs and never
+      // comes back down. It charges for coming back down: fall off the
+      // row-13 ledge and this is what the ground has waiting. Without it the
+      // third tier is the one rung on the climb that costs nothing to miss.
       ...floorSpikes('sbank-01', 31, 3, 22),
       // Same cycle, deliberately half a beat apart — there is no fixed
       // moment that clears both, so they have to be watched rather than
@@ -179,6 +184,11 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
       // unrelated hazards.
       { type: 'spike-bank', id: 'sbank-05', col: 18, width: 3, hiddenRow: 15, lethalRow: 17, timing: PISTON_TIMING, initialIdleMs: 1050 },
       { type: 'spike-bank', id: 'sbank-06', col: 26, width: 3, hiddenRow: 15, lethalRow: 17, timing: PISTON_TIMING, initialIdleMs: 1750 },
+      // `pnpm levels` reports both of these as unmet by the proved route,
+      // and that report is the paragraph above restated as a measurement:
+      // the solver walks, a walking android's head stops at y=188, and these
+      // stop at y=180. They exist for the player who jumps, which is the
+      // behaviour the row is built to take away.
       // Three pistons with four clear columns of standing room between
       // them. Hidden inside the ground fill at row 23, lethal at row 21 —
       // the row the player actually walks through — so a piston that is up

@@ -363,12 +363,23 @@ export const SECTOR_04_LEVELS: LevelDef[] = [
     exitRow: 13,
     traps: [
 
-      // Moved clear of the platform overhead. A trigger band is five tiles
-      // tall now — it has to be, to catch a player jumping across it
-      // (`APPROACH_BAND_TILES`) — and at the old column it reached up into
-      // the ledge above, so simply standing on that ledge spent the trap
-      // on nobody.
-      ...dropSpike('dspike-01', 44, 21, 22),
+      // COLUMN 8, AND IT USED TO BE 44 — which is past the exit, past the
+      // last tier, on ground the level gives nobody a reason to walk to. An
+      // earlier round moved it off a column where the trigger band reached
+      // up into the ledge above (a five-tile band has to, to catch a player
+      // jumping across it) and moved it clean out of the level instead.
+      //
+      // `routeTrace` found it: the proved route leaves the ground at column
+      // 18 and never comes back down, so this could not fire on anybody. It
+      // is the same defect as the spike by the portal on `TERMINAL`, two
+      // sectors earlier and two months older, and it survived because
+      // nothing in the project asked whether a trap can be reached.
+      //
+      // Column 8 is on the approach everyone walks, before the static
+      // spikes at 10-11 and well clear of the electric floor at 13-16 — and
+      // clear of the take-off at 18, because a sprung trap on the only tile
+      // a required jump can start from is a toll booth, not a question.
+      ...dropSpike('dspike-01', 8, 21, 22),
       // Cross a pit on stones that fall, climb past a ledge that is not
       // there, and do both under a spike that never stops. Nothing new is
       // introduced — the sector's four ideas are simply asked together.

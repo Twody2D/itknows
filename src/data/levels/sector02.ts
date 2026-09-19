@@ -218,7 +218,14 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
     exitCol: 40,
     exitRow: 19,
     traps: [
-      // The far side of the bridge, where the player relaxes.
+      // THE FAR SIDE OF THE BRIDGE, where the player relaxes — and `pnpm
+      // levels` reports that the proved route never comes near it, which is
+      // correct and is the point. The solver rides the slab to column 33 and
+      // hops straight onto the row-19 ledge at 38, clearing this entirely.
+      // What it charges for is the hop that falls short: land on the ground
+      // instead of the ledge and you land on these. A bank under the landing
+      // of a jump that can be missed is not a trap in the void, it is what
+      // makes missing cost something.
       ...floorSpikes('sbank-01', 35, 3, 22),
       // ROW 21, NOT 19, AND IT STARTS AT THE PIT'S EDGE. This is why the
       // level was impassable ("уровень bridge непроходимый" — owner): the
