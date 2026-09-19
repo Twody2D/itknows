@@ -17,8 +17,8 @@ interface Silhouette {
 
 /**
  * Per-sector visual identity: same procedural skyline recipe, different
- * numbers fed into it, so five sectors read as five distinct places instead
- * of one background re-seeded five times (the level id already changed the
+ * numbers fed into it, so every sector reads as a distinct place instead
+ * of one background re-seeded per sector (the level id already changed the
  * *arrangement* — this is the first thing to change the *style*). Every
  * color still comes from `PALETTE` (CLAUDE.md #3 — no ad-hoc hex).
  */
@@ -115,6 +115,24 @@ const SECTOR_THEMES: Record<number, SectorTheme> = {
     cableCount: 2,
     hazeMultiplier: 0.55,
     extraSystemNodes: 2,
+  },
+  // 06 OVERCLOCK — the core running past its rating: sector 05's skyline
+  // with 03's heat put back into it. Same tall, narrow spires, but the
+  // signals are warning-orange instead of SYSTEM purple and the pipes are
+  // back, because this is the first place in the game that pushes the player
+  // upward instead of only trying to stop them.
+  6: {
+    ...BASE_THEME,
+    signalColor: PALETTE.dangerAlt,
+    signalAlpha: 0.7,
+    farHeavyChance: 0.34,
+    farWidthRange: [16, 44],
+    farHeightRange: [66, 160],
+    midHeightRange: [30, 80],
+    midPipeChance: 0.7,
+    cableCount: 4,
+    hazeMultiplier: 1.15,
+    extraSystemNodes: 1,
   },
 };
 

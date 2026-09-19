@@ -87,7 +87,7 @@ const SHOP_ITEM_LINES: Record<string, DialogueLine> = {
   signal: { id: 'shop-item-signal', ru: 'Яркий визор. Шипы это не впечатляет.', en: 'A bright visor. Spikes are unimpressed.' },
   patrol: { id: 'shop-item-patrol', ru: 'Зелёный. Неожиданно разумный выбор.', en: 'Green. An unexpectedly sensible choice.' },
   echo: { id: 'shop-item-echo', ru: 'Дорогой корпус. Прыгать он не помогает.', en: 'An expensive shell. It will not jump for you.' },
-  core: { id: 'shop-item-core', ru: 'То, что остаётся после пятого сектора.', en: 'What is left after sector five.' },
+  core: { id: 'shop-item-core', ru: 'То, что остаётся, когда пройдено всё.', en: 'What is left when everything is cleared.' },
   error404: { id: 'shop-item-error404', ru: 'Этого корпуса в списке нет. И всё же он тут.', en: 'This chassis is not in the list. It is here anyway.' },
 
   data_trail: { id: 'shop-item-data_trail', ru: 'След из данных. Как будто мне сложно тебя найти.', en: 'A data trail. As if finding you were hard.' },

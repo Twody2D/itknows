@@ -18,12 +18,14 @@ import { SECTOR_02_LEVELS } from '../src/data/levels/sector02';
 import { SECTOR_03_LEVELS } from '../src/data/levels/sector03';
 import { SECTOR_04_LEVELS } from '../src/data/levels/sector04';
 import { SECTOR_05_LEVELS } from '../src/data/levels/sector05';
+import { SECTOR_06_LEVELS } from '../src/data/levels/sector06';
 
 const LEGEND = [
   '#  ground/platform      ^  static spike        P  spawn        E  exit',
   'x  spike trap (moving/bank/wall/orbit/swing/loop)             o  pursuer',
   '=  platform-family trap (moving/falling/disappearing/fake)    |  laser/gate',
   '~  electric floor       t  trigger              F  fake exit',
+  'L  launch pad (solid, throws upward)',
 ].join('\n');
 
 function blank(def: LevelDef): string[][] {
@@ -62,6 +64,9 @@ function paintTraps(grid: string[][], def: LevelDef): void {
           put(grid, trap.fromCol + i, trap.fromRow, '=');
           put(grid, trap.toCol + i, trap.toRow, '=');
         }
+        break;
+      case 'launch-pad':
+        for (let i = 0; i < trap.width; i++) put(grid, trap.col + i, trap.row, 'L');
         break;
       case 'electric-floor':
         for (let i = 0; i < trap.width; i++) put(grid, trap.col + i, trap.row, '~');
@@ -135,6 +140,7 @@ const ALL = [
   ['03', SECTOR_03_LEVELS],
   ['04', SECTOR_04_LEVELS],
   ['05', SECTOR_05_LEVELS],
+  ['06', SECTOR_06_LEVELS],
 ] as const;
 
 const unsolvable: string[] = [];

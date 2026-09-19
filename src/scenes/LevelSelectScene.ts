@@ -242,9 +242,24 @@ export class LevelSelectScene extends Phaser.Scene {
     this.buildRoute(cleared, levels.length);
 
     let slot = 0;
+    const totalStars = SaveService.getTotalStars();
     levels.forEach((levelId, i) => {
       if (i === currentIndex) {
-        this.buildCurrentCard(levelId, i + 1, cleared === levels.length);
+        // THE BIG CARD CAN BE LOCKED TOO, and until now it could not.
+        //
+        // Every other tile on this screen has asked `canPlayLevel` since the
+        // padlocks were added; this one never did, because "the level you are
+        // on" was assumed to be one you may play. Browse forward to a sector
+        // you have not reached and its first level IS the one you are on
+        // there — so the campaign's whole progression, and sector 06's star
+        // gate with it, was one tap wide. Measured, not guessed: a save with
+        // no completed levels and no stars started `sector-06-level-01` from
+        // this card.
+        if (canPlayLevel(levelId, (id: string) => SaveService.isCompleted(id), totalStars)) {
+          this.buildCurrentCard(levelId, i + 1, cleared === levels.length);
+        } else {
+          this.buildLockedCurrentCard(levelId, i + 1, totalStars);
+        }
         return;
       }
       const [x, y] = SMALL_SLOTS[slot++] ?? SMALL_SLOTS[SMALL_SLOTS.length - 1]!;
@@ -438,6 +453,29 @@ export class LevelSelectScene extends Phaser.Scene {
     this.pixel(starX + starRowWidth(1) + 4, y + h - 16 + Math.floor(STAR_PX / 2), String(starGate), PALETTE.goldEdge, 1, 0, 0.5, undefined, {
       sizePx: this.st(11),
     });
+  }
+
+  /**
+   * The big slot, shut. Same frame as an unlocked card so the layout does
+   * not jump between sectors, but graphite instead of cyan, no play arrow,
+   * no hit zone — and the same padlock and star price the small tiles use,
+   * because the player has to be told which of the two reasons it is.
+   */
+  private buildLockedCurrentCard(levelId: string, number: number, totalStars: number): void {
+    const x = this.sx(BIG.x);
+    const w = this.sw(BIG.w);
+
+    const g = this.add.graphics();
+    g.fillStyle(PALETTE.metalMid, 1);
+    g.fillRect(x, BIG.y + BIG.h, w, 4);
+    g.fillStyle(PALETTE.bgGraphite, 1);
+    g.fillRect(x, BIG.y, w, BIG.h);
+    g.lineStyle(1, PALETTE.metalMid, 1);
+    g.strokeRect(x + 0.5, BIG.y + 0.5, w - 1, BIG.h - 1);
+    this.items.push(g);
+
+    const gate = starGateFor(sectorNumberOf(levelId));
+    this.buildLockedTile(x, BIG.y, w, BIG.h, number, totalStars < gate ? gate : null);
   }
 
   private buildCurrentCard(levelId: string, number: number, sectorDone: boolean): void {

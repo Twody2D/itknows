@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { SECTOR_01_LEVELS } from '@/data/levels/sector01';
-import { SECTOR_02_LEVELS } from '@/data/levels/sector02';
-import { SECTOR_03_LEVELS } from '@/data/levels/sector03';
-import { SECTOR_04_LEVELS } from '@/data/levels/sector04';
-import { SECTOR_05_LEVELS } from '@/data/levels/sector05';
+import { getAllLevels } from '@/gameplay/LevelFactory';
 import { LEVEL_HEIGHT_TILES, exitRowOf } from '@/gameplay/LevelDef';
 import type { LevelDef } from '@/gameplay/LevelDef';
-import { MAX_JUMP_RISE_PX, REACH_AT_SAME_HEIGHT_PX } from '@/gameplay/jumpPhysics';
+import { MAX_JUMP_RISE_PX, REACH_AT_SAME_HEIGHT_PX, usableLiftPx } from '@/gameplay/jumpPhysics';
 import { LEVEL_WIDTH_TILES, TILE_SIZE } from '@/config/display';
 import { MIN_WARNING_MS, PHYSICS, PLAYER_HURT_BOX_HEIGHT } from '@/config/physics';
 import { DEFAULT_TRAP_TIMING } from '@/traps/TrapTiming';
@@ -22,13 +18,18 @@ function isInAnyGap(col: number, gaps: Array<[number, number]>): boolean {
   return gaps.some(([from, to]) => col >= from && col <= to);
 }
 
-describe.each([
-  ...SECTOR_01_LEVELS,
-  ...SECTOR_02_LEVELS,
-  ...SECTOR_03_LEVELS,
-  ...SECTOR_04_LEVELS,
-  ...SECTOR_05_LEVELS,
-])('level def: $id', (level: LevelDef) => {
+/**
+ * EVERY level the game can actually load, from the one registry that decides
+ * that (`LevelFactory`) — not a hand-written list of sector imports.
+ *
+ * It was a hand-written list, and that was a hole rather than a style
+ * choice: sector 06 was authored, registered in `LevelFactory`, shipped to
+ * the level map, and ran the whole of this file's honesty checks against
+ * nothing at all, because nobody had added a sixth import here. A test that
+ * has to be told about new content is a test that stops covering the
+ * content most likely to be wrong.
+ */
+describe.each([...getAllLevels()])('level def: $id', (level: LevelDef) => {
   it('is exactly one screen wide', () => {
     // The camera does not scroll (`GameplayScene.setupCameras`) and its zoom
     // makes the visible world exactly `LEVEL_WIDTH_TILES` across on every
@@ -192,6 +193,14 @@ describe.each([
 
     const rows = new Set<number>([level.groundRow, exitRowOf(level)]);
     for (const platform of level.platforms) rows.add(platform.row);
+    // A launch pad is a surface too, and the rise it grants is the one thing
+    // in the game that is not a jump — so it is both a row that has to be
+    // reachable and a way of reaching others (sector 06 is built entirely of
+    // tiers four and five tiles up, which no jump gains). The usable lift,
+    // not the advertised one: `usableLiftPx` is what the body actually
+    // delivers, and planning a level against the nominal number is the exact
+    // mistake that would certify a climb the player cannot finish.
+    const lifts: Array<{ row: number; riseTiles: number }> = [];
     for (const trap of level.traps ?? []) {
       if (trap.type === 'moving-platform') {
         rows.add(trap.fromRow);
@@ -202,6 +211,14 @@ describe.each([
         trap.type === 'fake-platform'
       ) {
         rows.add(trap.row);
+      } else if (trap.type === 'launch-pad') {
+        rows.add(trap.row);
+        // A pad that fires once on a trigger is not a way up — the same rule
+        // `LevelValidator` applies, for the same reason: a route through a
+        // launch that may never come is a dead end.
+        if (trap.loop !== false) {
+          lifts.push({ row: trap.row, riseTiles: usableLiftPx(trap.liftTiles * TILE_SIZE) / TILE_SIZE });
+        }
       }
     }
 
@@ -212,7 +229,9 @@ describe.each([
       for (const row of rows) {
         if (reached.has(row)) continue;
         for (const from of reached) {
-          if (from - row <= maxRiseTiles) {
+          const byJump = from - row <= maxRiseTiles;
+          const byLaunch = lifts.some((lift) => lift.row === from && from - row <= lift.riseTiles);
+          if (byJump || byLaunch) {
             reached.add(row);
             changed = true;
             break;
@@ -501,13 +520,7 @@ describe('ambush timing matches the approach it is built on', () => {
    * tile the next hop needs while the player watches from the tier below,
    * where the long warning is the point and nobody is running underneath.
    */
-  const ambushes = [
-    ...SECTOR_01_LEVELS,
-    ...SECTOR_02_LEVELS,
-    ...SECTOR_03_LEVELS,
-    ...SECTOR_04_LEVELS,
-    ...SECTOR_05_LEVELS,
-  ].flatMap((level) => {
+  const ambushes = getAllLevels().flatMap((level) => {
     const traps = level.traps ?? [];
     const columnsOf = (trap: (typeof traps)[number]): [number, number] | null => {
       if (trap.type === 'spike-bank') return [trap.col, trap.col + trap.width - 1];

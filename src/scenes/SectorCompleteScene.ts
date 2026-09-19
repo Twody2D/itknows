@@ -8,7 +8,7 @@ import { MenuTile } from '@/ui/MenuTile';
 import { DomTextOverlay, type DomTextHandle, type DomTextOptions } from '@/ui/DomTextOverlay';
 import { addPlayTriangle } from '@/ui/glyphs';
 import { STAR_PX, drawStarRow, starRowWidth } from '@/ui/StarRow';
-import { MAX_STARS } from '@/gameplay/stars';
+import { MAX_STARS, isSectorUnlocked, starGateFor } from '@/gameplay/stars';
 import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
 import { fadeIn } from '@/ui/SceneFade';
 import { personalityTag } from '@/ai/SystemPersonality';
@@ -545,11 +545,30 @@ export class SectorCompleteScene extends Phaser.Scene {
     });
 
     const nextLevelId = this.sectorData.nextLevelId;
-    const hasNext = nextLevelId !== undefined;
-    const primaryLabel = (hasNext ? t('next') : t('resultToMenu')).toUpperCase();
-    const subtitle = nextLevelId
-      ? `${t('resultSectorLabel').toUpperCase()} ${sectorNumberOf(nextLevelId)}`
-      : t('resultAllDoneShort').toUpperCase();
+    /**
+     * A star gate on the sector ahead (`gameplay/stars.ts`), which this
+     * button used to walk straight through.
+     *
+     * The level map has drawn real padlocks since stars existed, but this
+     * screen is the way most players actually reach the next sector — finish
+     * level 06, press the big button — and it never asked. Sector 06 was
+     * playable from a save with zero stars in it, which makes the gate
+     * decoration rather than a rule. The button now names what is missing
+     * and sends the player to the map, where the levels worth re-running are
+     * the ones showing fewer than three stars.
+     */
+    const gateLocked =
+      nextLevelId !== undefined &&
+      !isSectorUnlocked(sectorNumberOf(nextLevelId), SaveService.getTotalStars());
+    const hasNext = nextLevelId !== undefined && !gateLocked;
+    const primaryLabel = (
+      gateLocked ? t('resultLockedSector') : hasNext ? t('next') : t('resultToMenu')
+    ).toUpperCase();
+    const subtitle = gateLocked
+      ? `${t('resultNeedStars').toUpperCase()} ${starGateFor(sectorNumberOf(nextLevelId as string))}`
+      : nextLevelId
+        ? `${t('resultSectorLabel').toUpperCase()} ${sectorNumberOf(nextLevelId)}`
+        : t('resultAllDoneShort').toUpperCase();
 
     const BTN = { x: 248, y: 196, w: 232, h: 58 };
     // Icon box + gap + the wider of the two stacked lines, centred in the
@@ -577,7 +596,9 @@ export class SectorCompleteScene extends Phaser.Scene {
       iconAccent: PALETTE.bgVoid,
       contentWidth,
       onClick: () => {
-        if (this.sectorData.nextLevelId) {
+        if (gateLocked) {
+          this.scene.start('LevelSelectScene');
+        } else if (this.sectorData.nextLevelId) {
           this.scene.start('GameplayScene', { levelId: this.sectorData.nextLevelId, entryTransition: true });
         } else {
           this.scene.start('MainMenuScene');

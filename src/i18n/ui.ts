@@ -152,6 +152,12 @@ const UI_STRINGS = {
   resultSectorLabel: { ru: 'Сектор', en: 'Sector' },
   resultToMenu: { ru: 'В меню', en: 'To menu' },
   resultAllDoneShort: { ru: 'Всё пройдено', en: 'All complete' },
+  // Shown on the sector-complete screen when the NEXT sector is behind a
+  // star gate (`gameplay/stars.ts`). The number is composed from
+  // `starGateFor` rather than written here — a gate that moves with the
+  // campaign must not have its size typed into a translation.
+  resultLockedSector: { ru: 'Сектор закрыт', en: 'Sector locked' },
+  resultNeedStars: { ru: 'Нужно звёзд:', en: 'Stars needed:' },
   resultProgress: { ru: 'Прогресс', en: 'Progress' },
   next: { ru: 'Дальше', en: 'Next' },
 
