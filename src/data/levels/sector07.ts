@@ -98,6 +98,25 @@ export const SECTOR_07_LEVELS: LevelDef[] = [
         lethalRow: 17,
         timing: { idleMs: 1500, warningMs: 900, activeMs: 1200, cooldownMs: 400 },
       },
+      // ON THE WALK OVER, NEVER OVER THE PAD. That distinction is what lets
+      // this sector be extended at all: a hazard above a pad has to
+      // out-telegraph the whole flight through it plus 300 ms, because
+      // `Player.launch` fixes the arc at the moment of firing (CLAUDE.md
+      // #4.5). Beside the pad, the ordinary 250 ms rule applies and refusing
+      // is still free — which is the verb of the entire sector.
+      {
+        type: 'spike-bank',
+        id: 'sbank-02',
+        col: 12,
+        width: 2,
+        hiddenRow: 23,
+        lethalRow: 21,
+        timing: { idleMs: 1700, warningMs: 500, activeMs: 600, cooldownMs: 400 },
+      },
+      // And on the tier the launch delivers to: the level was over the
+      // moment the throw landed, which is not what a sector about choosing
+      // launches should say about the launch it chose.
+      { type: 'laser', id: 'laser-01', col: 24, topRow: 13, bottomRow: 16 },
     ],
   },
   {
@@ -136,6 +155,22 @@ export const SECTOR_07_LEVELS: LevelDef[] = [
       // awkward — the sector asks the player to decline launches, and
       // declining has to lead somewhere.
       { type: 'launch-pad', id: 'pad-02', col: 24, row: 22, width: 3, liftTiles: 5 },
+      // BETWEEN THE TWO PADS, so the walk from the threatened one to the safe
+      // one is itself a decision rather than a concession. Refusing the fast
+      // route stays a real option — the point of `pad-02` — but it stops
+      // being a free one.
+      {
+        type: 'spike-bank',
+        id: 'sbank-02',
+        col: 17,
+        width: 2,
+        hiddenRow: 23,
+        lethalRow: 21,
+        timing: { idleMs: 1600, warningMs: 500, activeMs: 700, cooldownMs: 400 },
+      },
+      // On the tier where the two routes rejoin, so neither of them arrives
+      // at an empty walk.
+      { type: 'laser', id: 'laser-01', col: 28, topRow: 11, bottomRow: 14 },
     ],
   },
   {
@@ -161,6 +196,24 @@ export const SECTOR_07_LEVELS: LevelDef[] = [
       // next launch — the price of a bad decision in this sector, stated
       // once, plainly, before the two levels that charge more for it.
       { type: 'timing-gate', id: 'gate-01', col: 17, topRow: 12, bottomRow: 21 },
+      // ON THE WALK OVER, NEVER OVER THE PAD. That distinction is what lets
+      // this sector be extended at all: a hazard above a pad has to
+      // out-telegraph the whole flight through it plus 300 ms, because
+      // `Player.launch` fixes the arc at the moment of firing (CLAUDE.md
+      // #4.5). Beside the pad, the ordinary 250 ms rule applies and refusing
+      // is still free — which is the verb of the entire sector.
+      {
+        type: 'spike-bank',
+        id: 'sbank-01',
+        col: 9,
+        width: 2,
+        hiddenRow: 23,
+        lethalRow: 21,
+        timing: { idleMs: 1800, warningMs: 500, activeMs: 600, cooldownMs: 400 },
+      },
+      // Past the gate, on the tier it guards — so getting through the
+      // barrier is arriving somewhere rather than finishing.
+      { type: 'laser', id: 'laser-01', col: 23, topRow: 12, bottomRow: 15 },
     ],
   },
   {
@@ -205,6 +258,23 @@ export const SECTOR_07_LEVELS: LevelDef[] = [
         bottomRow: 21,
         timing: { idleMs: 1000, warningMs: 1000, activeMs: 600, cooldownMs: 200 },
       },
+      // ON THE WALK OVER, NEVER OVER THE PAD. That distinction is what lets
+      // this sector be extended at all: a hazard above a pad has to
+      // out-telegraph the whole flight through it plus 300 ms, because
+      // `Player.launch` fixes the arc at the moment of firing (CLAUDE.md
+      // #4.5). Beside the pad, the ordinary 250 ms rule applies and refusing
+      // is still free — which is the verb of the entire sector.
+      {
+        type: 'spike-bank',
+        id: 'sbank-01',
+        col: 11,
+        width: 2,
+        hiddenRow: 23,
+        lethalRow: 21,
+        timing: { idleMs: 1900, warningMs: 500, activeMs: 600, cooldownMs: 400 },
+      },
+      // On the far side of the beam, where the arc puts the player down.
+      { type: 'laser', id: 'laser-02', col: 24, topRow: 13, bottomRow: 16, initialIdleMs: 800 },
     ],
   },
   {
@@ -252,6 +322,11 @@ export const SECTOR_07_LEVELS: LevelDef[] = [
         width: 5,
         travelMs: 1700,
       },
+      // ON THE TIER THE RIDE ENDS AT, and nowhere on the ride itself. A
+      // rider has no ground to step off onto, so a hazard over the slab
+      // would be one the player cannot refuse — the whole sector is built on
+      // being able to. The beam charges for arriving, not for travelling.
+      { type: 'laser', id: 'laser-01', col: 37, topRow: 10, bottomRow: 13 },
     ],
   },
   {
@@ -295,6 +370,14 @@ export const SECTOR_07_LEVELS: LevelDef[] = [
         bottomRow: 15,
         timing: { idleMs: 900, warningMs: 1000, activeMs: 650, cooldownMs: 250 },
       },
+      // Across the long row-11 tier, which was the one stretch of this
+      // finale that asked nothing at all.
+      { type: 'laser', id: 'laser-02', col: 25, topRow: 7, bottomRow: 10, initialIdleMs: 500 },
+      // AND GATE'S BARRIER ON THE LAST CLIMB. The sector closer should cite
+      // the cheap refusal as well as the expensive ones: shut, this costs
+      // the hop to the roof and nothing else, which is exactly the price
+      // `GATE` spent a whole level establishing.
+      { type: 'timing-gate', id: 'gate-01', col: 34, topRow: 4, bottomRow: 7 },
     ],
   },
 ];

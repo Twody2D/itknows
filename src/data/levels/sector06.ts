@@ -58,6 +58,31 @@ export const SECTOR_06_LEVELS: LevelDef[] = [
       // reaches row 17 and nothing is meant to: the pad is the only door,
       // and the player can see that from the spawn tile without moving.
       { type: 'launch-pad', id: 'pad-01', col: 12, row: 22, width: 3, liftTiles: 6 },
+      // TWO THINGS THAT ARE NOT THE PAD, added 2026-09-19 after the owner
+      // played the sector: «6-7 этапы слишком лёгкие, ловушек мало». This
+      // level had exactly one trap in it. The pad is the lesson and it stays
+      // the lesson — but a level that asks one question once is a
+      // demonstration, not a level, and the two tiers it delivers the player
+      // onto were empty floor.
+      //
+      // Neither of these is over the pad. That is the rule the whole sector
+      // is extended under: `Player.launch` fixes the arc at the moment of
+      // firing, so anything above a pad has to out-telegraph the entire
+      // flight through it plus 300 ms (CLAUDE.md #4.5). Beside the pad and
+      // on the tiers, the ordinary 250 ms rule applies and the player keeps
+      // every option they had.
+      {
+        type: 'spike-bank',
+        id: 'sbank-01',
+        col: 10,
+        width: 2,
+        hiddenRow: 23,
+        lethalRow: 21,
+        timing: { idleMs: 1500, warningMs: 500, activeMs: 700, cooldownMs: 300 },
+      },
+      // On the tier the pad delivers to, so the landing is not the end of
+      // the move.
+      { type: 'laser', id: 'laser-01', col: 21, topRow: 13, bottomRow: 16 },
     ],
   },
   {
@@ -85,6 +110,20 @@ export const SECTOR_06_LEVELS: LevelDef[] = [
       // only answer is to stand still — the thing sector 05 spent six levels
       // making expensive.
       { type: 'laser', id: 'laser-02', col: 19, topRow: 12, bottomRow: 16, initialIdleMs: 700 },
+      // A THIRD CLOCK, AND IT IS UNDERFOOT. The two beams are both things to
+      // stand and watch; this springs out of the tier the player is standing
+      // on to watch them, so the safe place to wait is a decision as well.
+      // Offset from `laser-02` by three columns and running on a different
+      // period, so the tier never has one rhythm to memorise.
+      {
+        type: 'spike-bank',
+        id: 'sbank-01',
+        col: 16,
+        width: 2,
+        hiddenRow: 18,
+        lethalRow: 16,
+        timing: { idleMs: 1800, warningMs: 500, activeMs: 600, cooldownMs: 400 },
+      },
     ],
   },
   {
@@ -114,6 +153,21 @@ export const SECTOR_06_LEVELS: LevelDef[] = [
       // ON A PLATFORM, not on the ground — the first pad in the campaign the
       // player has to be delivered to before they can use it.
       { type: 'launch-pad', id: 'pad-02', col: 12, row: 18, width: 3, liftTiles: 6 },
+      // WHAT THE CHAIN DELIVERS YOU ONTO. Two launches back to back were the
+      // whole of this level, and the eight-tile tier they end on had nothing
+      // at all — so the level finished the moment the second pad fired. The
+      // beam and the bank make the tier the third link rather than the
+      // landing mat, and both sit well clear of either pad's column.
+      { type: 'laser', id: 'laser-01', col: 21, topRow: 9, bottomRow: 12 },
+      {
+        type: 'spike-bank',
+        id: 'sbank-01',
+        col: 23,
+        width: 2,
+        hiddenRow: 14,
+        lethalRow: 12,
+        timing: { idleMs: 1600, warningMs: 500, activeMs: 700, cooldownMs: 300 },
+      },
     ],
   },
   {
@@ -164,6 +218,13 @@ export const SECTOR_06_LEVELS: LevelDef[] = [
       // On the far side, where the landing is: the crossing is not over at
       // the moment the player is above the pit.
       { type: 'spike-bank', id: 'sbank-01', col: 26, width: 3, hiddenRow: 23, lethalRow: 21 },
+      // ONE BEAM ON EACH SIDE OF THE CROSSING. The pad answers the pit and
+      // nothing answered the rest of the level: the ledge the throw lands on
+      // and the climb off the far side were both a walk. These stand on the
+      // two ledges rather than over the pit, because a beam over a launch is
+      // a beam the player cannot decline once the pad has fired.
+      { type: 'laser', id: 'laser-01', col: 22, topRow: 15, bottomRow: 18 },
+      { type: 'laser', id: 'laser-02', col: 34, topRow: 14, bottomRow: 18, initialIdleMs: 800 },
     ],
   },
   {
@@ -193,6 +254,20 @@ export const SECTOR_06_LEVELS: LevelDef[] = [
       // launch: the beam is the second wait, and the drone does not stop at
       // the bottom of the climb.
       { type: 'laser', id: 'laser-01', col: 28, topRow: 13, bottomRow: 17 },
+      // AND THE TIER ITSELF IS NOT A REST. The drone makes standing still
+      // cost distance and the beam makes it cost time; this makes standing
+      // still cost the place you chose to do it in, which is the only one of
+      // the three the player can answer by moving two tiles. It rises out of
+      // the landing tier well short of the beam's column.
+      {
+        type: 'spike-bank',
+        id: 'sbank-01',
+        col: 24,
+        width: 2,
+        hiddenRow: 19,
+        lethalRow: 17,
+        timing: { idleMs: 2000, warningMs: 500, activeMs: 600, cooldownMs: 400 },
+      },
     ],
   },
   {
@@ -237,6 +312,11 @@ export const SECTOR_06_LEVELS: LevelDef[] = [
       // (`sector05.ts`, `orbit-01`): the arc may cross the flight, never the
       // ledge the player waits on.
       { type: 'orbit-spike', id: 'orbit-01', pivotCol: 33, pivotRow: 11, radiusTiles: 1.25, periodMs: 1800 },
+      // Across the long middle tier, which was the one stretch of this
+      // finale a player could cross without deciding anything. The sector
+      // closer is the place to ask everything at once, and three launches
+      // and one orbit was not everything.
+      { type: 'laser', id: 'laser-01', col: 27, topRow: 8, bottomRow: 11 },
     ],
   },
 ];
