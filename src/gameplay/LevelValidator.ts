@@ -1,7 +1,7 @@
 import { TILE_SIZE } from '@/config/display';
 import type { LevelDef } from './LevelDef';
 import { exitRowOf } from './LevelDef';
-import { MAX_JUMP_RISE_PX, maxHorizontalReach } from './jumpPhysics';
+import { MAX_JUMP_RISE_PX, launchReach, maxHorizontalReach, usableLiftPx } from './jumpPhysics';
 
 /**
  * One standable surface: a contiguous run of ground, or a platform.
@@ -59,7 +59,12 @@ function groundSegments(def: LevelDef): Segment[] {
  * position; per-instant timing (is the disappearing platform there *now*)
  * is out of scope here, see the module doc comment below.
  */
-function platformSegments(def: LevelDef): { segments: Segment[]; rides: Array<[Segment, Segment]> } {
+function platformSegments(def: LevelDef): {
+  segments: Segment[];
+  rides: Array<[Segment, Segment]>;
+  /** Lift in px a segment grants to anything launching from it (`launch-pad`). */
+  launchers: Map<Segment, number>;
+} {
   const segments: Segment[] = def.platforms.map((p, i) => ({
     label: `platform-${i}`,
     fromCol: p.col,
@@ -67,6 +72,7 @@ function platformSegments(def: LevelDef): { segments: Segment[]; rides: Array<[S
     row: p.row,
   }));
   const rides: Array<[Segment, Segment]> = [];
+  const launchers = new Map<Segment, number>();
 
   for (const trap of def.traps ?? []) {
     if (trap.type === 'moving-platform') {
@@ -108,10 +114,31 @@ function platformSegments(def: LevelDef): { segments: Segment[]; rides: Array<[S
         toCol: trap.col + trap.width - 1,
         row: trap.row,
       });
+    } else if (trap.type === 'launch-pad') {
+      // Real, permanent footing — the pad is solid at every phase — plus the
+      // lift it grants to anything leaving it. Both matter: without the
+      // surface the player could not stand there at all, and without the lift
+      // a level whose upper half is deliberately out of jump range would be
+      // reported unsolvable even though riding the pad is the only intended
+      // route, which is exactly the mistake `rides` was added to fix for
+      // moving platforms.
+      const pad: Segment = {
+        label: `launch-pad-${trap.id}`,
+        fromCol: trap.col,
+        toCol: trap.col + trap.width - 1,
+        row: trap.row,
+      };
+      segments.push(pad);
+      // ONLY A LOOPING PAD counts towards reachability. A `loop: false` pad
+      // fires once, when something triggers it, and a route that depends on
+      // a launch that may never come is a dead end the solver would have
+      // signed off on (CLAUDE.md #4.3/#4.4). The pad is still real footing
+      // either way — it just stops being a way up.
+      if (trap.loop !== false) launchers.set(pad, trap.liftTiles * TILE_SIZE);
     }
   }
 
-  return { segments, rides };
+  return { segments, rides, launchers };
 }
 
 function segmentContainsCol(segment: Segment, col: number): boolean {
@@ -139,11 +166,18 @@ function edgeGapPx(a: Segment, b: Segment): number {
  * the player can reach. Since levels are now one screen and built upward
  * (`LevelDef`), that is the normal case, not an edge case.
  */
-function canReach(from: Segment, to: Segment): boolean {
+function canReach(from: Segment, to: Segment, liftPx = 0): boolean {
   const fromY = from.row * TILE_SIZE;
   const toY = to.row * TILE_SIZE;
   // Positive when `to` sits above `from` — the height the jump has to gain.
   const rise = fromY - toY;
+  // A launch pad replaces the jump rather than adding to it: the player is
+  // thrown, and the throw is what decides both the height and how far they
+  // drift while in the air (`jumpPhysics.launchReach`). Taking the better of
+  // the two keeps a pad from ever making a route WORSE than standing on an
+  // ordinary ledge would have been.
+  const lift = usableLiftPx(liftPx);
+  if (lift > 0 && rise <= lift && edgeGapPx(from, to) <= launchReach(lift, rise)) return true;
   if (rise > MAX_JUMP_RISE_PX) return false;
   return edgeGapPx(from, to) <= maxHorizontalReach(rise);
 }
@@ -174,7 +208,7 @@ interface SolveOutcome extends ValidationResult {
 }
 
 function solve(def: LevelDef): SolveOutcome {
-  const { segments: platforms, rides } = platformSegments(def);
+  const { segments: platforms, rides, launchers } = platformSegments(def);
   const segments = [...groundSegments(def), ...platforms];
 
   /** Segments reachable from `segment` by riding a moving platform it is standing on. */
@@ -227,9 +261,10 @@ function solve(def: LevelDef): SolveOutcome {
       cameFrom.set(other, current);
       queue.push(other);
     };
+    const liftPx = launchers.get(current) ?? 0;
     for (const other of segments) {
       if (visited.has(other)) continue;
-      if (canReach(current, other)) reach(other);
+      if (canReach(current, other, liftPx)) reach(other);
     }
     for (const other of ridesFrom(current)) {
       if (visited.has(other)) continue;

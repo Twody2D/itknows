@@ -3,7 +3,7 @@ import { PHYSICS } from '@/config/physics';
 import type { LevelDef } from './LevelDef';
 import type { Segment } from './LevelValidator';
 import { solvePath } from './LevelValidator';
-import { fallTimeSec, jumpAirTimeSec } from './jumpPhysics';
+import { MAX_JUMP_RISE_PX, fallTimeSec, jumpAirTimeSec, launchReach, usableLiftPx } from './jumpPhysics';
 import { DEFAULT_TRAP_TIMING } from '@/traps/TrapTiming';
 import type { TrapDef } from '@/traps/TrapDef';
 
@@ -63,6 +63,11 @@ function hazardSpan(trap: TrapDef): { fromCol: number; toCol: number; cycleMs: n
       return { fromCol: trap.col, toCol: trap.col, cycleMs: cycleOf(trap.timing) };
     case 'electric-floor':
     case 'spike-bank':
+      return { fromCol: trap.col, toCol: trap.col + trap.width - 1, cycleMs: cycleOf(trap.timing) };
+    case 'launch-pad':
+      // Not a hazard, but it costs exactly the same thing: the player stands
+      // on the pad and waits for it to fire. A route up a launcher is slower
+      // than the geometry alone suggests, and this is where that shows up.
       return { fromCol: trap.col, toCol: trap.col + trap.width - 1, cycleMs: cycleOf(trap.timing) };
     case 'spike-wall': {
       const reach = trap.fromRight === true ? trap.col - trap.extendTiles : trap.col + trap.extendTiles;
@@ -133,6 +138,15 @@ export function parBreakdown(def: LevelDef): ParBreakdown | null {
   const path = solvePath(def);
   if (path === null || path.length === 0) return null;
 
+  // Lift available at each column, for the transfers a jump cannot explain.
+  const liftByCol = new Map<number, number>();
+  for (const trap of def.traps ?? []) {
+    if (trap.type !== 'launch-pad') continue;
+    for (let col = trap.col; col < trap.col + trap.width; col++) {
+      liftByCol.set(col, Math.max(liftByCol.get(col) ?? 0, usableLiftPx(trap.liftTiles * TILE_SIZE)));
+    }
+  }
+
   let seconds = 0;
   let at = def.playerStartCol;
 
@@ -147,7 +161,18 @@ export function parBreakdown(def: LevelDef): ParBreakdown | null {
     const gapSec = Math.abs(landCol - departCol) * walkSecPerCol;
     // Horizontal distance is covered during the flight, not after it, so a
     // transfer costs whichever of the two is longer — never their sum.
-    const flightSec = risePx > 0 ? jumpAirTimeSec(risePx) : fallTimeSec(-risePx);
+    //
+    // A rise no jump can make was made by a launch pad, and has to be timed
+    // as one: `jumpAirTimeSec` answers 0 for an impossible jump, so leaving
+    // it to that would have quietly scored the longest flight in the level
+    // as instantaneous and handed the level a target time nobody could meet.
+    const liftPx = liftByCol.get(departCol) ?? 0;
+    const flightSec =
+      risePx <= 0
+        ? fallTimeSec(-risePx)
+        : risePx > MAX_JUMP_RISE_PX && liftPx > 0
+          ? launchReach(liftPx, risePx) / PHYSICS.moveSpeed
+          : jumpAirTimeSec(risePx);
     seconds += Math.max(gapSec, flightSec);
 
     at = landCol;

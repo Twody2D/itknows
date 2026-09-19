@@ -8,6 +8,7 @@ import {
 } from '@/config/physics';
 import type { InputState } from '@/utils/input/InputState';
 import type { PlayerAnimState } from './PlayerAnimState';
+import { launchVelocity } from './jumpPhysics';
 import { EventBus } from '@/core/EventBus';
 import type { DeathCause } from '@/core/EventBus';
 import { InventoryService } from '@/services/InventoryService';
@@ -135,7 +136,36 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
    * spent and no death is recorded, which is the whole point of the trap
    * (CLAUDE.md #4.7: a fake exit is never lethal).
    */
-  beginSwallow(): void {
+/** Standing on something solid right now — read by the scene's launch-pad sweep, which runs outside the physics step. */
+  isGrounded(): boolean {
+    return this.body.blocked.down || this.body.touching.down;
+  }
+
+  /**
+   * Throws the player `liftPx` upward — a `launch-pad` firing under them.
+   *
+   * `jumpCutApplied` is set, and that is the load-bearing line. The variable
+   * jump cuts any upward velocity the moment the jump button is NOT held
+   * (`preUpdate` below), and a launch happens without the player pressing
+   * anything — so without this the pad's rise would be cut to 45% on the very
+   * next frame, leaving about a fifth of the advertised height. That is not a
+   * tuning problem but a correctness one: `LevelValidator` certifies levels
+   * against the full lift, so a silently shortened launch would strand the
+   * player on a level the solver had proved passable.
+   *
+   * The player did not choose this rise, so they do not get to cut it either
+   * — which is the same rule stated from the player's side.
+   */
+  launch(liftPx: number): void {
+    if (this.lifeState !== 'alive') return;
+    this.body.setVelocityY(launchVelocity(liftPx));
+    this.jumpCutApplied = true;
+    this.lastGroundedAtMs = -Infinity;
+    this.lastJumpPressedAtMs = -Infinity;
+    this.setAnim('jump');
+  }
+
+    beginSwallow(): void {
     if (this.lifeState !== 'alive') return;
     this.lifeState = 'swallowed';
     this.body.setVelocity(0, 0);

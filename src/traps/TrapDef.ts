@@ -174,6 +174,40 @@ export type TrapDef =
     }
   | {
       /**
+       * A pad that throws the player upward when they are standing on it at
+       * the moment it fires — the sector-06 mechanic, and the first thing in
+       * this file that is not purely an obstacle.
+       *
+       * Every other entry here answers "can you get past me". This one
+       * answers "will you use me": a `launch-pad` is a SURFACE (solid,
+       * standable, never lethal) whose active phase carries the player
+       * `liftTiles` above itself, higher than any jump reaches. Levels built
+       * on it are climbs whose upper half is out of jump range entirely, so
+       * the pad is not a shortcut around the question — it is the question.
+       *
+       * Honesty: it runs the shared idle → warning → active → cooldown cycle
+       * like every timed trap, so the launch telegraphs for `MIN_WARNING_MS`
+       * before it happens (CLAUDE.md #4.2). That matters even though the pad
+       * cannot kill: being thrown without warning into a spike overhead
+       * would be a death the player could not have avoided, which is the
+       * thing #4 actually forbids. `LevelValidator` knows about the lift
+       * (`jumpPhysics.launchReach`), so a level whose exit is only reachable
+       * by riding a pad still has to prove itself passable.
+       */
+      type: 'launch-pad';
+      id: string;
+      col: number;
+      /** Surface row the pad sits on — the player stands here. */
+      row: number;
+      width: number;
+      /** Height in TILES the launch carries the player above the pad's surface. */
+      liftTiles: number;
+      timing?: TrapTiming;
+      initialIdleMs?: number;
+      loop?: boolean;
+    }
+  | {
+      /**
        * A spike on a fixed-radius arm, rotating at constant angular speed
        * forever — never slowing or reversing, unlike `swinging-spike`
        * below. Continuously visible; the steady, never-pausing sweep is

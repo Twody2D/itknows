@@ -37,6 +37,87 @@ export function fallTimeSec(dropPx: number): number {
 }
 
 /**
+ * Upward velocity that carries the player exactly `liftPx` above the launch
+ * point — what a `launch-pad` imparts.
+ *
+ * Negative, like `PHYSICS.jumpVelocity`, because up is negative here. Derived
+ * from the same ascending gravity a jump uses, so a pad's advertised lift in
+ * tiles is the height the player actually gains rather than a number tuned by
+ * eye until it looked right.
+ */
+export function launchVelocity(liftPx: number): number {
+  return -Math.sqrt(2 * PHYSICS.gravity * clampLift(liftPx));
+}
+
+/**
+ * The highest lift the game can actually deliver, in px.
+ *
+ * `Player` clamps its body to `PHYSICS.maxFallSpeed` in BOTH vertical
+ * directions (`setMaxVelocity`), so an upward impulse past that speed is
+ * silently trimmed by Arcade. Measured live before this was handled: a pad
+ * advertising 12 tiles lifted 10.1, with the velocity pinned at exactly
+ * -420. That is the dangerous kind of wrong — `LevelValidator` certifies a
+ * level against the lift the data claims, so a pad asking for more than the
+ * body can give would prove a level passable that the player cannot finish.
+ *
+ * Every launch calculation goes through `clampLift`, so the solver and the
+ * game agree even on a level authored with too large a number; the sanity
+ * test then refuses that number outright rather than letting it pass quietly.
+ */
+export const MAX_LAUNCH_LIFT_PX = (PHYSICS.maxFallSpeed * PHYSICS.maxFallSpeed) / (2 * PHYSICS.gravity);
+
+function clampLift(liftPx: number): number {
+  return Math.min(MAX_LAUNCH_LIFT_PX, Math.max(0, liftPx));
+}
+
+/** Arcade's fixed physics step. */
+const PHYSICS_STEP_SEC = 1 / 60;
+
+/**
+ * The lift a launch really delivers, which is slightly less than the impulse
+ * implies — what `LevelValidator` must plan against.
+ *
+ * The body integrates in discrete steps, so gravity is charged for a whole
+ * frame that the ideal continuous arc never pays. Measured live: a pad set to
+ * 9 tiles lifted 8.70, with the peak velocity right where the maths put it
+ * (-402). The gap is one frame of gravity, not a bug in the impulse.
+ *
+ * A full frame is subtracted rather than the half the arithmetic suggests,
+ * because this number has to be a LOWER bound for the same reason
+ * `maxHorizontalReach` is: a solver that plans against a lift the game
+ * delivers only on a good frame would certify a climb the player sometimes
+ * cannot make, and "sometimes" is the worst possible failure for a rule the
+ * whole campaign is checked against.
+ */
+export function usableLiftPx(liftPx: number): number {
+  const lift = clampLift(liftPx);
+  return Math.max(0, lift - Math.sqrt(2 * PHYSICS.gravity * lift) * PHYSICS_STEP_SEC);
+}
+
+/**
+ * Horizontal distance a launch of `liftPx` covers before landing on a surface
+ * `risePx` above the pad.
+ *
+ * The launcher's counterpart to `maxHorizontalReach`, and the same two-phase
+ * model: ascending under base gravity, descending under
+ * `fallGravityMultiplier`. Returns 0 when the launch cannot gain the height
+ * at all, so a caller that treats 0 as "unreachable" needs no special case.
+ *
+ * Like its sibling this is a LOWER bound — it ignores the extra distance a
+ * player covers by jumping at the top of the arc — because `LevelValidator`
+ * treats it as ground truth for whether a level is passable, and a reach
+ * that overstates what the game can do would certify a level nobody can
+ * finish.
+ */
+export function launchReach(liftPx: number, risePx: number): number {
+  const lift = clampLift(liftPx);
+  if (risePx > lift) return 0;
+  const timeUp = Math.sqrt((2 * lift) / PHYSICS.gravity);
+  const timeDown = Math.sqrt((2 * (lift - Math.max(0, risePx))) / FALL_GRAVITY);
+  return PHYSICS.moveSpeed * (timeUp + timeDown);
+}
+
+/**
  * Conservative horizontal reach for a jump from a surface to a target whose
  * surface is `riseAboveStartPx` higher than the start (negative or zero for
  * a target at or below the start). Mirrors the two-phase gravity model in

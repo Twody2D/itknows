@@ -22,6 +22,7 @@ import type { Triggerable } from '@/traps/TriggerTrap';
 import { Pursuer } from '@/traps/Pursuer';
 import { TimingGate } from '@/traps/TimingGate';
 import { FakeExit } from '@/traps/FakeExit';
+import { LaunchPadTrap } from '@/traps/LaunchPadTrap';
 import { SpikeBankTrap } from '@/traps/SpikeBankTrap';
 import { SpikeWallTrap } from '@/traps/SpikeWallTrap';
 import { OrbitSpikeTrap } from '@/traps/OrbitSpikeTrap';
@@ -54,6 +55,7 @@ export interface BuiltTraps {
   triggers: TriggerTrap[];
   pursuers: Pursuer[];
   fakeExits: FakeExit[];
+  launchPads: LaunchPadTrap[];
   all: Array<{ destroy: () => void }>;
 }
 
@@ -136,6 +138,7 @@ function buildTraps(
     triggers: [],
     pursuers: [],
     fakeExits: [],
+    launchPads: [],
     all: [],
   };
 
@@ -402,6 +405,30 @@ function buildTraps(
         // span together (`loop: false` turns it into a one-shot ambush that
         // springs where the player walks rather than on a clock).
         triggerable.set(def.id, { trigger: () => bank.forEach((spike) => spike.trigger()) });
+        break;
+      }
+
+      case 'launch-pad': {
+        // One instance per tile, in lockstep on a shared timing — the same
+        // shape `spike-bank` uses, and for the same reason: the level data
+        // describes one pad, the tiles are only how it is built.
+        const pad: LaunchPadTrap[] = [];
+        for (let i = 0; i < def.width; i++) {
+          const trap = new LaunchPadTrap(scene, {
+            id: `${def.id}-${i}`,
+            x: tileCenter(def.col + i, def.row).x,
+            surfaceY: def.row * TILE_SIZE,
+            liftPx: def.liftTiles * TILE_SIZE,
+            timing: def.timing,
+            initialIdleMs: def.initialIdleMs,
+            loop: def.loop,
+          });
+          pad.push(trap);
+          result.updatable.push(trap);
+          result.launchPads.push(trap);
+          result.all.push(trap);
+        }
+        triggerable.set(def.id, { trigger: () => pad.forEach((tile) => tile.trigger()) });
         break;
       }
 

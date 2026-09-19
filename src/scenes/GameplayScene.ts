@@ -412,6 +412,16 @@ export class GameplayScene extends Phaser.Scene {
       );
     }
 
+    // A launch pad is footing before it is machinery: it collides exactly
+    // like every other one-way platform, so it can be stood on, crossed and
+    // jumped from between launches. What makes it a pad is the zone sweep in
+    // `sweepZoneContacts`, never the collision.
+    for (const pad of traps.launchPads) {
+      this.physics.add.collider(this.player, pad.gameObject, undefined, (playerObj, platformObj) =>
+        this.isLandingOnPlatform(playerObj as Player, platformObj as Phaser.Physics.Arcade.Sprite),
+      );
+    }
+
     for (const gate of traps.timingGates) {
       this.physics.add.collider(this.player, gate.gameObject, undefined, () => !gate.isOpen());
     }
@@ -565,6 +575,19 @@ export class GameplayScene extends Phaser.Scene {
         this.onSwallowedByFakeExit(fakeExit);
         return;
       }
+    }
+    for (const pad of this.level.traps.launchPads) {
+      if (!pad.isFiring()) continue;
+      if (!Phaser.Geom.Rectangle.Overlaps(feet, pad.zone)) continue;
+      // Only a player actually resting on the pad is thrown. Without the
+      // grounded test, a pad firing while the player is merely passing
+      // through its column mid-jump would add a second impulse to an arc
+      // they had already committed to — an unasked-for launch is exactly
+      // the kind of thing the warning phase exists to prevent.
+      if (!this.player.isGrounded()) continue;
+      this.player.launch(pad.liftPx);
+      playSfx('jump');
+      break;
     }
     if (!this.resolving && Phaser.Geom.Rectangle.Overlaps(feet, this.level.exitZone)) {
       this.onExitReached();
