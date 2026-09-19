@@ -32,7 +32,7 @@ pnpm dev          # dev-сервер (http://localhost:5173)
 pnpm typecheck    # tsc --noEmit
 pnpm lint         # eslint
 pnpm test         # vitest run
-pnpm levels       # ASCII-раскладка всех 30 уровней + вердикт солвера
+pnpm levels       # ASCII-раскладка всех 60 уровней + вердикт солвера
 ```
 
 В dev-сборке доступен оверлей отладки: **F3** — FPS, текущий тир авто-
