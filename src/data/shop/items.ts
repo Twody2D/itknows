@@ -1,5 +1,5 @@
 import type { UiStringKey } from '@/i18n/ui';
-import { COLLECTOR_SKIN_STARS } from '@/gameplay/stars';
+import { BEEP7_TRAIL_STARS, COLLECTOR_SKIN_STARS, ECHO_SKIN_STARS } from '@/gameplay/stars';
 
 /** Master-prompt §8 categories. `premium` covers both `remove_ads` and the `system_access` bundle — owned-only, never equipped. */
 export type ShopCategory = 'character' | 'death_fx' | 'system' | 'trail' | 'premium';
@@ -72,13 +72,16 @@ export const SHOP_ITEMS: ShopItem[] = [
     priceCredits: 150,
     rarity: 'rare',
   },
+  // Earned, never bought — see `ECHO_SKIN_STARS` for the measurement that
+  // took its price away. A third of the campaign's stars: reachable well
+  // before the end, so the ladder starts inside the game rather than after it.
   {
     id: 'echo',
     category: 'character',
     nameKey: 'shopSkinEcho',
     descriptionKey: 'shopSkinEchoDesc',
-    priceCredits: 220,
     rarity: 'premium',
+    unlockCondition: { kind: 'stars', count: ECHO_SKIN_STARS },
   },
   // Locked until every level in the campaign is completed — a real,
   // already-tracked stat (`SaveService.getCompletedLevels()`), never a fake
@@ -147,13 +150,17 @@ export const SHOP_ITEMS: ShopItem[] = [
     priceCredits: 130,
     rarity: 'rare',
   },
+  // The top of the earn-only ladder: two thirds of every star in the
+  // campaign, which is the one threshold that needs three-starring rather
+  // than merely finishing well. It was the single most expensive item in
+  // the shop, and is now the one that money cannot reach at all.
   {
     id: 'beep7',
     category: 'trail',
     nameKey: 'shopTrailBeep7',
     descriptionKey: 'shopTrailBeep7Desc',
-    priceCredits: 260,
     rarity: 'premium',
+    unlockCondition: { kind: 'stars', count: BEEP7_TRAIL_STARS },
   },
 
   // PREMIUM

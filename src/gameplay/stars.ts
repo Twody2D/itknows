@@ -106,3 +106,25 @@ export function canPlayLevel(levelId: string, isCompleted: (id: string) => boole
  * would just chase a catalogue that was already affordable.
  */
 export const COLLECTOR_SKIN_STARS = Math.round(starsAvailableThrough(SECTOR_COUNT) * GATE_FRACTION);
+
+/**
+ * The other two thresholds on the same ladder: `echo` at a third of the
+ * campaign's stars, `reference` at a half, `beep7` at two thirds — 60, 90
+ * and 120 out of 180 at ten sectors, all derived so they follow the
+ * campaign instead of going stale in it.
+ *
+ * WHY THESE TWO STOPPED HAVING A PRICE (owner's decision 2026-09-19). The
+ * shop was measured against the finished campaign and found over-funded:
+ * the whole purchasable catalogue cost 1460 CREDITS while even a player who
+ * died on every single level earned 1750 in one pass, and a good one earned
+ * 4150 (`docs/SHOP.md`). Raising prices would not fix that — it would just
+ * move the same number. What fixes it is the thing stars were added for: an
+ * item money cannot reach. The two most expensive cosmetics in the game are
+ * now the two that cannot be bought at all, which is also the only way their
+ * `premium` rarity means anything.
+ *
+ * Nobody loses a purchase: `InventoryService` ownership is permanent, so a
+ * player who already bought either one keeps it.
+ */
+export const ECHO_SKIN_STARS = Math.round(starsAvailableThrough(SECTOR_COUNT) / 3);
+export const BEEP7_TRAIL_STARS = Math.round((starsAvailableThrough(SECTOR_COUNT) * 2) / 3);
