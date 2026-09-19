@@ -19,7 +19,7 @@
 - Сложность берётся из расстановки и точности, а не из длины. Уровень
   проектируется **вверх**, а не вбок (`CLAUDE.md` #2).
 
-Уровней 54: 9 секторов по 6 (кампания растёт до 10 секторов).
+Уровней 60: 10 секторов по 6 — кампания собрана полностью.
 
 ---
 
@@ -65,6 +65,7 @@ src/data/levels/sector06.ts   ← LIFT-OFF, WINDOW, CHAIN, CROSSING, HOLD, OVERC
 src/data/levels/sector07.ts   ← HOLD FIRE, OFFBEAT, GATE, THROUGH, RELAY, REDLINE
 src/data/levels/sector08.ts   ← DRIFT, UPSTREAM, SORTED, FEED, RELOAD, SORTING FLOOR
 src/data/levels/sector09.ts   ← FIRST STEP, NARROW, CRUMBLE, CONVEY, THROW, SCAFFOLD
+src/data/levels/sector10.ts   ← RECALL, PATIENCE, MIRAGE, MACHINE, VOID, TERMINAL
 ```
 
 Найти нужный уровень проще всего поиском по имени: открой файл сектора и ищи

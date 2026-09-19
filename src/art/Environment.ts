@@ -190,6 +190,24 @@ const SECTOR_THEMES: Record<number, SectorTheme> = {
     hazeMultiplier: 0.5,
     extraSystemNodes: 1,
   },
+  // 10 TERMINAL — the end of the line, and the one place THE SYSTEM stops
+  // pretending to be scenery: the most sensor nodes in the game, its own
+  // purple on every lit window, the tallest and densest massing, and air
+  // clear enough to see all of it. Sector 05 was called SYSTEM CORE and
+  // looked like this from further away; this is the same view from inside.
+  10: {
+    ...BASE_THEME,
+    signalColor: PALETTE.system,
+    signalAlpha: 0.72,
+    farHeavyChance: 0.42,
+    farWidthRange: [12, 38],
+    farHeightRange: [80, 180],
+    midHeightRange: [28, 76],
+    midPipeChance: 0.45,
+    cableCount: 3,
+    hazeMultiplier: 0.6,
+    extraSystemNodes: 3,
+  },
 };
 
 function themeFor(seedKey: string): SectorTheme {

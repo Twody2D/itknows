@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { personalityTag } from '@/ai/SystemPersonality';
+import { FINAL_PERSONALITY_TAG, personalityTag } from '@/ai/SystemPersonality';
+import { LEVELS_PER_SECTOR, SECTOR_COUNT, levelIdFor } from '@/gameplay/sectors';
 
 describe('personalityTag', () => {
   it('is v1.0 for sector 1', () => {
@@ -32,5 +33,27 @@ describe('personalityTag', () => {
 
   it('falls back to v1.0 for an unrecognized level id shape', () => {
     expect(personalityTag('not-a-level-id')).toBe('v1.0');
+  });
+
+  /**
+   * The ladder has to reach the end of the campaign, and it has to change
+   * only at sector boundaries. Before the campaign doubled it stopped at
+   * v2.0 from sector 5 on — six of the ten sectors would have shared one
+   * version, which is a reveal that quietly stops revealing.
+   */
+  it('keeps climbing to the last sector instead of flattening halfway', () => {
+    const tags = Array.from({ length: SECTOR_COUNT }, (_, i) => personalityTag(levelIdFor(i + 1, 1)));
+    expect(new Set(tags).size).toBeGreaterThanOrEqual(5);
+    expect(personalityTag(levelIdFor(SECTOR_COUNT, 1))).toBe(FINAL_PERSONALITY_TAG);
+    expect(FINAL_PERSONALITY_TAG).not.toBe(personalityTag(levelIdFor(5, 1)));
+  });
+
+  it('never changes inside a sector, in any sector', () => {
+    for (let sector = 1; sector <= SECTOR_COUNT; sector++) {
+      const first = personalityTag(levelIdFor(sector, 1));
+      for (let level = 2; level <= LEVELS_PER_SECTOR; level++) {
+        expect(personalityTag(levelIdFor(sector, level)), `sector ${sector}`).toBe(first);
+      }
+    }
   });
 });
