@@ -28,12 +28,9 @@ export interface LaserConfig {
 export class LaserTrap extends Trap {
   readonly gameObject: Phaser.GameObjects.Rectangle;
 
-  private idleElapsedOverride = 0;
-  private consumedInitialDelay = false;
 
   constructor(scene: Phaser.Scene, config: LaserConfig) {
-    super('laser', config.id, { timing: config.timing, loop: config.loop });
-    this.idleElapsedOverride = config.initialIdleMs ?? 0;
+    super('laser', config.id, { timing: config.timing, loop: config.loop, initialIdleMs: config.initialIdleMs });
 
     const height = config.yBottom - config.yTop;
     this.gameObject = scene.add.rectangle(config.x, config.yTop + height / 2, 3, height, PALETTE.danger, 0.08);
@@ -60,14 +57,6 @@ export class LaserTrap extends Trap {
     }
   }
 
-  override update(time: number, delta: number): void {
-    if (!this.consumedInitialDelay && this.idleElapsedOverride > 0) {
-      this.idleElapsedOverride -= delta;
-      if (this.idleElapsedOverride > 0) return;
-      this.consumedInitialDelay = true;
-    }
-    super.update(time, delta);
-  }
 
   destroy(): void {
     this.gameObject.destroy();

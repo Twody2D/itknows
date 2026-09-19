@@ -34,16 +34,14 @@ export class SpikeWallTrap extends Trap {
   private readonly height: number;
   private readonly extendedWidth: number;
   private readonly sign: 1 | -1;
-  private idleElapsedOverride = 0;
 
   constructor(scene: Phaser.Scene, config: SpikeWallConfig) {
-    super('spike-wall', config.id, { timing: config.timing, loop: config.loop });
+    super('spike-wall', config.id, { timing: config.timing, loop: config.loop, initialIdleMs: config.initialIdleMs });
     this.edgeX = config.edgeX;
     this.y = config.y;
     this.height = config.height;
     this.extendedWidth = config.extendedWidth;
     this.sign = config.fromRight ? -1 : 1;
-    this.idleElapsedOverride = config.initialIdleMs ?? 0;
 
     this.gameObject = scene.add.rectangle(config.edgeX, config.y, 1, config.height, PALETTE.danger, 0.1);
     scene.physics.add.existing(this.gameObject, true);
@@ -90,13 +88,6 @@ export class SpikeWallTrap extends Trap {
     }
   }
 
-  override update(time: number, delta: number): void {
-    if (this.idleElapsedOverride > 0) {
-      this.idleElapsedOverride -= delta;
-      if (this.idleElapsedOverride > 0) return;
-    }
-    super.update(time, delta);
-  }
 
   destroy(): void {
     this.gameObject.destroy();

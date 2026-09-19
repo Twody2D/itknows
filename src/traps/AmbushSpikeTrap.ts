@@ -74,16 +74,14 @@ export class AmbushSpikeTrap extends Trap {
   private readonly x: number;
   private readonly yHidden: number;
   private readonly yLanded: number;
-  private idleElapsedOverride = 0;
   private fallTween: Phaser.Tweens.Tween | null = null;
 
   constructor(scene: Phaser.Scene, config: AmbushSpikeConfig) {
-    super('moving-spike', config.id, { timing: config.timing, loop: config.loop });
+    super('moving-spike', config.id, { timing: config.timing, loop: config.loop, initialIdleMs: config.initialIdleMs });
     this.scene = scene;
     this.x = config.x;
     this.yHidden = config.yHidden;
     this.yLanded = config.yLanded;
-    this.idleElapsedOverride = config.initialIdleMs ?? 0;
     if (this.timing.warningMs <= HANG_MS) {
       throw new Error(
         `moving-spike:${config.id}: warningMs (${this.timing.warningMs}) must exceed HANG_MS (${HANG_MS}) — the spike needs time to fall after its telegraph`,
@@ -154,13 +152,6 @@ export class AmbushSpikeTrap extends Trap {
     return super.isLethal();
   }
 
-  override update(time: number, delta: number): void {
-    if (this.idleElapsedOverride > 0) {
-      this.idleElapsedOverride -= delta;
-      if (this.idleElapsedOverride > 0) return;
-    }
-    super.update(time, delta);
-  }
 
   destroy(): void {
     this.fallTween?.stop();

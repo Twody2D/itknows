@@ -36,16 +36,14 @@ export class SpikeBankTrap extends Trap {
   private readonly x: number;
   private readonly yHidden: number;
   private readonly yLethal: number;
-  private idleElapsedOverride = 0;
   private moveTween: Phaser.Tweens.Tween | null = null;
 
   constructor(scene: Phaser.Scene, config: SpikeBankConfig) {
-    super('spike-bank', config.id, { timing: config.timing, loop: config.loop });
+    super('spike-bank', config.id, { timing: config.timing, loop: config.loop, initialIdleMs: config.initialIdleMs });
     this.scene = scene;
     this.x = config.x;
     this.yHidden = config.yHidden;
     this.yLethal = config.yLethal;
-    this.idleElapsedOverride = config.initialIdleMs ?? 0;
 
     this.gameObject = scene.physics.add.sprite(config.x, config.yHidden, 'tile-spike');
     // `tile-spike` is drawn tips-up, for punching up out of a floor. A bank
@@ -118,13 +116,6 @@ export class SpikeBankTrap extends Trap {
     }
   }
 
-  override update(time: number, delta: number): void {
-    if (this.idleElapsedOverride > 0) {
-      this.idleElapsedOverride -= delta;
-      if (this.idleElapsedOverride > 0) return;
-    }
-    super.update(time, delta);
-  }
 
   destroy(): void {
     this.moveTween?.stop();

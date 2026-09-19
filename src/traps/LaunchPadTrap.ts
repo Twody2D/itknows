@@ -43,7 +43,7 @@ export class LaunchPadTrap extends Trap {
   private pulse: Phaser.Tweens.Tween | null = null;
 
   constructor(scene: Phaser.Scene, config: LaunchPadConfig) {
-    super('launch-pad', config.id, { timing: config.timing, loop: config.loop });
+    super('launch-pad', config.id, { timing: config.timing, loop: config.loop, initialIdleMs: config.initialIdleMs });
     this.x = config.x;
     this.surfaceY = config.surfaceY;
     this.liftPx = config.liftPx;

@@ -10,6 +10,20 @@ export interface TrapOptions {
   timing?: TrapTiming | undefined;
   /** Loops idle→warning→active→cooldown→idle forever (default) or waits for trigger() once per cycle. */
   loop?: boolean | undefined;
+  /**
+   * Extra idle time before this trap's FIRST warning, in ms — what makes two
+   * traps of the same period run out of step with each other instead of
+   * firing as one (sector 03's piston rows, sector 07's launch windows).
+   *
+   * It lives here and not in each subclass because it used to live in each
+   * subclass: four identical copies of the same five lines, and the fifth
+   * trap to take an `initialIdleMs` in its config — `LaunchPadTrap` — simply
+   * forgot to write them. The field was declared, the level data was passed
+   * through `Level.ts`, `docs/level-editing.md` described it, and it did
+   * nothing at all. A shared rule implemented per class is a rule that is
+   * one new class away from being false.
+   */
+  initialIdleMs?: number | undefined;
 }
 
 /**
@@ -28,6 +42,7 @@ export abstract class Trap {
   protected phaseElapsedMs = 0;
   private readonly loop: boolean;
   private armed: boolean;
+  private initialIdleRemainingMs: number;
 
   constructor(type: string, id: string, options: TrapOptions = {}) {
     this.type = type;
@@ -36,6 +51,7 @@ export abstract class Trap {
     assertHonestTiming(this.timing, `${type}:${id}`);
     this.loop = options.loop ?? true;
     this.armed = this.loop;
+    this.initialIdleRemainingMs = options.initialIdleMs ?? 0;
     this.onEnterPhase('idle');
   }
 
@@ -50,7 +66,25 @@ export abstract class Trap {
   update(time: number, delta: number): void {
     if (!this.armed) return;
 
-    this.phaseElapsedMs += delta;
+    // Held in `idle`, not merely behind schedule: the trap stays visually
+    // dormant and nothing animates, which is what the four classes that used
+    // to do this themselves did too (they returned before their own
+    // `onUpdatePhase`).
+    //
+    // The frame that ends the wait carries only its OVERSHOOT into the
+    // cycle. The copies this replaces threw the whole frame in, so an offset
+    // that landed on a frame boundary came up to one frame early — harmless
+    // on its own, and exactly the kind of small lie that stops two traps
+    // meant to be half a second apart from being half a second apart.
+    let step = delta;
+    if (this.initialIdleRemainingMs > 0) {
+      this.initialIdleRemainingMs -= delta;
+      if (this.initialIdleRemainingMs > 0) return;
+      step = -this.initialIdleRemainingMs;
+      this.initialIdleRemainingMs = 0;
+    }
+
+    this.phaseElapsedMs += step;
     const duration = this.durationOf(this.phase);
 
     if (this.phaseElapsedMs >= duration) {

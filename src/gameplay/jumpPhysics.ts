@@ -95,6 +95,27 @@ export function usableLiftPx(liftPx: number): number {
 }
 
 /**
+ * How long, in seconds, a launch of `liftPx` can still put the player inside
+ * a hazard whose lowest row sits `hazardHeightPx` above the pad.
+ *
+ * Up through the band, and — because a launch that misses its landing comes
+ * back down the way it went — down through it again. That descent is the
+ * reason this is not simply "time to reach the hazard": a telegraph that
+ * only covers the way up is a telegraph that runs out while the player is
+ * still in the danger, and `tests/launch-window.test.ts` turns this number
+ * into the minimum warning such a hazard is allowed to have.
+ *
+ * Both phases use the gravity the game really uses (base going up,
+ * `fallGravityMultiplier` coming down), same as every other function here.
+ */
+export function launchDangerSec(liftPx: number, hazardHeightPx: number): number {
+  const lift = usableLiftPx(liftPx);
+  if (hazardHeightPx > lift) return 0;
+  const timeUp = Math.sqrt((2 * lift) / PHYSICS.gravity);
+  return timeUp + fallTimeSec(lift - Math.max(0, hazardHeightPx));
+}
+
+/**
  * Horizontal distance a launch of `liftPx` covers before landing on a surface
  * `risePx` above the pad.
  *

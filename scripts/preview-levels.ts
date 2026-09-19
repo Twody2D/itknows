@@ -19,6 +19,7 @@ import { SECTOR_03_LEVELS } from '../src/data/levels/sector03';
 import { SECTOR_04_LEVELS } from '../src/data/levels/sector04';
 import { SECTOR_05_LEVELS } from '../src/data/levels/sector05';
 import { SECTOR_06_LEVELS } from '../src/data/levels/sector06';
+import { SECTOR_07_LEVELS } from '../src/data/levels/sector07';
 
 const LEGEND = [
   '#  ground/platform      ^  static spike        P  spawn        E  exit',
@@ -141,6 +142,7 @@ const ALL = [
   ['04', SECTOR_04_LEVELS],
   ['05', SECTOR_05_LEVELS],
   ['06', SECTOR_06_LEVELS],
+  ['07', SECTOR_07_LEVELS],
 ] as const;
 
 const unsolvable: string[] = [];

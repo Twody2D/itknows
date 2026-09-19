@@ -134,6 +134,25 @@ const SECTOR_THEMES: Record<number, SectorTheme> = {
     hazeMultiplier: 1.15,
     extraSystemNodes: 1,
   },
+  // 07 REDLINE — past the rating and staying there: the same machinery as 06
+  // seen through more smoke, lit by fewer and harsher signals. Deliberately
+  // NOT `PALETTE.danger` on its own terms — the red here is dim and low, a
+  // temperature rather than a warning, so the bright reds the traps use keep
+  // meaning "this will kill you" (the rule `skinVisuals.ts` follows for the
+  // same reason).
+  7: {
+    ...BASE_THEME,
+    signalColor: PALETTE.danger,
+    signalAlpha: 0.38,
+    farHeavyChance: 0.4,
+    farWidthRange: [18, 52],
+    farHeightRange: [60, 150],
+    midHeightRange: [34, 90],
+    midPipeChance: 0.8,
+    cableCount: 5,
+    hazeMultiplier: 1.7,
+    extraSystemNodes: 1,
+  },
 };
 
 function themeFor(seedKey: string): SectorTheme {
