@@ -3,6 +3,7 @@ import { PALETTE } from '@/config/palette';
 import { hexToCss } from '@/utils/color';
 import { t } from '@/i18n/ui';
 import { DomTextOverlay } from '@/ui/DomTextOverlay';
+import { linesThatFit } from '@/ui/textBlock';
 import type { DomTextHandle, DomTextOptions } from '@/ui/DomTextOverlay';
 import { buildScreenTopbar, attachEscape } from '@/ui/ScreenChrome';
 import { buildRadialGridBackdrop } from '@/art/ProceduralBackdrop';
@@ -719,9 +720,19 @@ export class LevelSelectScene extends Phaser.Scene {
     // and the value prints straight through it.
     const valueY = 166 + Math.ceil(bestLabel.height) + 6;
     if (bestMs === null) {
-      this.pixel(this.sysX + 8, valueY, t('levelsNoBest'), PALETTE.textDisabled, 1, 0, 0, colW - 16, {
-        sizePx: 9,
-        clampLines: 3,
+      // Sized to the room actually left above the star row, which is pinned
+      // to the bottom of this same box — not to a hand-picked line count.
+      // `clampLines: 3` was a guess about how the label above would wrap, and
+      // at 480 px that guess was wrong by exactly one line: «ЦЕЛИКОМ» printed
+      // straight through «ЗВЁЗДЫ СЕКТОРА». The clamp stays underneath as the
+      // backstop it is, derived from the same measurement.
+      const noBest = t('levelsNoBest');
+      const style = { color: 'transparent', font: 'pixel' as const, uppercase: true, letterSpacing: 1 };
+      const roomPx = starsY - 6 - valueY;
+      const sizePx = this.domText.blockFitSize(noBest, style, colW - 16, roomPx, 9);
+      this.pixel(this.sysX + 8, valueY, noBest, PALETTE.textDisabled, 1, 0, 0, colW - 16, {
+        sizePx,
+        clampLines: linesThatFit(roomPx, sizePx),
       });
       return;
     }

@@ -86,6 +86,14 @@ interface Item {
 const BASE_SIZE = 9;
 
 /**
+ * The line height every DOM label gets unless it asks for another. Exported
+ * because a caller that has to reserve vertical room for a wrapped block —
+ * or convert that room back into a line clamp — has no other honest way to
+ * ask how tall a line is.
+ */
+export const DEFAULT_LINE_HEIGHT = 1.3;
+
+/**
  * Real, browser-rendered text positioned over the game canvas — used only by
  * `ShopScene` (project owner's explicit call: everywhere else keeps the
  * game's bitmap font). This sidesteps a whole category of problem a canvas
@@ -351,6 +359,37 @@ export class DomTextOverlay {
   }
 
   /**
+   * The largest size up to `max` at which `text`, wrapped to `wrapWidth`,
+   * is no taller than `maxHeight` — measured by rendering the whole wrapped
+   * block off-screen, not derived from a line count.
+   *
+   * The two siblings above fit a block to a WIDTH; this one fits it to the
+   * room left underneath it. The difference matters wherever something else
+   * is pinned below: a `clampLines` picked by hand is a guess about how many
+   * lines the text above will take, and when that guess is wrong the last
+   * line prints straight through the neighbour instead of being dropped.
+   * That is exactly what the level map's stats box did — «ЕЩЁ НЕ ПРОЙДЕН
+   * ЦЕЛИКОМ» wrapped to three lines at 480 px and its third line landed on
+   * «ЗВЁЗДЫ СЕКТОРА», which is pinned to the bottom of the same box.
+   *
+   * Returns `min` when even the smallest size overflows; the caller is then
+   * expected to clamp as well, because a box too small for one line of text
+   * cannot be fixed by measuring it.
+   */
+  blockFitSize(text: string, style: DomTextOptions, wrapWidth: number, maxHeight: number, max: number, min = 7): number {
+    if (wrapWidth <= 0 || maxHeight <= 0 || text.trim().length === 0) return max;
+    const free = { ...style, color: 'transparent', wordWrapWidth: wrapWidth };
+    delete free.clampLines;
+    for (let size = Math.round(max); size > min; size--) {
+      const probe = this.add(-1000, -1000, text, { ...free, sizePx: size }, 0, 0);
+      const height = probe.height;
+      probe.destroy();
+      if (height <= maxHeight) return size;
+    }
+    return min;
+  }
+
+  /**
    * The natural width in virtual px of `text` set in `style`, measured by
    * rendering it off-screen rather than estimated from character counts —
    * glyph widths differ, and this font's do not follow character count.
@@ -453,7 +492,7 @@ export class DomTextOverlay {
     const weight = opts.font === 'pixel' ? PIXEL_WEIGHT : PROSE_WEIGHT;
     el.style.fontWeight = opts.bold ? weight.bold : weight.regular;
     el.style.fontSize = `${virtualPx * scaleY}px`;
-    el.style.lineHeight = String(opts.lineHeight ?? 1.3);
+    el.style.lineHeight = String(opts.lineHeight ?? DEFAULT_LINE_HEIGHT);
     const tracking = opts.letterSpacing ?? 0;
     el.style.letterSpacing = tracking ? `${tracking * scaleY}px` : '';
     el.style.color = opts.color;
