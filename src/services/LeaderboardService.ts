@@ -8,13 +8,20 @@ import { YandexGamesService, type YsdkLeaderboardEntry } from './YandexGamesServ
  * until then every call from this service degrades the same way the rest of
  * `YandexGamesService` does outside a real SDK (empty/`null`/no-op),
  * documented as a real gap in `docs/yandex-games.md`, not hidden.
+ *
+ * Exported because `docs/leaderboards.md` — the list the console work is
+ * actually done from — is checked against these two functions by
+ * `tests/leaderboard-tables.test.ts`. A hand-kept list of seventy names is a
+ * list that goes stale the first time a level is renamed, and a stale entry
+ * there is not a visible bug: the game degrades quietly to "leaderboard
+ * unavailable", which is exactly what a missing table looks like.
  */
-function leaderboardNameFor(levelId: string): string {
+export function leaderboardNameFor(levelId: string): string {
   return `level-${levelId}`;
 }
 
 /** A sector's own table — `sectorId` is already the `sector-01`-style id (`sectors.ts`'s `sectorIdOf`), same real-console-setup caveat as `leaderboardNameFor`. */
-function sectorLeaderboardNameFor(sectorId: string): string {
+export function sectorLeaderboardNameFor(sectorId: string): string {
   return `sector-${sectorId}`;
 }
 
