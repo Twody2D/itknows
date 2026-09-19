@@ -15,7 +15,7 @@ export function isSectorFinale(levelId: string): boolean {
 }
 
 /** How many sectors the campaign has (matches `SECTOR_0X_LEVELS` arrays and `art/Environment.ts`'s themes). */
-export const SECTOR_COUNT = 8;
+export const SECTOR_COUNT = 9;
 
 // SYSTEM-branded sector callsigns — deliberately not translated (CLAUDE.md
 // #7 treats these like `SYSTEM ONLINE`/`v1.4`: technical tokens, not copy),
@@ -30,6 +30,7 @@ const SECTOR_NAMES: Record<number, string> = {
   6: 'OVERCLOCK',
   7: 'REDLINE',
   8: 'SORTING FLOOR',
+  9: 'SCAFFOLD',
 };
 
 export function sectorName(sectorNumber: number): string {

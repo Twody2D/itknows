@@ -171,6 +171,25 @@ const SECTOR_THEMES: Record<number, SectorTheme> = {
     hazeMultiplier: 1.35,
     extraSystemNodes: 0,
   },
+  // 09 SCAFFOLD — the frame with the cladding off: tall, thin, widely
+  // spaced silhouettes and the clearest air in the campaign. The level
+  // itself is mostly empty space now, so the background has to stay out of
+  // its way — anything busy back here would read as footing that is not
+  // there, which on a sector with no floor is the one mistake the art must
+  // not make.
+  9: {
+    ...BASE_THEME,
+    signalColor: PALETTE.cyanDim,
+    signalAlpha: 0.3,
+    farHeavyChance: 0.14,
+    farWidthRange: [10, 28],
+    farHeightRange: [70, 165],
+    midHeightRange: [20, 54],
+    midPipeChance: 0.25,
+    cableCount: 7,
+    hazeMultiplier: 0.5,
+    extraSystemNodes: 1,
+  },
 };
 
 function themeFor(seedKey: string): SectorTheme {
