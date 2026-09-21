@@ -83,7 +83,8 @@ achievement, perfect run.
 ## Категории и каталог (`src/data/shop/items.ts`)
 
 - **CHARACTER**: `default` (бесплатный, экипирован по умолчанию), `void`
-  (150), `signal` (150), `patrol` (150), `echo` (220), `error404` (только в
+  (150), `signal` (150), `patrol` (150), `echo` (не продаётся — выдаётся за `ECHO_SKIN_STARS`
+  звёзд, сейчас 60 из 180), `error404` (только в
   бандле SYSTEM ACCESS — не продаётся отдельно), `core` (не продаётся —
   выдаётся за пройденную кампанию), `reference` (не продаётся — выдаётся за
   `COLLECTOR_SKIN_STARS` звёзд, сейчас 90 из 180).
@@ -92,7 +93,8 @@ achievement, perfect run.
 - **SYSTEM**: `standard` (бесплатный), `cold` (150), `corrupted`
   (только в бандле).
 - **TRAIL**: `data_trail` (бесплатный), `launch` (130), `interference`
-  (130), `beep7` (260).
+  (130), `beep7` (не продаётся — выдаётся за
+  `BEEP7_TRAIL_STARS` звёзд, сейчас 120 из 180).
 - **PREMIUM**: `remove_ads` (реальный Yandex-продукт, non-consumable),
   `system_access` (реальный Yandex-продукт-бандл: remove_ads + `error404` +
   `data_wipe` + `corrupted`, выдаётся одной атомарной операцией).

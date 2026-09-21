@@ -8,6 +8,7 @@ import {
 } from '@/config/physics';
 import type { LevelDef } from './LevelDef';
 import { LEVEL_HEIGHT_TILES, exitRowOf } from './LevelDef';
+import { spikeBankPeekY } from './spikeBankPeek';
 import type { TrapDef } from '@/traps/TrapDef';
 import { LaserTrap } from '@/traps/LaserTrap';
 import { MovingSpikeTrap } from '@/traps/MovingSpikeTrap';
@@ -128,6 +129,7 @@ function buildTraps(
   defs: TrapDef[],
   levelSeed: number,
   groundRow: number,
+  gaps: LevelDef['gaps'],
   platforms: LevelDef['platforms'],
 ): BuiltTraps {
   const result: BuiltTraps = {
@@ -394,6 +396,7 @@ function buildTraps(
             x,
             yHidden: tileCenter(def.col + i, def.hiddenRow).y,
             yLethal: tileCenter(def.col + i, def.lethalRow).y,
+            yPeek: spikeBankPeekY(def.col + i, def.hiddenRow, def.lethalRow, groundRow, gaps, platforms),
             timing: def.timing,
             initialIdleMs: def.initialIdleMs,
             loop: def.loop,
@@ -719,7 +722,7 @@ export function buildLevel(scene: Phaser.Scene, def: LevelDef): BuiltLevel {
     y: def.groundRow * TILE_SIZE,
   };
 
-  const traps = buildTraps(scene, def.traps ?? [], levelSeed, def.groundRow, def.platforms);
+  const traps = buildTraps(scene, def.traps ?? [], levelSeed, def.groundRow, def.gaps, def.platforms);
 
   return {
     groundGroup,

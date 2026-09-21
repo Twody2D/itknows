@@ -288,7 +288,18 @@ export const SECTOR_07_LEVELS: LevelDef[] = [
     spikeColumns: [7, 8],
     platforms: [{ col: 34, row: 14, width: 7 }],
     playerStartCol: 2,
-    exitCol: 36,
+    // THE DOOR SITS AT THE FAR END OF THE TIER, not on its lip. At column 36
+    // the exit's 2x3-tile catch zone (x 360..380) covered the place the ride
+    // puts the player down: the hop off the slab's far edge lands at x≈367
+    // and crosses the zone in the air at x=357, so the level ended mid-jump,
+    // the tier was never walked, and `laser-01` — the only hazard between
+    // the landing and the door — stood inside the catch zone and could not
+    // be touched by anybody. The same dead-content defect the owner found on
+    // TERMINAL, found here by measuring the door against the beam instead of
+    // by eye. Column 39 puts the whole landing tier back between arriving
+    // and leaving; `tests/level-def-sanity.test.ts` now refuses any hazard
+    // that stands inside a door's catch zone.
+    exitCol: 39,
     exitRow: 14,
     traps: [
       { type: 'launch-pad', id: 'pad-01', col: 10, row: 22, width: 3, liftTiles: 6 },
@@ -325,7 +336,10 @@ export const SECTOR_07_LEVELS: LevelDef[] = [
       // ON THE TIER THE RIDE ENDS AT, and nowhere on the ride itself. A
       // rider has no ground to step off onto, so a hazard over the slab
       // would be one the player cannot refuse — the whole sector is built on
-      // being able to. The beam charges for arriving, not for travelling.
+      // being able to. The beam charges for arriving, not for travelling:
+      // the hop off the slab lands around column 36 and the door is at 39,
+      // so this stands in the three tiles that have to be walked, on ground
+      // the player is free to stop on and read it from.
       { type: 'laser', id: 'laser-01', col: 37, topRow: 10, bottomRow: 13 },
     ],
   },

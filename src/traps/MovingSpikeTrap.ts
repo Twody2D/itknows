@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { TRAP_HITBOX } from '@/config/physics';
 
 export interface MovingSpikeConfig {
   id: string;
@@ -28,8 +29,8 @@ export class MovingSpikeTrap {
     const body = this.gameObject.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
     body.setImmovable(true);
-    body.setSize(6, 4);
-    body.setOffset(2, 6);
+    body.setSize(TRAP_HITBOX.spikeBase.width, TRAP_HITBOX.spikeBase.height);
+    body.setOffset(TRAP_HITBOX.spikeBase.offsetX, TRAP_HITBOX.spikeBase.offsetY);
 
     this.tween = scene.tweens.add({
       targets: this.gameObject,

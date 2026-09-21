@@ -19,15 +19,33 @@ export interface ConveyorConfig {
  *
  * It is not a hazard and has no phase cycle: it never turns lethal, never
  * warns, and never stops. That is why it can be honest with no telegraph
- * beyond itself — the chevrons scroll at exactly the speed the belt pulls,
- * so what the player sees is what will happen to them, continuously, the way
- * a patrolling spike's motion is its own warning (CLAUDE.md #4.2 only ever
- * governs things that kill).
+ * beyond itself — the chevrons scroll in the direction the belt pulls, and
+ * never stop while it pulls, so what the player sees is what will happen to
+ * them, continuously, the way a patrolling spike's motion is its own warning
+ * (CLAUDE.md #4.2 only ever governs things that kill).
  *
  * What it does to the rest of the game is the point. Every timed trap in
  * sectors 02-07 is answered by waiting somewhere safe; here the safe tile
  * slides out from under you while you wait.
  */
+/**
+ * How fast the chevrons scroll against how hard the belt pulls.
+ *
+ * They used to be the same number, which was tidy and, once the cap moved
+ * from 60 to 72 px/s, unreadable: a 10 px chevron crossing its own width
+ * seven times a second on a 270-tall screen strobes rather than flows, and
+ * the owner said so as soon as he saw it («у этой ловушки слишком быстрая
+ * скорость анимации, только визуальная часть»).
+ *
+ * What this does NOT change is the pull: `carryPx` is untouched, so the belt
+ * still moves the player by exactly what `speed` says and every level, par
+ * time and solver check is unaffected. What is lost is the ability to read
+ * the exact speed off the art — which the game never asked the player to do;
+ * what it has to show is that the floor moves, and which way, and both
+ * survive at 0.4.
+ */
+const SCROLL_FACTOR = 0.4;
+
 export class ConveyorTrap {
   readonly id: string;
   readonly gameObject: Phaser.GameObjects.TileSprite;
@@ -64,9 +82,9 @@ export class ConveyorTrap {
   }
 
   update(_time: number, delta: number): void {
-    // Scrolled by the same number that moves the player, so the surface the
-    // player sees sliding is the surface that slides them.
-    this.gameObject.tilePositionX += this.carryPx(delta) * (this.speed < 0 ? -1 : 1);
+    // Direction and liveliness from the pull, pace from `SCROLL_FACTOR` —
+    // the belt slides the player by `carryPx` either way.
+    this.gameObject.tilePositionX += this.carryPx(delta) * SCROLL_FACTOR * (this.speed < 0 ? -1 : 1);
   }
 
   destroy(): void {

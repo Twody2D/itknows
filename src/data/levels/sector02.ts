@@ -109,7 +109,19 @@ export const SECTOR_02_LEVELS: LevelDef[] = [
       // farthest away, not a fixed beat. Three of them at different periods
       // across one corridor, so there is no single rhythm that clears the
       // level — each has to be watched on approach.
-      { type: 'swinging-spike', id: 'swing-01', pivotCol: 12, pivotRow: 15, lengthTiles: 3, maxAngleDeg: 42, periodMs: 2100 },
+      // FOUR TILES OF ARM, NOT THREE, and the number is not taste. The body
+      // is a 6x6 box centred on the tile, so at the bottom of the arc it
+      // ends at `pivotRow*10 + 5 + length + 3`. At three tiles that is
+      // y = 188 against a standing player's hurt top of exactly 188, and
+      // `Rectangle.Overlaps` is a strict comparison — the first pendulum of
+      // the level swung through the android's head, every pass, and killed
+      // nobody who was not already jumping, while the second one (four
+      // tiles) killed. Same complaint the swinging spike's body offset was
+      // repaired for once ("когда крутящийся шип проходит прямо сквозь меня
+      // он не убивает"); this is the level-data half of it.
+      // `tests/level-def-sanity.test.ts` now holds every swing to a real
+      // margin so no arm can sit on that boundary again.
+      { type: 'swinging-spike', id: 'swing-01', pivotCol: 12, pivotRow: 15, lengthTiles: 4, maxAngleDeg: 42, periodMs: 2100 },
       { type: 'swinging-spike', id: 'swing-02', pivotCol: 21, pivotRow: 15, lengthTiles: 4, maxAngleDeg: 38, periodMs: 1700 },
       { type: 'swinging-spike', id: 'swing-03', pivotCol: 31, pivotRow: 14, lengthTiles: 3, maxAngleDeg: 46, periodMs: 2400 },
     ],

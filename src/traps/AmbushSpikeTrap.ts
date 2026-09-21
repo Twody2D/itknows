@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { Trap } from './Trap';
 import type { TrapPhase } from './Trap';
 import type { TrapTiming } from './TrapTiming';
-import { MIN_WARNING_MS } from '@/config/physics';
+import { MIN_WARNING_MS, TRAP_HITBOX } from '@/config/physics';
 
 /**
  * How long the spike is visible before it can kill.
@@ -98,8 +98,8 @@ export class AmbushSpikeTrap extends Trap {
     const body = this.gameObject.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
     body.setImmovable(true);
-    body.setSize(6, 4);
-    body.setOffset(2, 6);
+    body.setSize(TRAP_HITBOX.spikeBase.width, TRAP_HITBOX.spikeBase.height);
+    body.setOffset(TRAP_HITBOX.spikeBase.offsetX, TRAP_HITBOX.spikeBase.offsetY);
 
     this.onEnterPhase('idle');
   }

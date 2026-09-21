@@ -298,10 +298,16 @@ export const SECTOR_03_LEVELS: LevelDef[] = [
       // `hiddenRow` above `lethalRow` hangs the same machine upside down
       // (`TrapDef.ts`) — it slams down onto the tier the climb has to pause
       // on. The landing is safe; staying on it is not.
+      // COLUMN 32, NOT 33. The tier below runs 32-36 and the climb arrives
+      // on its left edge, so a piston over 33-35 slammed onto three tiles
+      // the route has no reason to stand on — the player lands at 32 and
+      // leaves left, one tile clear of it, every time. Moved one column left
+      // so it covers the tile the pause actually happens on, which is what
+      // the comment above it always claimed.
       {
         type: 'spike-bank',
         id: 'sbank-02',
-        col: 33,
+        col: 32,
         width: 3,
         hiddenRow: 15,
         lethalRow: 18,

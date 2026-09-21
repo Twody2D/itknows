@@ -3,6 +3,7 @@ import { PALETTE } from '@/config/palette';
 import { Trap } from './Trap';
 import type { TrapPhase } from './Trap';
 import type { TrapTiming } from './TrapTiming';
+import { TRAP_HITBOX } from '@/config/physics';
 
 export interface TimingGateConfig {
   id: string;
@@ -26,7 +27,7 @@ export class TimingGate extends Trap {
     super('timing-gate', config.id, { timing: config.timing });
 
     const height = config.yBottom - config.yTop;
-    this.gameObject = scene.add.rectangle(config.x, config.yTop + height / 2, 4, height, PALETTE.system, 0.8);
+    this.gameObject = scene.add.rectangle(config.x, config.yTop + height / 2, TRAP_HITBOX.timingGateWidth, height, PALETTE.system, 0.8);
     scene.physics.add.existing(this.gameObject, true);
 
     this.onEnterPhase('idle');

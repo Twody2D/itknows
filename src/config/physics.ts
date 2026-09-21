@@ -52,6 +52,36 @@ export const SPIKE_HITBOX_OFFSET_X = 3;
 export const SPIKE_HITBOX_OFFSET_Y = 7;
 
 /**
+ * Hitboxes of the traps that move, in px, against a `TILE_SIZE` (10x10) tile.
+ *
+ * They live here rather than in each trap class because two different things
+ * have to agree on them: the classes that hand them to Arcade, and
+ * `gameplay/routeTrace.ts`, which asks whether the player's body can ever be
+ * where a trap is and must not run Phaser to do it. The detector's first
+ * version restated them as whole tiles, and a 3 px beam widened to 10 px is
+ * how a laser standing inside RELAY's exit door was reported as fine.
+ */
+export const TRAP_HITBOX = {
+  /**
+   * Ground-mounted spikes: the box sits at the BASE of the tile, which is
+   * the forgiving thing to do when the player runs into spikes standing
+   * point-up on a surface.
+   */
+  spikeBase: { width: 6, height: 4, offsetX: 2, offsetY: 6 },
+  /**
+   * Spikes that swing, orbit or loop through open air: centred, because the
+   * base-anchored box put the lethal part four pixels below the picture and
+   * the visible spike passed straight through the player ("когда крутящийся
+   * шип проходит прямо сквозь меня он не убивает", owner).
+   */
+  spikeCentred: { width: 6, height: 6, offsetX: 2, offsetY: 2 },
+  /** `LaserTrap`'s beam — three pixels wide, not a tile. */
+  laserWidth: 3,
+  /** `TimingGate`'s shutter. */
+  timingGateWidth: 4,
+} as const;
+
+/**
  * The android's COLLISION body, in sprite pixels — what lands on ledges,
  * what a gap has to be measured against, and what an overlap zone has to
  * contain to notice the player. Every gap width in the campaign is tuned in

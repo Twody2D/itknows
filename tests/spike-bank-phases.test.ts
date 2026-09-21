@@ -36,7 +36,7 @@ interface TweenCall {
   duration: number;
 }
 
-function probe(yHidden: number, yLethal: number) {
+function probe(yHidden: number, yLethal: number, yPeek?: number) {
   const sprite: Sprite = {
     x: 0,
     y: 0,
@@ -81,6 +81,7 @@ function probe(yHidden: number, yLethal: number) {
     x: 100,
     yHidden,
     yLethal,
+    yPeek,
     timing: { idleMs: 500, warningMs: 900, activeMs: 1200, cooldownMs: 400 },
   });
 
@@ -107,17 +108,27 @@ function probe(yHidden: number, yLethal: number) {
 /** One full cycle of the probe timing, with room to spare. */
 const CYCLE_MS = 500 + 900 + 1200 + 400 + 100;
 
-const CEILING = { hidden: 140, lethal: 170 };
-const FLOOR = { hidden: 230, lethal: 210 };
+/**
+ * A bank hanging in open air: it is readable where it rests, so the peek is
+ * the resting position and the telegraph is the sprite simply appearing.
+ */
+const CEILING = { hidden: 140, lethal: 170, peek: 140 };
+/**
+ * A bank buried under the floor, with the peek `gameplay/spikeBankPeek.ts`
+ * computes for `hiddenRow: 23` against a `groundRow` of 22 — see
+ * `tests/spike-bank-peek.test.ts` for why the resting position alone shows
+ * the player nothing.
+ */
+const FLOOR = { hidden: 235, lethal: 215, peek: 219 };
 
 describe('spike bank: movement and lethality never come apart', () => {
-  for (const [label, { hidden, lethal }] of [
+  for (const [label, { hidden, lethal, peek }] of [
     ['ceiling bank', CEILING],
     ['floor bank', FLOOR],
   ] as const) {
     describe(label, () => {
       it('never moves while it cannot kill', () => {
-        const { run } = probe(hidden, lethal);
+        const { run } = probe(hidden, lethal, peek);
         const { tweens, lethalWhenTweened } = run(CYCLE_MS * 2);
         expect(tweens.length).toBeGreaterThan(0);
         expect(lethalWhenTweened.every(Boolean)).toBe(true);
@@ -125,24 +136,27 @@ describe('spike bank: movement and lethality never come apart', () => {
       });
 
       it('shows a still, visible telegraph for the whole warning', () => {
-        const { run } = probe(hidden, lethal);
+        const { run } = probe(hidden, lethal, peek);
         const warning = run(CYCLE_MS).samples.filter((s2) => s2.phase === 'warning');
         expect(warning.length).toBeGreaterThan(0);
         expect(warning.every((s2) => s2.lethal)).toBe(false);
         expect(warning.every((s2) => s2.alpha === 1)).toBe(true);
-        // One position for all of it, and not the resting one: a floor bank
-        // rests a row under the ground, so resting position alone shows
-        // nothing at all.
+        // ONE POSITION FOR ALL OF IT, AND THE ONE IT WAS GIVEN. This used to
+        // assert `y !== hidden` and `|y - hidden| <= 5`, which is the shape
+        // the first fix happened to have rather than anything the player can
+        // see: four pixels out of a resting row that is itself twelve pixels
+        // under the floor still shows nothing above the floor. The number
+        // now comes from `gameplay/spikeBankPeek.ts`, which is held to the
+        // surface line by `tests/spike-bank-peek.test.ts`; what belongs here
+        // is that the trap holds it, still, for the whole warning.
         expect(new Set(warning.map((s2) => s2.y)).size).toBe(1);
-        const y = warning[0]!.y;
-        expect(y).not.toBe(hidden);
-        expect(Math.abs(y - hidden)).toBeLessThanOrEqual(5);
-        // Peeking toward where it will strike, never away from it.
-        expect(Math.sign(y - hidden)).toBe(Math.sign(lethal - hidden));
+        expect(warning[0]!.y).toBe(peek);
+        // Never past the strike position, and never away from it.
+        expect(Math.sign(lethal - peek)).toBe(Math.sign(lethal - hidden));
       });
 
       it('is out of sight whenever it is out of the way', () => {
-        const { run } = probe(hidden, lethal);
+        const { run } = probe(hidden, lethal, peek);
         const off = run(CYCLE_MS * 2).samples.filter(
           (s2) => s2.phase === 'idle' || s2.phase === 'cooldown',
         );
@@ -155,7 +169,7 @@ describe('spike bank: movement and lethality never come apart', () => {
   }
 
   it('points its tips at the player it threatens', () => {
-    expect(probe(CEILING.hidden, CEILING.lethal).trap.gameObject.flipY).toBe(true);
-    expect(probe(FLOOR.hidden, FLOOR.lethal).trap.gameObject.flipY).toBe(false);
+    expect(probe(CEILING.hidden, CEILING.lethal, CEILING.peek).trap.gameObject.flipY).toBe(true);
+    expect(probe(FLOOR.hidden, FLOOR.lethal, FLOOR.peek).trap.gameObject.flipY).toBe(false);
   });
 });

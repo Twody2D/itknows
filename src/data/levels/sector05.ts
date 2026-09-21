@@ -288,7 +288,17 @@ export const SECTOR_05_LEVELS: LevelDef[] = [
         width: 3,
         travelMs: 2200,
       },
-      { type: 'laser', id: 'laser-01', col: 30, topRow: 17, bottomRow: 21 },
+      // ROW 14, NOT ROW 17, and the three rows are the whole difference
+      // between a beam and a decoration. The climb leaves the row-19 tier at
+      // column 28 and lands on row 16 at column 32; crossing column 30 the
+      // feet are at y≈161, so a beam starting at row 17 (y=170) was nine
+      // pixels under every arc that ever passes it. It could only have
+      // caught a player walking the ground at column 30 — which no route
+      // needs, because the climb starts at column 24. Hung from the row-13
+      // tier overhead instead, it stands in the hop it was written for and
+      // still clears both landings. Found by `routeTrace` once the detector
+      // started measuring real 3 px beams instead of whole tiles.
+      { type: 'laser', id: 'laser-01', col: 30, topRow: 14, bottomRow: 21 },
       // Pivoted at 30/17 with a 1-tile radius, not 30/14 with 1.75.
       //
       // Measured at the old placement, the arc swept x285-319 / y125-159 —

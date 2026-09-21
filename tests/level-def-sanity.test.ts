@@ -4,7 +4,8 @@ import { LEVEL_HEIGHT_TILES, exitRowOf } from '@/gameplay/LevelDef';
 import type { LevelDef } from '@/gameplay/LevelDef';
 import { MAX_JUMP_RISE_PX, REACH_AT_SAME_HEIGHT_PX, usableLiftPx } from '@/gameplay/jumpPhysics';
 import { LEVEL_WIDTH_TILES, TILE_SIZE } from '@/config/display';
-import { MIN_WARNING_MS, PHYSICS, PLAYER_HURT_BOX_HEIGHT } from '@/config/physics';
+import { MIN_WARNING_MS, PHYSICS, PLAYER_HURT_BOX_HEIGHT, TRAP_HITBOX } from '@/config/physics';
+import { trapLethalBoxes } from '@/gameplay/routeTrace';
 import { DEFAULT_TRAP_TIMING } from '@/traps/TrapTiming';
 import { TRAPDOOR_LEAD } from '@/data/levels/ambush';
 
@@ -290,6 +291,87 @@ describe.each([...getAllLevels()])('level def: $id', (level: LevelDef) => {
 
     expect(offenders, offenders.join('; ')).toEqual([]);
   });
+  it('never hangs a swing at exactly head height', () => {
+    // A swinging spike passes through the bottom of its arc twice a period,
+    // and that is the moment it either kills a walking player or does not.
+    // `PENDULUM`'s first arm bottomed out with its 6x6 body ending at y=188
+    // against a standing hurt box that starts at y=188 — `Rectangle.Overlaps`
+    // compares strictly, so the spike swung through the android's head on
+    // every pass, killed nobody, and the identical arm two columns along
+    // (one tile longer) killed. That is the same complaint the class's body
+    // offset was already repaired for once ("когда крутящийся шип проходит
+    // прямо сквозь меня он не убивает", owner) coming back as level data.
+    //
+    // There are only two honest answers, the same two the moving spike is
+    // held to above: bite, or clear the body entirely. The boundary is the
+    // one place the picture and the hitbox disagree.
+    const margin = 2;
+    const offenders: string[] = [];
+    const surfaces = [
+      { row: level.groundRow, from: 0, to: level.width - 1 },
+      ...level.platforms.map((p) => ({ row: p.row, from: p.col, to: p.col + p.width - 1 })),
+    ];
+
+    for (const trap of level.traps ?? []) {
+      if (trap.type !== 'swinging-spike') continue;
+      const lengthPx = trap.lengthTiles * TILE_SIZE;
+      // Bottom of the centred body at the bottom of the arc.
+      const bodyBottom =
+        trap.pivotRow * TILE_SIZE +
+        TILE_SIZE / 2 +
+        lengthPx +
+        (TRAP_HITBOX.spikeCentred.offsetY + TRAP_HITBOX.spikeCentred.height - TILE_SIZE / 2);
+      const reachPx = lengthPx * Math.sin((trap.maxAngleDeg * Math.PI) / 180);
+      const fromCol = (trap.pivotCol * TILE_SIZE + TILE_SIZE / 2 - reachPx) / TILE_SIZE;
+      const toCol = (trap.pivotCol * TILE_SIZE + TILE_SIZE / 2 + reachPx) / TILE_SIZE;
+
+      for (const surface of surfaces) {
+        if (toCol < surface.from || fromCol > surface.to) continue;
+        const hurtTop = surface.row * TILE_SIZE - PLAYER_HURT_BOX_HEIGHT;
+        if (bodyBottom <= hurtTop - margin) continue; // scenery, clear of the whole body
+        if (bodyBottom >= hurtTop + margin) continue; // a real bite
+        offenders.push(
+          `${trap.id}: bottoms out at y=${bodyBottom} against a hurt box starting at y=${hurtTop} over row ${surface.row}`,
+        );
+      }
+    }
+
+    expect(offenders, offenders.join('; ')).toEqual([]);
+  });
+
+  it('never stands a hazard inside the exit door\'s catch zone', () => {
+    // The door fires on the player's 6px collision body and ends the level;
+    // anything lethal inside that rectangle is decoration that the exit wins
+    // the race against, every time. RELAY had a laser drawn straight through
+    // the right half of its doorway: the hop off the moving platform crossed
+    // the catch zone in the air, the level ended, and the beam could not be
+    // touched by anybody. That is the same dead-content defect the owner
+    // found on TERMINAL by eye («бесполезный шип у портала»), and it is the
+    // kind of thing that only ever shows up when the two are measured
+    // against each other rather than looked at.
+    const exitRow = level.exitRow ?? level.groundRow;
+    const zone = {
+      x: level.exitCol * TILE_SIZE,
+      y: exitRow * TILE_SIZE - 3 * TILE_SIZE,
+      w: 2 * TILE_SIZE,
+      h: 3 * TILE_SIZE,
+    };
+    const offenders: string[] = [];
+
+    for (const trap of level.traps ?? []) {
+      for (const box of trapLethalBoxes(trap)) {
+        const overlaps =
+          box.x < zone.x + zone.w && zone.x < box.x + box.w && box.y < zone.y + zone.h && zone.y < box.y + box.h;
+        if (overlaps) {
+          offenders.push(`${trap.id}: kills inside the door at (${box.x}, ${box.y})`);
+          break;
+        }
+      }
+    }
+
+    expect(offenders, offenders.join('; ')).toEqual([]);
+  });
+
   it('places every sprung trap somewhere the player can actually meet it', () => {
     // The campaign's surprise traps are all built from `ambush.ts`, and
     // their geometry is derived rather than eyeballed — but the columns

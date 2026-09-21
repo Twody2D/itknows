@@ -104,9 +104,12 @@ describe('the target time knows which way the floor is running', () => {
   });
 
   it('puts the upstream floor where the physics puts it', () => {
-    // Twenty tiles against the cap, at 110 - 60 = 50 px/s, is 4.0s for that
+    // Twenty tiles against the cap, at 110 - 72 = 38 px/s, is 5.3s for that
     // stretch alone — against 1.8s on flat ground. A target derived from the
     // flat number would be a third star nobody could earn (CLAUDE.md #4.8).
+    // The assertion below computes both from the constants, so the cap can
+    // move again without this going quietly wrong; the numbers in this
+    // comment are only here to say what it is worth.
     const flat = parBreakdown(level({ playerStartCol: 2, exitCol: 40 })) as { floorMs: number };
     const upstream = parBreakdown(beltAt(-MAX_CONVEYOR_SPEED)) as { floorMs: number };
     const expectedExtraMs = (20 * TILE_SIZE) / (PHYSICS.moveSpeed - MAX_CONVEYOR_SPEED) * 1000 - (20 * TILE_SIZE) / PHYSICS.moveSpeed * 1000;

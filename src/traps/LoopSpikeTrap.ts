@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { TRAP_HITBOX } from '@/config/physics';
 
 export interface LoopSpikeConfig {
   id: string;
@@ -44,8 +45,8 @@ export class LoopSpikeTrap {
     // nothing happened, because the part of the tile that kills was four
     // pixels below where the picture was (owner, playing: "когда
     // крутящийся шип проходит прямо сквозь меня он не убивает").
-    body.setSize(6, 6);
-    body.setOffset(2, 2);
+    body.setSize(TRAP_HITBOX.spikeCentred.width, TRAP_HITBOX.spikeCentred.height);
+    body.setOffset(TRAP_HITBOX.spikeCentred.offsetX, TRAP_HITBOX.spikeCentred.offsetY);
 
     // Every remaining waypoint, then back to the first — one full lap.
     const legs = [...rest, first].map((point) => ({

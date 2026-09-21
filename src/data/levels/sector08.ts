@@ -24,7 +24,11 @@ import type { LevelDef } from '@/gameplay/LevelDef';
  * belt hands you to — a pit, a beam, a plate — and every one of those keeps
  * its own telegraph.
  *
- * WHY IT IS CAPPED AT 60 AGAINST THE PLAYER'S 110. Walking upstream has to
+ * WHY IT IS CAPPED AT `MAX_CONVEYOR_SPEED` AGAINST THE PLAYER'S 110 — 72
+ * since 2026-09-19, when the owner played the finished campaign and found
+ * the belts did nothing («DRIFT полоска бесполезная, еле еле двигает
+ * тебя»). The number is named rather than written out because it moved once
+ * and the belts in this file moved with it. Walking upstream has to
  * stay possible. `LevelValidator` counts a conveyor as ordinary footing, so
  * a belt the player could not walk against would be a wall the solver cannot
  * see — the same rule that keeps the pursuer slower than the player

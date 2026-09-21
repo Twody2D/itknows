@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LevelDef } from '@/gameplay/LevelDef';
-import { routeBodyBoxes, trapLethalBox, trapsTheRouteNeverMeets } from '@/gameplay/routeTrace';
+import { routeBodyBoxes, trapLethalBoxes, trapsTheRouteNeverMeets } from '@/gameplay/routeTrace';
 import { getAllLevels } from '@/gameplay/LevelFactory';
 
 /**
@@ -72,10 +72,10 @@ describe('a trap the player can never reach', () => {
   it('says nothing about things that cannot kill', () => {
     // Pads, belts, platforms and decoys are not hazards, and the pursuer goes
     // wherever the player does, so "can it reach them" has one answer.
-    expect(trapLethalBox({ type: 'launch-pad', id: 'p', col: 1, row: 22, width: 3, liftTiles: 6 })).toBeNull();
-    expect(trapLethalBox({ type: 'conveyor', id: 'c', col: 1, row: 22, width: 3, speed: 60 })).toBeNull();
-    expect(trapLethalBox({ type: 'pursuer', id: 'd', col: 1, row: 21, speedFactor: 0.65 })).toBeNull();
-    expect(trapLethalBox({ type: 'fake-platform', id: 'f', col: 1, row: 19, width: 3 })).toBeNull();
+    expect(trapLethalBoxes({ type: 'launch-pad', id: 'p', col: 1, row: 22, width: 3, liftTiles: 6 })).toEqual([]);
+    expect(trapLethalBoxes({ type: 'conveyor', id: 'c', col: 1, row: 22, width: 3, speed: 60 })).toEqual([]);
+    expect(trapLethalBoxes({ type: 'pursuer', id: 'd', col: 1, row: 21, speedFactor: 0.65 })).toEqual([]);
+    expect(trapLethalBoxes({ type: 'fake-platform', id: 'f', col: 1, row: 19, width: 3 })).toEqual([]);
   });
 
   it('holds the campaign to a known, shrinking list of unmet traps', () => {

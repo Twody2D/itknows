@@ -2,22 +2,10 @@ import Phaser from 'phaser';
 import { Trap } from './Trap';
 import type { TrapPhase } from './Trap';
 import type { TrapTiming } from './TrapTiming';
+import { TRAP_HITBOX } from '@/config/physics';
 
 /** How long the bank takes to cross from peek to lethal — lethal throughout. */
 const PUNCH_MS = 120;
-
-/**
- * How far out of its resting position the bank shows during `warning`, in px.
- *
- * A floor bank rests one row UNDER the ground (`hiddenRow: 23` against a
- * `groundRow` of 22), so "visible at the resting position" would be a spike
- * drawn through the floor — not a telegraph, just a rendering artefact. It
- * peeks instead: four pixels of tips over the floor line, motionless, for the
- * whole of `warningMs`. A ceiling bank rests in open air and is readable
- * either way; it peeks by the same amount so both orientations behave
- * identically.
- */
-const PEEK_PX = 4;
 
 export interface SpikeBankConfig {
   id: string;
@@ -26,6 +14,19 @@ export interface SpikeBankConfig {
   yHidden: number;
   /** World Y it reaches at `active` — where it's actually lethal. */
   yLethal: number;
+  /**
+   * World Y it holds at `warning` — where the telegraph is actually seen.
+   *
+   * A bank that rests in open air is already readable where it is, so this
+   * is just `yHidden` for it. A bank that rests behind solid geometry is
+   * not: `hiddenRow: 23` against a `groundRow` of 22 puts every drawn pixel
+   * of it 12 px UNDER the floor the player walks on, and a telegraph painted
+   * inside the floor is a rendering artefact, not a signal. For those it is
+   * the position where the tips break the surface — computed in
+   * `gameplay/Level.ts`, which is the only place that knows which rows are
+   * solid. Omitted means `yHidden`.
+   */
+  yPeek?: number | undefined;
   timing?: TrapTiming | undefined;
   initialIdleMs?: number | undefined;
   loop?: boolean | undefined;
@@ -55,7 +56,7 @@ export class SpikeBankTrap extends Trap {
   private readonly x: number;
   private readonly yHidden: number;
   private readonly yLethal: number;
-  /** Where the tips show during `warning` — see `PEEK_PX`. */
+  /** Where the tips show during `warning` — see `SpikeBankConfig.yPeek`. */
   private readonly peekY: number;
   private moveTween: Phaser.Tweens.Tween | null = null;
 
@@ -65,7 +66,7 @@ export class SpikeBankTrap extends Trap {
     this.x = config.x;
     this.yHidden = config.yHidden;
     this.yLethal = config.yLethal;
-    this.peekY = config.yHidden + Math.sign(config.yLethal - config.yHidden) * PEEK_PX;
+    this.peekY = config.yPeek ?? config.yHidden;
 
     this.gameObject = scene.physics.add.sprite(config.x, config.yHidden, 'tile-spike');
     // `tile-spike` is drawn tips-up, for punching up out of a floor. A bank
@@ -79,8 +80,8 @@ export class SpikeBankTrap extends Trap {
     const body = this.gameObject.body as Phaser.Physics.Arcade.Body;
     body.setAllowGravity(false);
     body.setImmovable(true);
-    body.setSize(6, 4);
-    body.setOffset(2, 6);
+    body.setSize(TRAP_HITBOX.spikeBase.width, TRAP_HITBOX.spikeBase.height);
+    body.setOffset(TRAP_HITBOX.spikeBase.offsetX, TRAP_HITBOX.spikeBase.offsetY);
 
     this.onEnterPhase('idle');
   }
@@ -117,6 +118,15 @@ export class SpikeBankTrap extends Trap {
         // FIRE's 900 ms against the flight through the band, and that sum is
         // measured from the first visible frame to the first lethal one,
         // which is still the whole of `warningMs`.
+        //
+        // IT SITS WHERE IT CAN BE SEEN, which is not always where it rests.
+        // A floor bank's resting row is a row UNDER the floor, so holding it
+        // there showed the player nothing but red pixels painted inside the
+        // ground — the floor line itself never broke, and the first thing to
+        // cross the surface they were standing on was the lethal punch. That
+        // is a 250 ms telegraph in the code and none on the screen.
+        // `yPeek` is the position where the tips actually clear the surface;
+        // for a bank resting in open air it is the resting position itself.
         this.gameObject.setPosition(this.x, this.peekY);
         this.gameObject.setAlpha(1);
         break;

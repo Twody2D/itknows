@@ -151,6 +151,15 @@ export class GameplayScene extends Phaser.Scene {
   /** Reused by `sweepZoneContacts` so it allocates nothing (CLAUDE.md #9). */
   private readonly bodyRect = new Phaser.Geom.Rectangle();
   private readonly hazardRect = new Phaser.Geom.Rectangle();
+  /**
+   * Last frame's body top-left for every entry of `traps.lethalHazards`, as
+   * `[x0, y0, x1, y1, …]` — see `sweepLethalContact` for why Arcade's own
+   * deltas cannot be used. Sized once per level, written every frame,
+   * allocating nothing (CLAUDE.md #9).
+   */
+  private hazardPrevXY = new Float64Array(0);
+  /** False until `hazardPrevXY` holds a real frame — the first sweep of a level has nothing to sweep from. */
+  private hazardSweepValid = false;
 
   private fx!: FxManager;
   /** id → hazard game object, built once per level so warning-pulse can find the right visual from `trap:armed`'s id-only payload. */
@@ -207,6 +216,8 @@ export class GameplayScene extends Phaser.Scene {
     }
 
     this.level = buildLevel(this, this.levelDef);
+    this.hazardPrevXY = new Float64Array(this.level.traps.lethalHazards.length * 2);
+    this.hazardSweepValid = false;
     // Ground the skyline on the visible floor line, not the world's full
     // fall-pit height (`worldHeight` includes space below the floor) —
     // the same class of bug the menu's environment call already fixed.
@@ -631,31 +642,52 @@ export class GameplayScene extends Phaser.Scene {
       }
     }
 
-    for (const hazard of this.level.traps.lethalHazards) {
-      if (!hazard.isLethal()) continue;
-      const body = (hazard.gameObject as Phaser.GameObjects.GameObject & {
+    const hazards = this.level.traps.lethalHazards;
+    for (let i = 0; i < hazards.length; i++) {
+      const body = (hazards[i]!.gameObject as Phaser.GameObjects.GameObject & {
         body: Phaser.Physics.Arcade.Body | Phaser.Physics.Arcade.StaticBody | null;
       }).body;
       if (!body || !body.enable) continue;
+
       // SWEPT, not sampled. A hazard's hitbox is 4px tall and a drop spike
       // covers 100px in ~310ms — over 5px in a frame — so testing only where
       // it IS lets it step straight over the android between two frames and
       // come out the other side untouched. The rectangle is stretched back
       // over the ground it covered since the last frame, which is the path
       // the player actually saw it take.
-      const dx = 'deltaX' in body ? body.deltaX() : 0;
-      const dy = 'deltaY' in body ? body.deltaY() : 0;
+      //
+      // THE PREVIOUS POSITION IS REMEMBERED HERE, not read off the body.
+      // `body.deltaX()/deltaY()` are the distance Arcade's own integrator
+      // moved the body, and every hazard in this list is moved by a tween or
+      // a `setPosition` with `allowGravity` off — `Body.update` sets
+      // `prev := pos` before computing the delta, so for all of them the
+      // delta is exactly zero and the "swept" rectangle used to be the plain
+      // body rect with extra arithmetic. The guarantee the spike bank's
+      // 120 ms punch is written against did not exist.
+      const prevIndex = i * 2;
+      const prevX = this.hazardSweepValid ? this.hazardPrevXY[prevIndex]! : body.x;
+      const prevY = this.hazardSweepValid ? this.hazardPrevXY[prevIndex + 1]! : body.y;
+      this.hazardPrevXY[prevIndex] = body.x;
+      this.hazardPrevXY[prevIndex + 1] = body.y;
+
+      if (!hazards[i]!.isLethal()) continue;
       const swept = this.hazardRect.setTo(
-        Math.min(body.x, body.x - dx),
-        Math.min(body.y, body.y - dy),
-        body.width + Math.abs(dx),
-        body.height + Math.abs(dy),
+        Math.min(body.x, prevX),
+        Math.min(body.y, prevY),
+        body.width + Math.abs(body.x - prevX),
+        body.height + Math.abs(body.y - prevY),
       );
       if (Phaser.Geom.Rectangle.Overlaps(hurt, swept)) {
+        // The rest of the array keeps last frame's positions, so the next
+        // sweep would stretch them over a frame that was never drawn. The
+        // player is dead and the scene is about to restart anyway; dropping
+        // the baseline is what makes that harmless either way.
+        this.hazardSweepValid = false;
         this.player.kill('trap');
         return;
       }
     }
+    this.hazardSweepValid = true;
   }
 
   /** Nudges the player by a moving platform's per-frame delta while standing on it. */

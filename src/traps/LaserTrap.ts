@@ -3,6 +3,7 @@ import { PALETTE } from '@/config/palette';
 import { Trap } from './Trap';
 import type { TrapPhase } from './Trap';
 import type { TrapTiming } from './TrapTiming';
+import { TRAP_HITBOX } from '@/config/physics';
 
 export interface LaserConfig {
   id: string;
@@ -33,7 +34,7 @@ export class LaserTrap extends Trap {
     super('laser', config.id, { timing: config.timing, loop: config.loop, initialIdleMs: config.initialIdleMs });
 
     const height = config.yBottom - config.yTop;
-    this.gameObject = scene.add.rectangle(config.x, config.yTop + height / 2, 3, height, PALETTE.danger, 0.08);
+    this.gameObject = scene.add.rectangle(config.x, config.yTop + height / 2, TRAP_HITBOX.laserWidth, height, PALETTE.danger, 0.08);
     scene.physics.add.existing(this.gameObject, true);
 
     this.onEnterPhase('idle');
