@@ -20,6 +20,14 @@ import { rebuildOnResize } from '@/ui/relayout';
 import { BAR_W, TITLE_MAX_PX, TITLE_X, sectorHeaderLayout } from '@/config/sectorHeaderLayout';
 import { STAR_PX, drawStarRow, starRowWidth } from '@/ui/StarRow';
 import { MAX_STARS, canPlayLevel, starGateFor } from '@/gameplay/stars';
+import {
+  MAP_STATS_PANEL,
+  MAP_SYS_PANEL,
+  statsStarRowY,
+  statsValueRoomPx,
+  statsValueY,
+  sysCommentRoomPx,
+} from '@/ui/levelMapLayout';
 import { addCheckGlyph, addChevronGlyph, addDiamondGlyph, addPlayTriangle } from '@/ui/glyphs';
 
 /**
@@ -56,13 +64,13 @@ const SHOWCASE = { x: 44, y: 150, w: 76, h: 88 };
  */
 const DAILY = { x: 298, y: 158, w: BIG.w, h: 62 };
 /**
- * The SYSTEM column's stats box. Grown from the mockup's 80 to carry the
- * sector's star count under the best time; it ends at 254 on a 270-tall
- * canvas, which is the same bottom margin the map's own tiles keep.
+ * The two panels' geometry lives in `ui/levelMapLayout.ts`, not here — see
+ * that file for why: the test that holds this column's text from printing
+ * through the row below it could not see numbers that only existed inside a
+ * Phaser scene, so it restated them and stopped being a test.
  */
-const STATS_BOX_H = 96;
-/** Height of SYSTEM's panel above the stats box — what its running line has to fit inside. */
-const SYS_BOX_H = 110;
+const STATS_BOX_H = MAP_STATS_PANEL.height;
+const SYS_BOX_H = MAP_SYS_PANEL.height;
 /** The mockup's own content zone: 12..468, with SYSTEM's column at 492. */
 const MAP_X = 12;
 const MAP_W = 456;
@@ -659,9 +667,9 @@ export class LevelSelectScene extends Phaser.Scene {
 
     const g = this.add.graphics();
     g.fillStyle(PALETTE.system, 0.12);
-    g.fillRect(this.sysX, 38, colW, SYS_BOX_H);
+    g.fillRect(this.sysX, MAP_SYS_PANEL.top, colW, SYS_BOX_H);
     g.fillStyle(PALETTE.system, 1);
-    g.fillRect(this.sysX, 38, 2, SYS_BOX_H);
+    g.fillRect(this.sysX, MAP_SYS_PANEL.top, 2, SYS_BOX_H);
     this.items.push(g);
 
     this.pixel(this.sysX + 8, 48, 'SYSTEM', PALETTE.system, 1, 0, 0.5, undefined, { sizePx: 10 });
@@ -685,7 +693,7 @@ export class LevelSelectScene extends Phaser.Scene {
     // authoring budget `PREMISE_MAX_CHARS` the lines themselves are held to.
     // The clamp is the backstop; the budget is what keeps a premise from
     // needing one.
-    const commentRoom = 38 + SYS_BOX_H - 56 - 6;
+    const commentRoom = sysCommentRoomPx();
     const commentSize = this.domText.blockFitSize(
       comment,
       { ...commentStyle, color: 'transparent' },
@@ -693,7 +701,7 @@ export class LevelSelectScene extends Phaser.Scene {
       commentRoom,
       colW >= 110 ? 11 : 10,
     );
-    this.pixel(this.sysX + 8, 56, comment, PALETTE.systemLight, 1, 0, 0, colW - 16, {
+    this.pixel(this.sysX + 8, MAP_SYS_PANEL.textTop, comment, PALETTE.systemLight, 1, 0, 0, colW - 16, {
       ...commentStyle,
       sizePx: commentSize,
       clampLines: linesThatFit(commentRoom, commentSize, commentStyle.lineHeight),
@@ -701,9 +709,9 @@ export class LevelSelectScene extends Phaser.Scene {
 
     const box = this.add.graphics();
     box.fillStyle(PALETTE.metalDark, 1);
-    box.fillRect(this.sysX, 158, colW, STATS_BOX_H);
+    box.fillRect(this.sysX, MAP_STATS_PANEL.top, colW, STATS_BOX_H);
     box.lineStyle(1, PALETTE.metalMid, 1);
-    box.strokeRect(this.sysX + 0.5, 158.5, colW - 1, STATS_BOX_H - 1);
+    box.strokeRect(this.sysX + 0.5, MAP_STATS_PANEL.top + 0.5, colW - 1, STATS_BOX_H - 1);
     this.items.push(box);
 
     // The sector's star count, pinned to the bottom of the box and drawn
@@ -713,7 +721,7 @@ export class LevelSelectScene extends Phaser.Scene {
     // element in it would spend the room the fix bought.
     const sectorLevels = this.levelsOfSector();
     const sectorStars = SaveService.getSectorStars(sectorLevels);
-    const starsY = 158 + STATS_BOX_H - 22;
+    const starsY = statsStarRowY();
     this.pixel(this.sysX + 8, starsY, t('levelsSectorStars'), PALETTE.labelMuted, 1, 0, 0.5, undefined, { sizePx: 9 });
     this.items.push(
       drawStarRow(this, this.sysX + 8, starsY + 8, sectorStars === 0 ? 0 : 1, 1, { scale: 1 }),
@@ -741,7 +749,7 @@ export class LevelSelectScene extends Phaser.Scene {
     // actually took, measured, not assumed. A fixed offset here worked only
     // while the label fit one line; a wider technical face wraps it to two
     // and the value prints straight through it.
-    const valueY = 166 + Math.ceil(bestLabel.height) + 6;
+    const valueY = statsValueY(bestLabel.height);
     if (bestMs === null) {
       // Sized to the room actually left above the star row, which is pinned
       // to the bottom of this same box — not to a hand-picked line count.
@@ -751,7 +759,7 @@ export class LevelSelectScene extends Phaser.Scene {
       // backstop it is, derived from the same measurement.
       const noBest = t('levelsNoBest');
       const style = { color: 'transparent', font: 'pixel' as const, uppercase: true, letterSpacing: 1 };
-      const roomPx = starsY - 6 - valueY;
+      const roomPx = statsValueRoomPx(bestLabel.height);
       const sizePx = this.domText.blockFitSize(noBest, style, colW - 16, roomPx, 9);
       this.pixel(this.sysX + 8, valueY, noBest, PALETTE.textDisabled, 1, 0, 0, colW - 16, {
         sizePx,

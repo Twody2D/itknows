@@ -40,6 +40,7 @@ import { Commentator } from '@/ai/Commentator';
 import { SystemVoice } from '@/ai/SystemVoice';
 import { personalityTag } from '@/ai/SystemPersonality';
 import { isSectorFinale, sectorIdOf, sectorNumberOf } from '@/gameplay/sectors';
+import { sectorPremise } from '@/data/dialogues/levelSelect';
 import type { SectorCompleteData } from '@/scenes/SectorCompleteScene';
 import { TutorialHints } from '@/ui/TutorialHints';
 import { fadeIn } from '@/ui/SceneFade';
@@ -48,6 +49,14 @@ import { formatMmSs } from '@/utils/formatTime';
 import { t } from '@/i18n/ui';
 
 const SYSTEM_COMMENT_DISPLAY_MS = 3800;
+
+/**
+ * How long a sector's premise stays up, in ms. Longer than a reaction line
+ * because it is a whole sentence about the sector rather than a remark about
+ * the last three seconds — at `PREMISE_MAX_CHARS` and an unhurried reading
+ * pace that is about six seconds.
+ */
+const SECTOR_PREMISE_DISPLAY_MS = 6000;
 
 
 interface GameplaySceneData {
@@ -213,6 +222,7 @@ export class GameplayScene extends Phaser.Scene {
     if (GameState.currentSectorId !== sectorId) {
       GameState.currentSectorId = sectorId;
       GameState.startSector();
+      this.announceSectorPremise();
     }
 
     this.level = buildLevel(this, this.levelDef);
@@ -872,6 +882,40 @@ export class GameplayScene extends Phaser.Scene {
     this.hudSystemPill.fillStyle(PALETTE.system, 1);
     this.hudSystemPill.fillRect(x, y, 2, h);
     this.hudSystemPill.setVisible(true);
+  }
+
+  /**
+   * THE SECTOR SAYS WHAT IT IS, once, out loud, on the way in.
+   *
+   * The ten premises (`data/dialogues/levelSelect.ts`) were written to answer
+   * the owner's «сектор 10 тоже слишком лёгкий и непонятный» — a sector whose
+   * geometry tells you what to do and never what makes this screen different
+   * from the previous fifty. They were then printed in exactly one place: the
+   * SYSTEM column of the level map. And the campaign never opens the level
+   * map. PLAY resumes straight into a level, a cleared level starts the next
+   * one, and the Sector Complete screen's button goes forward — the only
+   * forced trip to the map is a locked star gate, which cannot happen at all
+   * for sectors 2-5 and does not happen for anyone averaging more than one
+   * and a half stars. The owner cleared all sixty levels and was shown none
+   * of them, including the one written for his complaint.
+   *
+   * So it is said where the player is: by SYSTEM, in the HUD, on the first
+   * frame of a sector they have not finished a level of yet. It stays on
+   * screen longer than a reaction line because it is a longer sentence and
+   * it is not reacting to anything — and it is skipped for a Daily run,
+   * which is not campaign progress and has no sector to introduce.
+   */
+  private announceSectorPremise(): void {
+    if (this.daily) return;
+    const sector = sectorNumberOf(this.levelDef.id);
+    const premise = sectorPremise(sector);
+    if (premise === null) return;
+    // Only while the sector is still untouched — the same condition the map
+    // uses, so the two can never disagree about whether it has been said.
+    const completed = SaveService.getCompletedLevels();
+    const started = completed.some((id) => sectorNumberOf(id) === sector);
+    if (started) return;
+    SystemVoice.show(premise, 'sector_premise', SECTOR_PREMISE_DISPLAY_MS);
   }
 
   /**

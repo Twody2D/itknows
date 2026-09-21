@@ -47,28 +47,46 @@ const LINES: Record<'untouched' | 'started' | 'nearly' | 'cleared', DialogueLine
  * A sector's premise cannot be carried by its geometry alone — geometry
  * says what to do, never why this screen is different from the last fifty.
  * SYSTEM has been the game's voice for that since sector 01, so the fix is
- * to let it say the thing out loud, once, on the map, while the sector is
- * still untouched. After that the generic lines take over: a premise
- * repeated is a premise nobody reads.
+ * to let it say the thing out loud, once, while the sector is still
+ * untouched. After that the generic lines take over: a premise repeated is a
+ * premise nobody reads.
+ *
+ * SAID IN TWO PLACES, because the first one turned out not to be a place the
+ * player goes. Until 2026-09-21 this was printed only in SYSTEM's column on
+ * the level map — and the campaign never opens the level map: PLAY resumes
+ * into a level, a cleared level starts the next, and SECTOR COMPLETE goes
+ * forward. The owner finished all sixty levels and was shown none of the
+ * ten. `GameplayScene.announceSectorPremise` now says it in the HUD on the
+ * way into an untouched sector, which is the path everybody takes; the map
+ * still says it for anyone who goes there first.
  *
  * Authored, one per sector, never generated (CLAUDE.md #6), and in SYSTEM's
  * register — observing, not instructing. None of them tells the player what
  * to press.
  *
- * AND EVERY ONE IS SHORT ON PURPOSE. SYSTEM's column on the level map is
- * about 94 px wide and 86 px tall, which is six lines of 10 px type at the
- * narrowest supported width — roughly `PREMISE_MAX_CHARS` of uppercase
- * Russian. The first drafts of sectors 07 and 10 ran to 72 and 99 characters
- * and were measured live at 105 px and 150 px of text in an 90 px box: cut
- * off mid-sentence at 480, spilling past the panel at 620. A premise the
- * player reads half of is worse than no premise, because the half they get
- * is the setup. `tests/dialogue-packs.test.ts` holds the budget.
+ * AND EVERY ONE IS SHORT ON PURPOSE. The first drafts of sectors 07 and 10
+ * ran to 72 and 99 characters and were measured live at 105 px and 150 px of
+ * text in an 86 px box: cut off mid-sentence at 480, spilling past the panel
+ * at 620. A premise the player reads half of is worse than no premise,
+ * because the half they get is the setup.
+ * `tests/dialogue-packs.test.ts` holds the budget.
  */
 /**
- * The character budget for a premise, derived from the column rather than
- * picked: ~94 px of width at 10 px uppercase is about 11 characters a line,
- * and the box holds six lines. See the note above for how the number was
- * found — by measuring two lines that did not fit.
+ * The character budget for a premise.
+ *
+ * MEASURED, NOT ESTIMATED, and it had to be re-measured: the first version of
+ * this comment derived 66 from three numbers that were all wrong (a 94 px
+ * column that is 80 px, 11 characters a line that are 13, six lines that are
+ * five), and arrived at the right answer by having the errors cancel. The
+ * derivation is now the binding constraint, which is the HUD line rather
+ * than the map column, because that is where the campaign says it.
+ *
+ * The HUD line is `wordWrapWidth: width - 32`, so 448 px at the narrowest
+ * supported width, and it carries a constant 13-character prefix
+ * (`SYSTEM v3.0: `). Measured live on the longest premise in the game:
+ * 75 characters render 423 px, i.e. 5.64 px each, so the line holds 79 and
+ * the premise holds 66. The map column takes 65 by the same kind of
+ * arithmetic, so neither place is the looser one by more than a character.
  */
 export const PREMISE_MAX_CHARS = 66;
 
@@ -125,12 +143,24 @@ export const SECTOR_PREMISE: Record<number, DialogueLine> = {
   },
 };
 
+/**
+ * A sector's premise in the current locale, or `null` for a number with none.
+ *
+ * Exported on its own because the premise has two places to be said and they
+ * ask different questions. The map asks "has this sector been touched"; the
+ * campaign asks "is this the way in". Both call this; neither owns it.
+ */
+export function sectorPremise(sector: number): string | null {
+  const premise = SECTOR_PREMISE[sector];
+  return premise ? premise[LocaleState.current] : null;
+}
+
 export function levelSelectComment(completed: number, total: number, sector?: number): string {
   // An untouched sector states what it is; everything after that is the
   // player's own progress, which is what they came back to the map to read.
   if (completed === 0 && sector !== undefined) {
-    const premise = SECTOR_PREMISE[sector];
-    if (premise) return premise[LocaleState.current];
+    const premise = sectorPremise(sector);
+    if (premise !== null) return premise;
   }
 
   const key =

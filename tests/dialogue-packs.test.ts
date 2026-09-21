@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PACKS } from '@/data/dialogues';
 import { FAKE_EXIT_LINES_FOR_TEST } from '@/data/dialogues/fakeExit';
-import { PREMISE_MAX_CHARS, SECTOR_PREMISE, levelSelectComment } from '@/data/dialogues/levelSelect';
+import { PREMISE_MAX_CHARS, SECTOR_PREMISE, levelSelectComment, sectorPremise } from '@/data/dialogues/levelSelect';
 import { LEVELS_PER_SECTOR, SECTOR_COUNT } from '@/gameplay/sectors';
 import { LocaleState } from '@/i18n/Locale';
 
@@ -125,6 +125,40 @@ describe('a sector premise fits the column it is printed in', () => {
       }
     }
     expect(over, over.join('; ')).toEqual([]);
+  });
+
+  it('fits the HUD line the campaign says it on, prefix included', () => {
+    // THE BINDING CONSTRAINT, and the one the budget is derived from. The
+    // campaign says the premise in `GameplayScene`'s SYSTEM pill, whose
+    // `wordWrapWidth` is `width - 32` — 448 px at the narrowest supported
+    // width — and which carries a constant 13-character prefix
+    // (`SYSTEM v3.0: `). Measured live: 75 characters render 423 px.
+    //
+    // This is deliberately arithmetic on measured numbers rather than a
+    // repeat of `PREMISE_MAX_CHARS`: if someone raises the budget, the two
+    // assertions disagree and the one holding the pixels wins.
+    const HUD_BOX_PX = 448;
+    const PREFIX_CHARS = 'SYSTEM v3.0: '.length;
+    const PX_PER_CHAR = 423 / 75;
+
+    const over: string[] = [];
+    for (const [sector, line] of Object.entries(SECTOR_PREMISE)) {
+      for (const locale of ['ru', 'en'] as const) {
+        const px = (PREFIX_CHARS + line[locale].length) * PX_PER_CHAR;
+        if (px > HUD_BOX_PX) over.push(`${sector}/${locale}: ${Math.round(px)}px > ${HUD_BOX_PX}px`);
+      }
+    }
+    expect(over, over.join('; ')).toEqual([]);
+    expect((PREFIX_CHARS + PREMISE_MAX_CHARS) * PX_PER_CHAR).toBeLessThanOrEqual(HUD_BOX_PX);
+  });
+
+  it('has a premise for every sector in the campaign', () => {
+    // The campaign path says it on the way in, so a missing one is a sector
+    // that introduces itself with silence.
+    for (let sector = 1; sector <= SECTOR_COUNT; sector++) {
+      expect(sectorPremise(sector), `sector ${sector}`).not.toBeNull();
+    }
+    expect(sectorPremise(SECTOR_COUNT + 1)).toBeNull();
   });
 
   it('says something different for every sector', () => {
