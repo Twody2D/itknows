@@ -381,10 +381,24 @@ export class DomTextOverlay {
     const free = { ...style, color: 'transparent', wordWrapWidth: wrapWidth };
     delete free.clampLines;
     for (let size = Math.round(max); size > min; size--) {
-      const probe = this.add(-1000, -1000, text, { ...free, sizePx: size }, 0, 0);
+      // THE SIZE RETURNED IS THE SIZE MEASURED. Setting `wordWrapWidth` puts
+      // the probe through `fitted()`, which shrinks it again when a single
+      // word is wider than the box — so this used to return the size it
+      // ASKED for while reporting the height of a smaller one. The label
+      // drawn afterwards goes down the same path and ends up at the smaller
+      // size too, so nothing overflowed; what went wrong was quieter. The
+      // caller turns this number into `clampLines`, and a clamp computed for
+      // 11 px type applied to 9 px type cuts off a line that would have fit.
+      // No string in the game is long enough to trigger it today (the widest
+      // word that can reach either caller is 11 characters against a 14
+      // character threshold) — which is exactly the kind of margin that
+      // disappears the next time somebody writes a longer line.
+      const asked = { ...free, sizePx: size };
+      const effective = this.fitted(text, asked);
+      const probe = this.add(-1000, -1000, text, effective, 0, 0);
       const height = probe.height;
       probe.destroy();
-      if (height <= maxHeight) return size;
+      if (height <= maxHeight) return Math.round(effective.sizePx ?? size);
     }
     return min;
   }
