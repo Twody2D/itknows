@@ -580,14 +580,6 @@ class SaveServiceController {
     return true;
   }
 
-  /** Hands a continue back when the ad it was spent on never played — see `DailyResultScene`. Never drops below zero. */
-  refundDailyContinue(date: string): void {
-    const daily = this.getDaily(date);
-    if (daily.continuesUsed === 0) return;
-    daily.continuesUsed -= 1;
-    this.persist();
-  }
-
   /** Resets only the shop fields (credits/inventory/processed tokens) back to a fresh save's defaults — level progress (`completedLevels`/`lastLevelId`) is untouched. Used by `ShopDevTools`; harmless enough to also back a future "reset purchases" settings option. */
   resetShopState(): void {
     this.data.credits = 0;

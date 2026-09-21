@@ -5,6 +5,9 @@ import { PALETTE } from '@/config/palette';
 import { PHYSICS } from '@/config/physics';
 import { MIN_VIRTUAL_WIDTH, VIRTUAL_HEIGHT } from '@/config/display';
 import { blockBrowserGestures } from '@/utils/input/blockBrowserGestures';
+import { requestFullscreenOnFirstGesture } from '@/utils/input/fullscreen';
+import { inputState } from '@/utils/input/InputState';
+import { LocaleState } from '@/i18n/Locale';
 import { AudioEngine } from '@/audio/AudioEngine';
 import { YandexGamesService } from '@/services/YandexGamesService';
 import { SaveService } from '@/services/SaveService';
@@ -28,6 +31,7 @@ const root = document.getElementById('app');
 if (!root) throw new Error('#app root element not found');
 
 blockBrowserGestures(root);
+requestFullscreenOnFirstGesture(root);
 
 // Reflects whatever entitlement this save already owns into AdsService
 // before anything in the boot sequence could possibly ask for an ad — pure
@@ -49,7 +53,25 @@ PurchaseManager.init();
 void YandexGamesService.init();
 YandexGamesService.onReady(() => {
   void SaveService.syncWithCloud().then(() => PurchaseManager.restorePurchases());
+  applyDetectedLanguage();
 });
+
+/**
+ * Yandex Games requirement 2.14 — the game detects the player's language
+ * through the SDK. `LocaleState` decides whether to take it: a language the
+ * player chose by hand in settings always wins, and anything outside `ru`/`en`
+ * leaves the default alone (see `i18n/Locale.ts`).
+ *
+ * This lands late by nature — the SDK is a network fetch and boot is not — so
+ * the menu may already be on screen in the wrong language by the time the
+ * answer arrives. Whatever is showing is therefore rebuilt, but only from the
+ * menu: no attempt is ever interrupted for this, and once the player is past
+ * the menu the next scene picks the language up on its own.
+ */
+function applyDetectedLanguage(): void {
+  if (!LocaleState.applyDetected(YandexGamesService.getDetectedLanguage())) return;
+  if (game.scene.isActive('MainMenuScene')) game.scene.getScene('MainMenuScene').scene.restart();
+}
 
 // Audio focus (master-prompt §32): a hidden tab suspends the context outright
 // instead of letting scheduled nodes play into nothing, and picks back up on
@@ -57,6 +79,24 @@ YandexGamesService.onReady(() => {
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) AudioEngine.suspend();
   else AudioEngine.resume();
+});
+
+// The other half of that, and the one `visibilitychange` cannot see: a
+// Yandex ad is drawn over this same document, so the page never goes hidden
+// while it plays. Requirement 4.7 asks for both the sound and the game itself
+// to stop for its duration (the SDK side of the pause — `GameplayAPI` — is
+// handled inside the facade, which is the only thing that knows whether an
+// attempt was running). Held keys go too: the ad takes the focus, so no
+// `keyup` would ever arrive for them.
+YandexGamesService.onAdBreak((open) => {
+  if (open) {
+    inputState.releaseAll();
+    AudioEngine.suspend();
+    game.pause();
+  } else {
+    game.resume();
+    AudioEngine.resume();
+  }
 });
 
 const game = new Phaser.Game({

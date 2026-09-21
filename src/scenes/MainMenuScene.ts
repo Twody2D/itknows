@@ -172,11 +172,12 @@ export class MainMenuScene extends Phaser.Scene {
     const rack = MENU_LAYOUT.serverRack;
     if (width < rack.minWidth) return;
 
+    const rackX = width - rack.rightInset - rack.w;
     const g = this.add.graphics().setDepth(-7);
     g.fillStyle(PALETTE.metalDark, 1);
-    g.fillRect(rack.x, rack.y, rack.w, rack.h);
+    g.fillRect(rackX, rack.y, rack.w, rack.h);
     g.lineStyle(1, PALETTE.metalMid, 1);
-    g.strokeRect(rack.x + 0.5, rack.y + 0.5, rack.w - 1, rack.h - 1);
+    g.strokeRect(rackX + 0.5, rack.y + 0.5, rack.w - 1, rack.h - 1);
 
     const bars: Array<[number, number]> = [
       [80, PALETTE.metalMid],
@@ -191,7 +192,7 @@ export class MainMenuScene extends Phaser.Scene {
     ];
     bars.forEach(([barWidth, color], i) => {
       g.fillStyle(color, 1);
-      g.fillRect(rack.x + 8, rack.y + 8 + i * 12, barWidth, 6);
+      g.fillRect(rackX + 8, rack.y + 8 + i * 12, barWidth, 6);
     });
   }
 

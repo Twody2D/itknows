@@ -85,7 +85,7 @@ const INVENTORY_CATEGORY: Partial<Record<ShopCategory, InventoryCategory>> = {
   trail: 'trail',
 };
 
-// Layout — virtual px on the fixed 270px-tall canvas (width floats 480..620).
+// Layout — virtual px on the fixed 270px-tall canvas (width floats 480..540).
 const TOPBAR_H = 28;
 const RAIL_W = 64;
 const GRID_X = 70;

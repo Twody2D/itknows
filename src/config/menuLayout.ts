@@ -1,5 +1,5 @@
 /**
- * Main-menu layout, in virtual pixels on the W x 270 canvas (W = 480..620).
+ * Main-menu layout, in virtual pixels on the W x 270 canvas (W = 480..540).
  *
  * Every interactive element is positioned from the LEFT edge in absolute
  * pixels, which is what makes the menu width-proof: at any supported width
@@ -43,8 +43,19 @@ export const MENU_LAYOUT = {
    * and disappears entirely below `minW` rather than being squeezed into
    * something unreadable.
    */
-  systemLine: { rightInset: 12, y: 232, maxW: 196, minW: 130, h: 26, minWidth: 560 },
-  serverRack: { x: 492, y: 96, w: 96, h: 120, minWidth: 590 },
+  systemLine: { rightInset: 12, y: 232, maxW: 196, minW: 112, h: 26, minWidth: 534 },
+  /**
+   * Right-anchored like everything else in this column, and it did not used
+   * to be: it sat at a fixed `x: 492` with a 590 px threshold, both measured
+   * on the design's 620 px canvas. When MAX_VIRTUAL_WIDTH came down to 540 to
+   * satisfy Yandex's 2:1 desktop limit (`config/display.ts`), that made the
+   * rack — and, at `minW: 130`, SYSTEM's line with it — unreachable at every
+   * supported width: two pieces of the menu that could never be drawn again.
+   * Anchored to the right edge instead, both fit the narrower column with the
+   * command grid untouched, which is the whole point of the atmosphere
+   * column being atmosphere.
+   */
+  serverRack: { rightInset: 12, y: 96, w: 96, h: 120, minWidth: 518 },
 } as const;
 
 /**

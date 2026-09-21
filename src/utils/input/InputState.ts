@@ -20,6 +20,20 @@ const JUMP_CODES = new Set(['Space', 'ArrowUp', 'KeyW']);
  * press that starts and ends inside a single frame would otherwise never be
  * observed by a before/after comparison. A missed tap is an input bug, not
  * acceptable difficulty (CLAUDE.md #5 / #64).
+ *
+ * THE OTHER HALF OF LISTENING ON `window`: nothing else tells us the key
+ * came back up. `keyup` fires at the focused document, so a key held while
+ * the browser loses focus — an ad opening over the page, Alt-Tab, the phone's
+ * notification shade, the task switcher — is pressed forever as far as this
+ * is concerned. Measured on the dev build before this was fixed: right held,
+ * window blurred, the android walked another 87 px in 0.7 s and `right`
+ * stayed `true` with no key left to release. Yandex Games requires the game
+ * to behave when the browser is minimized or an ad covers it, and «управление
+ * никогда не является причиной смерти» (CLAUDE.md #5) says the same thing
+ * from the other side. So every way the page can stop receiving key events
+ * — `blur`, `pagehide`, a hidden document, a cancelled pointer — drops
+ * everything held, and `releaseAll()` is public so the ad break can do it
+ * explicitly too (`services/AdsService.ts`).
  */
 class InputStateController {
   private pressed = new Set<string>();
@@ -31,14 +45,49 @@ class InputStateController {
   private jumpBuffered = false;
 
   constructor() {
-    window.addEventListener('keydown', (e) => {
-      if (this.pressed.has(e.code)) return; // ignore OS auto-repeat
-      this.pressed.add(e.code);
-      if (JUMP_CODES.has(e.code)) this.jumpBuffered = true;
+    // Guarded so the module imports in a DOM-less environment (Vitest runs
+    // `environment: 'node'`), which is what makes the state machine below
+    // testable at all — see `tests/input-focus-loss.test.ts`.
+    if (typeof window === 'undefined') return;
+    window.addEventListener('keydown', (e) => this.keyDown(e.code));
+    window.addEventListener('keyup', (e) => this.keyUp(e.code));
+    window.addEventListener('blur', () => this.releaseAll());
+    // `pagehide` rather than `unload`: mobile Safari/Chrome freeze a
+    // backgrounded page instead of unloading it, and this is the event that
+    // actually fires there.
+    window.addEventListener('pagehide', () => this.releaseAll());
+    window.addEventListener('pointercancel', () => this.releaseAll());
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.releaseAll();
     });
-    window.addEventListener('keyup', (e) => {
-      this.pressed.delete(e.code);
-    });
+  }
+
+  /** The keyboard listener's body, exposed so the state machine is reachable without a DOM. */
+  keyDown(code: string): void {
+    if (this.pressed.has(code)) return; // ignore OS auto-repeat
+    this.pressed.add(code);
+    if (JUMP_CODES.has(code)) this.jumpBuffered = true;
+  }
+
+  keyUp(code: string): void {
+    this.pressed.delete(code);
+  }
+
+  /**
+   * Drops every held input, keyboard and touch alike, plus any jump that was
+   * buffered but never consumed. Called whenever the page stops being able to
+   * see the release that would otherwise arrive — see the class comment.
+   *
+   * The buffered jump goes too, deliberately: it would otherwise fire on the
+   * frame after the player comes back, which reads as the game jumping by
+   * itself.
+   */
+  releaseAll(): void {
+    this.pressed.clear();
+    this.touchLeft = false;
+    this.touchRight = false;
+    this.touchJumpDown = false;
+    this.jumpBuffered = false;
   }
 
   setTouchLeft(down: boolean): void {

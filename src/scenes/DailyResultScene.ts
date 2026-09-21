@@ -13,7 +13,6 @@ import { currentChallengeTimeMs } from '@/gameplay/DailyChallenge';
 import { DAILY_LIVES, SaveService } from '@/services/SaveService';
 import { LeaderboardService } from '@/services/LeaderboardService';
 import { YandexGamesService, type YsdkLeaderboardEntry } from '@/services/YandexGamesService';
-import { AdsService } from '@/services/AdsService';
 import type { DailyRunState } from './GameplayScene';
 
 export interface DailyResultData {
@@ -313,12 +312,20 @@ export class DailyResultScene extends Phaser.Scene {
     ];
 
     // The continue is offered only where it means something: the run ended
-    // for want of a life, the day's one continue is unspent, and ads can
-    // actually pay out (a player who bought "no ads" is shown nothing rather
-    // than a button that cannot deliver).
+    // for want of a life and the day's one continue is unspent.
+    //
+    // IT USED TO COST AN AD, AND THAT WAS THE VIOLATION. Yandex Games 4.5.2:
+    // a rewarded-video reward is a bonus on top of the game and «не должна
+    // влиять на возможность продолжить игровой процесс». Continuing a run is
+    // not a bonus, it is the game, so the ad in front of it is gone and the
+    // allowance is what limits it — one a day, which is what made it
+    // interesting in the first place. The `adsDisabled` check went with it:
+    // there is no longer an ad that could fail to deliver, so a player who
+    // bought "no ads" now gets the same continue as everyone else instead of
+    // no button at all.
     const ranOut = this.result.outcome === 'out-of-lives';
     const hasContinue = SaveService.canUseDailyContinue(this.result.date);
-    if (ranOut && hasContinue && !AdsService.isAdsDisabled()) {
+    if (ranOut && hasContinue) {
       buttons.push(this.buildContinueButton());
     } else if (ranOut && !hasContinue) {
       this.mono(368, 226, t('dailyContinueSpent'), PALETTE.textDisabled, 9, [0.5, 0.5]);
@@ -341,20 +348,11 @@ export class DailyResultScene extends Phaser.Scene {
         hint.setPosition(368, 235 + offsetY);
       },
       onClick: () => {
-        // Spent BEFORE the ad plays, and only if the day still had one: the
-        // allowance is enforced by the save, never by whether this button
-        // happened to be on screen. Handed back below if nothing was
-        // actually watched — an ad that fails to play owes the player
-        // nothing and costs them nothing (CLAUDE.md #8).
+        // The allowance is enforced by the save, never by whether this button
+        // happened to be on screen — a second click, or a stale scene, spends
+        // nothing and starts nothing.
         if (!SaveService.useDailyContinue(this.result.date)) return;
-        AdsService.requestRewarded((granted) => {
-          if (granted) {
-            this.startRun(1);
-            return;
-          }
-          SaveService.refundDailyContinue(this.result.date);
-          this.mono(368, 250, t('dailyContinueUnavailable'), PALETTE.dangerAlt, 9, [0.5, 0.5]);
-        });
+        this.startRun(1);
       },
     });
     return button;

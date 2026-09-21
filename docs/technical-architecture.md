@@ -41,7 +41,7 @@ docs/                      — этот файл, master-prompt.md, performance-
 ## Рендеринг и разрешение экрана
 
 Виртуальная высота зафиксирована (`VIRTUAL_HEIGHT = 270`), ширина плавает между
-`MIN_VIRTUAL_WIDTH = 480` и `MAX_VIRTUAL_WIDTH = 620` (см. `src/config/display.ts`).
+`MIN_VIRTUAL_WIDTH = 480` и `MAX_VIRTUAL_WIDTH = 540` (см. `src/config/display.ts`).
 
 `ScaleController` (`src/core/ScaleController.ts`) на каждом resize:
 

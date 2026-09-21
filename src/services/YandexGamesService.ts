@@ -72,7 +72,13 @@ interface YsdkPayments {
   consumePurchase(purchaseToken: string): Promise<void>;
 }
 
+/** `ysdk.environment` — verified against `yandex.ru/dev/games/doc/ru/sdk/sdk-environment`. Only the language is read; the app/player sections are not used. */
+interface YsdkEnvironment {
+  i18n?: { lang?: string; tld?: string };
+}
+
 interface Ysdk {
+  environment?: YsdkEnvironment;
   features?: {
     LoadingAPI?: { ready(): void };
     GameplayAPI?: { start(): void; stop(): void };
@@ -124,6 +130,11 @@ class YandexGamesServiceController {
   private initPromise: Promise<void> | null = null;
   private menuInteractive = false;
   private loadingReadyNotified = false;
+  /** Whether a real attempt is running right now - what the ad break has to put back afterwards. */
+  private gameplayActive = false;
+  /** Guards against an SDK that fires `onClose` and `onError` both, or `onOpen` twice. */
+  private adBreak = false;
+  private readonly adBreakListeners: Array<(open: boolean) => void> = [];
   private player: YsdkPlayer | null = null;
   private playerPromise: Promise<YsdkPlayer | null> | null = null;
   private payments: YsdkPayments | null = null;
@@ -181,22 +192,56 @@ class YandexGamesServiceController {
 
   /** `GameplayAPI.start()` — call whenever a real attempt begins/resumes (level start, restart-after-death, unpause). Menu/pause never call this. */
   notifyGameplayStart(): void {
+    this.gameplayActive = true;
     this.ysdk?.features?.GameplayAPI?.start();
   }
 
   /** `GameplayAPI.stop()` — call whenever gameplay pauses/ends (death-restart teardown, pause, leaving the scene). */
   notifyGameplayStop(): void {
+    this.gameplayActive = false;
     this.ysdk?.features?.GameplayAPI?.stop();
   }
 
+  /**
+   * Told when an ad opens over the page and when it goes away again.
+   *
+   * Yandex Games requirement 4.7: «При показе полноэкранной рекламы звук в
+   * игре и игровой процесс должны ставиться на паузу.» Nothing else can
+   * notice: the ad is drawn over the same document, so `document.hidden`
+   * stays `false` and the `visibilitychange` handler in `main.ts` — which is
+   * what suspends audio for a backgrounded tab — never fires. Before this,
+   * the synth kept playing under the ad and `GameplayAPI` still reported the
+   * player as playing.
+   *
+   * Registered from `main.ts`, which is the only place that holds the Phaser
+   * game; this facade stays free of anything gameplay-side (CLAUDE.md #8).
+   */
+  onAdBreak(listener: (open: boolean) => void): void {
+    this.adBreakListeners.push(listener);
+  }
+
+  /**
+   * The fullscreen ad shown at a natural breakpoint (`AdsService` decides
+   * which, and how often). Resolves either way — a skipped or failed ad is
+   * never an error — and always closes the ad break it opened, so a game
+   * paused for the ad cannot be left paused by one that errored.
+   */
   showInterstitial(): Promise<void> {
     const adv = this.ysdk?.adv;
     if (!adv) return Promise.resolve();
     return new Promise((resolve) => {
+      let settled = false;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        this.endAdBreak();
+        resolve();
+      };
       adv.showFullscreenAdv({
         callbacks: {
-          onClose: () => resolve(),
-          onError: () => resolve(),
+          onOpen: () => this.beginAdBreak(),
+          onClose: () => finish(),
+          onError: () => finish(),
         },
       });
     });
@@ -209,15 +254,46 @@ class YandexGamesServiceController {
       return;
     }
     let rewarded = false;
+    let settled = false;
+    // `onClose` and `onError` are documented as alternatives, but an SDK that
+    // fired both would otherwise hand the caller two answers and leave the
+    // game paused behind the second one.
+    const finish = (granted: boolean): void => {
+      if (settled) return;
+      settled = true;
+      this.endAdBreak();
+      onComplete(granted);
+    };
     adv.showRewardedVideo({
       callbacks: {
+        onOpen: () => this.beginAdBreak(),
         onRewarded: () => {
           rewarded = true;
         },
-        onClose: () => onComplete(rewarded),
-        onError: () => onComplete(false),
+        onClose: () => finish(rewarded),
+        onError: () => finish(false),
       },
     });
+  }
+
+  /** Test-only: drives the ad-break plumbing without a live SDK to open a real ad. */
+  simulateAdBreakForTests(open: boolean): void {
+    if (open) this.beginAdBreak();
+    else this.endAdBreak();
+  }
+
+  /** Whether `GameplayAPI` currently considers the player to be playing — also what the ad break restores. */
+  isGameplayActive(): boolean {
+    return this.gameplayActive;
+  }
+
+  /**
+   * The language the portal is showing the player, or `null` outside a real
+   * SDK. `i18n/Locale.ts` decides what to do with it — a player's own choice
+   * in settings always outranks this (requirement 2.14).
+   */
+  getDetectedLanguage(): string | null {
+    return this.ysdk?.environment?.i18n?.lang ?? null;
   }
 
   /**
@@ -403,12 +479,48 @@ class YandexGamesServiceController {
     }
   }
 
+  /**
+   * Suspends the attempt for the duration of an ad and puts it back after.
+   *
+   * `GameplayAPI.stop()` goes through the raw SDK call rather than
+   * `notifyGameplayStop()` on purpose: the attempt is not over, it is
+   * covered, so `gameplayActive` has to survive the break in order to be
+   * worth restoring. A break that opens from the menu or the shop restores
+   * nothing, which is the same definition CLAUDE.md #8 already uses.
+   */
+  private beginAdBreak(): void {
+    if (this.adBreak) return;
+    this.adBreak = true;
+    if (this.gameplayActive) this.ysdk?.features?.GameplayAPI?.stop();
+    this.emitAdBreak(true);
+  }
+
+  private endAdBreak(): void {
+    if (!this.adBreak) return;
+    this.adBreak = false;
+    if (this.gameplayActive) this.ysdk?.features?.GameplayAPI?.start();
+    this.emitAdBreak(false);
+  }
+
+  private emitAdBreak(open: boolean): void {
+    for (const listener of this.adBreakListeners) {
+      try {
+        listener(open);
+      } catch {
+        /* a subscriber's own failure never leaves the ad break half-applied */
+      }
+    }
+  }
+
   /** Test/dev-only reset — never called from gameplay code. */
   resetForTests(): void {
     this.ysdk = null;
     this.initPromise = null;
     this.menuInteractive = false;
     this.loadingReadyNotified = false;
+    this.gameplayActive = false;
+    this.adBreak = false;
+    this.adBreakListeners.length = 0;
     this.player = null;
     this.playerPromise = null;
     this.payments = null;

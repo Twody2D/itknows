@@ -5,7 +5,7 @@ import { MENU_LINES_FOR_TEST } from '@/data/dialogues/menu';
 
 /**
  * The design brief justified this layout partly on it being width-proof —
- * every control inside the 480px safe zone, so 480..620 changes only the
+ * every control inside the 480px safe zone, so 480..540 changes only the
  * atmosphere on the right. That guarantee is easy to break with a one-line
  * nudge and impossible to spot by eye at a single window size, so it's
  * asserted here rather than re-checked by hand.
@@ -60,11 +60,35 @@ describe('main menu layout', () => {
   });
 
   it('width-gated decoration declares a width it actually needs', () => {
+    // Both are right-anchored, so "needs" means: at the threshold it
+    // declares, it fits beside the command grid rather than on top of it.
     const rack = MENU_LAYOUT.serverRack;
-    expect(rack.minWidth).toBeGreaterThanOrEqual(rack.x + rack.w);
+    expect(rack.minWidth).toBeGreaterThanOrEqual(MENU_GRID_RIGHT + rack.rightInset + rack.w);
 
     const line = MENU_LAYOUT.systemLine;
-    expect(line.minWidth).toBeGreaterThanOrEqual(line.rightInset + line.minW);
+    expect(line.minWidth).toBeGreaterThanOrEqual(MENU_GRID_RIGHT + line.rightInset + line.minW);
+  });
+
+  it('every width-gated decoration is reachable at the widest supported canvas', () => {
+    // THE CHECK THAT CAUGHT THE 620 -> 540 CAP. Both of these were placed
+    // against the design's 620 px canvas — the rack at a fixed `x: 492`
+    // behind a 590 px gate, the line behind a 560 px one — so narrowing the
+    // canvas to satisfy Yandex's 2:1 desktop limit made both unreachable at
+    // every width the game can actually run at: art that ships and never
+    // draws. A decoration that no supported canvas can show is dead code
+    // (CLAUDE.md #12), not a decoration.
+    expect(MENU_LAYOUT.serverRack.minWidth).toBeLessThanOrEqual(MAX_VIRTUAL_WIDTH);
+    expect(MENU_LAYOUT.systemLine.minWidth).toBeLessThanOrEqual(MAX_VIRTUAL_WIDTH);
+    expect(systemLineWidth(MAX_VIRTUAL_WIDTH)).toBeGreaterThan(0);
+  });
+
+  it('the server rack never covers a control at any supported width', () => {
+    const rack = MENU_LAYOUT.serverRack;
+    for (let width = rack.minWidth; width <= MAX_VIRTUAL_WIDTH; width++) {
+      expect(width - rack.rightInset - rack.w, `overlaps the grid at width ${width}`).toBeGreaterThanOrEqual(
+        MENU_GRID_RIGHT,
+      );
+    }
   });
 
   it('the SYSTEM line never covers a control at any supported width', () => {
@@ -82,11 +106,6 @@ describe('main menu layout', () => {
     }
   });
 
-  it('the SYSTEM line is actually reachable at the widest supported canvas', () => {
-    // A guard that keeps the previous test honest: it passes trivially if
-    // the line is never shown at all.
-    expect(systemLineWidth(MAX_VIRTUAL_WIDTH)).toBeGreaterThan(0);
-  });
 });
 
 describe('SYSTEM menu lines', () => {

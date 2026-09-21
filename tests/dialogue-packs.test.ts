@@ -109,7 +109,7 @@ describe('a sector premise fits the column it is printed in', () => {
   // of 10 px uppercase at the narrowest supported width. The first drafts of
   // sectors 07 and 10 ran to 72 and 99 characters and were measured live at
   // 105 px and 150 px of text inside a 90 px box — cut off mid-sentence at
-  // 480 and spilling past the panel at 620.
+  // 480 and spilling past the panel at the widest supported canvas.
   //
   // `LevelSelectScene` now derives both the size and the clamp from the room
   // available, so nothing can spill. That is the backstop, not the fix: a

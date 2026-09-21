@@ -146,9 +146,12 @@ const UI_STRINGS = {
   dailyNextIn: { ru: 'Новое испытание через', en: 'Next challenge in' },
   dailyRetry: { ru: 'Ещё раз', en: 'Run again' },
   dailyContinue: { ru: 'Продолжить', en: 'Continue' },
-  dailyContinueHint: { ru: 'За рекламу', en: 'Watch an ad' },
+  // No longer "for an ad": Yandex Games 4.5.2 says a rewarded-video reward
+  // «не должна влиять на возможность продолжить игровой процесс», and a
+  // continue is exactly that. The one-per-day allowance stays; the ad in
+  // front of it is gone.
+  dailyContinueHint: { ru: 'Один раз в день', en: 'Once per day' },
   dailyContinueSpent: { ru: 'Продолжение уже использовано', en: 'Continue already used' },
-  dailyContinueUnavailable: { ru: 'Реклама недоступна', en: 'Ad unavailable' },
   resultSectorLabel: { ru: 'Сектор', en: 'Sector' },
   resultToMenu: { ru: 'В меню', en: 'To menu' },
   resultAllDoneShort: { ru: 'Всё пройдено', en: 'All complete' },

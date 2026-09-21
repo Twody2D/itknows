@@ -357,20 +357,12 @@ describe('SaveService', () => {
       expect(SaveService.getDaily('2026-09-14')).toMatchObject({ bestTimeMs: 21_000, bestDeaths: 5 });
     });
 
-    it('allows exactly one rewarded continue per day', () => {
+    it('allows exactly one continue per day', () => {
       expect(SaveService.canUseDailyContinue('2026-09-14')).toBe(true);
       expect(SaveService.useDailyContinue('2026-09-14')).toBe(true);
       expect(SaveService.canUseDailyContinue('2026-09-14')).toBe(false);
       expect(SaveService.useDailyContinue('2026-09-14')).toBe(false);
       expect(SaveService.getDaily('2026-09-14').continuesUsed).toBe(1);
-    });
-
-    it('hands the continue back when the ad never played, and never below zero', () => {
-      SaveService.useDailyContinue('2026-09-14');
-      SaveService.refundDailyContinue('2026-09-14');
-      expect(SaveService.canUseDailyContinue('2026-09-14')).toBe(true);
-      SaveService.refundDailyContinue('2026-09-14');
-      expect(SaveService.getDaily('2026-09-14').continuesUsed).toBe(0);
     });
 
     it('re-reading the same date never resets what it holds', () => {

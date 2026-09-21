@@ -67,7 +67,7 @@ export function buildScreenTopbar(scene: Phaser.Scene, domText: DomTextOverlay, 
   // Built before the subtitle so the subtitle can be measured against the
   // space this actually leaves. The mockup pins both to fixed x (subtitle
   // 150, counter 352) because it is drawn at one fixed 620px width; ours
-  // has to hold from 480 to 620, so the gap is computed instead of assumed.
+  // has to hold from 480 to 540, so the gap is computed instead of assumed.
   let rightEdge = width - 10;
   if (opts.right !== undefined) {
     const right = domText.add(

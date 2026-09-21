@@ -1,6 +1,6 @@
 /**
  * The game is authored landscape-only: `VIRTUAL_HEIGHT` is fixed and width
- * floats 480-620 (CLAUDE.md #2). `ScaleController`'s zoom math assumes
+ * floats 480-540 (CLAUDE.md #2). `ScaleController`'s zoom math assumes
  * width > height — in a portrait viewport it would ask for a canvas wider
  * than the screen, which `#app`'s `overflow: hidden` then silently clips.
  * Rather than let that happen, block play with an explicit rotate prompt
