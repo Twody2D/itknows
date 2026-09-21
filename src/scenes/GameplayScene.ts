@@ -58,6 +58,15 @@ const SYSTEM_COMMENT_DISPLAY_MS = 3800;
  */
 const SECTOR_PREMISE_DISPLAY_MS = 6000;
 
+/** `SystemVoice` category the sector premise is published under. */
+const SECTOR_PREMISE_CATEGORY = 'sector_premise';
+
+/**
+ * Comment categories that are about nothing in particular — the ones that
+ * may be dropped rather than allowed to talk over the premise.
+ */
+const AMBIENT_COMMENT_CATEGORIES = new Set(['long_hesitation', 'general']);
+
 
 interface GameplaySceneData {
   levelId: string;
@@ -915,7 +924,7 @@ export class GameplayScene extends Phaser.Scene {
     const completed = SaveService.getCompletedLevels();
     const started = completed.some((id) => sectorNumberOf(id) === sector);
     if (started) return;
-    SystemVoice.show(premise, 'sector_premise', SECTOR_PREMISE_DISPLAY_MS);
+    SystemVoice.show(premise, SECTOR_PREMISE_CATEGORY, SECTOR_PREMISE_DISPLAY_MS);
   }
 
   /**
@@ -925,6 +934,17 @@ export class GameplayScene extends Phaser.Scene {
    * commentary to actually be visible now instead of firing silently.
    */
   private handleSystemComment(payload: { text: string; category: string }): void {
+    // AMBIENT REMARKS WAIT THEIR TURN. The sector premise is said once per
+    // sector and never again, and the very first thing a player does on a
+    // fresh screen is stand still and look at it — which is exactly what
+    // `long_hesitation` fires on. Measured on a clean prod build: the
+    // premise was replaced 2.5 s into its six by «LEVEL DESIGN не меняется
+    // от того, что ты стоишь». Anything caused by an event (a death, a near
+    // miss, an adaptation) still interrupts, because that is information
+    // about what just happened to the player and it expires if withheld.
+    if (SystemVoice.currentCategory() === SECTOR_PREMISE_CATEGORY && AMBIENT_COMMENT_CATEGORIES.has(payload.category)) {
+      return;
+    }
     SystemVoice.show(payload.text, payload.category, SYSTEM_COMMENT_DISPLAY_MS);
   }
 

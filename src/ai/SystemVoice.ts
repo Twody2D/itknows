@@ -27,6 +27,19 @@ class SystemVoiceState {
   current(): string {
     return performance.now() < this.expiresAtMs ? this.text : '';
   }
+
+  /**
+   * Category of the line on screen right now, or '' if nothing is live.
+   *
+   * Exists so a caller can ask what it would be interrupting. The sector
+   * premise is the one line in the game that is not a reaction — it is the
+   * sector introducing itself, said once and never again — and standing
+   * still for two seconds on the first screen was enough for an ambient
+   * remark about standing still to wipe it out mid-read.
+   */
+  currentCategory(): string {
+    return performance.now() < this.expiresAtMs ? this.category : '';
+  }
 }
 
 export const SystemVoice = new SystemVoiceState();
