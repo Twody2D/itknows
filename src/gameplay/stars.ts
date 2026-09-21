@@ -6,8 +6,20 @@ import { LEVELS_PER_SECTOR, SECTOR_COUNT, isLevelUnlocked, sectorNumberOf } from
  * Every number the game already had said only "done or not done": the level
  * was cleared, the best time was printed, and neither asked anything further
  * of the player. Three stars turn each level into three questions — get
- * through it, get through it without dying, and do that inside the level's
- * own target time (`parTime.ts`).
+ * through it, get through it inside the level's target time, and do it
+ * inside the tighter one (`parTime.ts`).
+ *
+ * THE LADDER IS TIME ALL THE WAY UP since 2026-09-21. It used to be
+ * "cleared / no deaths / no deaths and in time", and the owner played the
+ * finished campaign and threw the middle rung out: «сейчас вроде нужно без
+ * смертей пройти, но это практически не реально, пусть будет по времени».
+ * He is right about more than the difficulty. A deathless requirement is a
+ * pass/fail wall — one mistake in the last three tiles of a sixty-level
+ * campaign costs the same as twenty — while time is a quantity, and the game
+ * already measures it the honest way: `GameState.elapsedMs()` survives a
+ * restart on purpose, so every failed attempt is already inside the number
+ * the ladder reads. Dying is priced, not punished, and the price is exactly
+ * what it cost: the run you lost, plus the restart.
  *
  * The rules live here, apart from storage and from drawing, so they can be
  * asserted directly. Nothing in this file reads a save or touches a scene.
@@ -19,28 +31,35 @@ export const MAX_STARS = 3;
 export const STAR_CREDITS = 15;
 
 export interface RunOutcome {
-  /** Time for this visit to the level, in ms — `GameState.elapsedMs()`. */
+  /**
+   * Time for this visit to the level, in ms — `GameState.elapsedMs()`, which
+   * includes every attempt the player spent getting here.
+   */
   timeMs: number;
-  /** Deaths on this visit — `GameState.run.deaths`. */
-  deaths: number;
-  /** The level's target time, or `null` for a level with no derivable one. */
+  /** The second star's target, or `null` for a level with no derivable one. */
   parMs: number | null;
+  /** The third star's target (`parTime.thirdStarTimeMs`), always below `parMs`. */
+  thirdStarMs: number | null;
 }
 
 /**
  * Stars earned by ONE visit to a level.
  *
- * One visit, not a career: a 20-second clear with four deaths and a later
- * 8-second clear with one must not add up to three stars between them. That
- * is also why the time is only ever read for a deathless run — after a death
- * `timeMs` covers every failed attempt too (`GameState.elapsedMs()` survives
- * the restart on purpose), so comparing it to a target would be comparing
- * two different things.
+ * One visit, not a career: a 20-second clear and a later 8-second clear must
+ * not add up to three stars between them. `SaveService` keeps the best a
+ * single visit ever scored, which is why this takes one outcome and not a
+ * history.
+ *
+ * A level with no derivable target can only ever pay one star — it cannot
+ * ask for a time it does not have. There is exactly none of those in the
+ * campaign (`LevelValidator` refuses to ship an unsolvable level), so this
+ * branch is a guarantee rather than a case.
  */
-export function starsFor({ timeMs, deaths, parMs }: RunOutcome): number {
-  if (deaths > 0) return 1;
-  if (parMs === null || timeMs > parMs) return 2;
-  return 3;
+export function starsFor({ timeMs, parMs, thirdStarMs }: RunOutcome): number {
+  if (parMs === null) return 1;
+  if (thirdStarMs !== null && timeMs <= thirdStarMs) return MAX_STARS;
+  if (timeMs <= parMs) return 2;
+  return 1;
 }
 
 /**

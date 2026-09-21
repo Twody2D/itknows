@@ -13,31 +13,58 @@ import { LEVELS_PER_SECTOR, levelIdFor } from '@/gameplay/sectors';
 const cleared = (...ids: string[]) => (id: string) => ids.includes(id);
 
 describe('stars for a run', () => {
+  /**
+   * THE LADDER IS TIME ALL THE WAY UP, since the owner played the finished
+   * campaign and had the deathless rung taken out: «сейчас вроде нужно без
+   * смертей пройти, но это практически не реально, пусть будет по времени»
+   * (2026-09-21). Deaths are not read at all any more — they cost the time
+   * of the attempt they ended, and `GameState.elapsedMs()` already carries
+   * that, so the clock prices them without a wall.
+   */
+  const targets = { parMs: 10_000, thirdStarMs: 7000 };
+
   it('pays one star for clearing the level at all', () => {
-    expect(starsFor({ timeMs: 99_000, deaths: 7, parMs: 8000 })).toBe(1);
+    expect(starsFor({ timeMs: 99_000, ...targets })).toBe(1);
   });
 
-  it('pays two for a deathless run that missed the target time', () => {
-    expect(starsFor({ timeMs: 12_000, deaths: 0, parMs: 8000 })).toBe(2);
+  it('pays two for a run inside the target time', () => {
+    expect(starsFor({ timeMs: 9999, ...targets })).toBe(2);
+    expect(starsFor({ timeMs: 10_000, ...targets })).toBe(2);
+    expect(starsFor({ timeMs: 10_001, ...targets })).toBe(1);
   });
 
-  it('pays three for a deathless run inside the target time', () => {
-    expect(starsFor({ timeMs: 7999, deaths: 0, parMs: 8000 })).toBe(3);
-    expect(starsFor({ timeMs: 8000, deaths: 0, parMs: 8000 })).toBe(3);
+  it('pays three for a run inside the tighter one', () => {
+    expect(starsFor({ timeMs: 6999, ...targets })).toBe(3);
+    expect(starsFor({ timeMs: 7000, ...targets })).toBe(3);
+    expect(starsFor({ timeMs: 7001, ...targets })).toBe(2);
   });
 
   /**
-   * The whole reason time is only read for a deathless run: after a death
-   * `GameState.elapsedMs()` covers the failed attempts too, on purpose. A fast
-   * number there describes a different thing than the same number on a clean
-   * run, and must never buy the same star.
+   * The point of the 2026-09-21 change, stated as a test: a death is no
+   * longer a verdict. What it costs is the attempt it ended, which is
+   * already in `timeMs`, so a player who dies early and then runs clean can
+   * still reach the top rung, and one who dies late cannot — by arithmetic
+   * rather than by rule.
    */
-  it('never pays for speed once the player has died, however fast the clock reads', () => {
-    expect(starsFor({ timeMs: 1, deaths: 1, parMs: 8000 })).toBe(1);
+  it('lets a run that included a death still earn every star, if it was fast enough', () => {
+    // 4 s lost to a failed attempt, then a 2.5 s clean run.
+    expect(starsFor({ timeMs: 6500, ...targets })).toBe(3);
+    // The same mistake made three tiles from the exit costs the whole level.
+    expect(starsFor({ timeMs: 11_500, ...targets })).toBe(1);
   });
 
-  it('stops at two stars on a level with no derivable target', () => {
-    expect(starsFor({ timeMs: 1, deaths: 0, parMs: null })).toBe(2);
+  it('pays one star on a level with no derivable target', () => {
+    // It cannot ask for a time it does not have. `LevelValidator` refuses to
+    // ship a level the solver cannot finish, so this is a guarantee rather
+    // than a case the campaign contains.
+    expect(starsFor({ timeMs: 1, parMs: null, thirdStarMs: null })).toBe(1);
+  });
+
+  it('never lets the top rung sit at or above the one below it', () => {
+    // A ladder whose rungs cross is not a ladder: `parTime.thirdStarTimeMs`
+    // is derived by subtracting from the second star's target, and this is
+    // the property that derivation exists to keep.
+    expect(targets.thirdStarMs).toBeLessThan(targets.parMs);
   });
 });
 
@@ -104,6 +131,6 @@ describe('the star scale itself', () => {
   });
 
   it('is what `starsFor` can actually award', () => {
-    expect(starsFor({ timeMs: 1, deaths: 0, parMs: 10_000 })).toBe(MAX_STARS);
+    expect(starsFor({ timeMs: 1, parMs: 10_000, thirdStarMs: 7000 })).toBe(MAX_STARS);
   });
 });

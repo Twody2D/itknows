@@ -7,6 +7,7 @@ import { MAX_JUMP_RISE_PX, fallTimeSec, jumpAirTimeSec, launchReach, usableLiftP
 import { effectiveWalkSpeed } from './conveyor';
 import { DEFAULT_TRAP_TIMING } from '@/traps/TrapTiming';
 import type { TrapDef } from '@/traps/TrapDef';
+import { trapsTheRouteNeverMeets } from './routeTrace';
 
 /**
  * How long a clean run of a level ought to take — the number the third star
@@ -62,6 +63,30 @@ const HAZARD_WAIT_FRACTION = 0.5;
  * level, which is what the paragraph above says this number is for.
  */
 const FLOOR_SLACK = 2.4;
+
+/**
+ * How much of the human slack a THIRD star leaves, against the second star's
+ * full allowance.
+ *
+ * The ladder is time all the way up since 2026-09-21, when the owner had the
+ * deathless requirement taken off it: «сейчас вроде нужно без смертей
+ * пройти, но это практически не реально, пусть будет по времени». Deaths are
+ * no longer read at all — they cost the time of the attempt they end, and
+ * `GameState.elapsedMs()` already carries that, so dying is priced rather
+ * than punished.
+ *
+ * THE 30% COMES OFF THE SLACK, NOT OFF THE TARGET, and the difference is the
+ * whole reason this is a separate constant rather than `parMs * 0.7`. The
+ * target is `floor × 2.4 + hazard`, and the hazard part is time the level
+ * MAKES the player stand still — a piston's cycle does not run faster for a
+ * good player. Taking 30% off the whole number takes it out of that waiting
+ * too: on MACHINE (floor 2923, hazard 5450) `parMs × 0.7` is 8726 ms against
+ * a floor-plus-waiting of 8373 ms, i.e. a third star with 353 ms in hand,
+ * which is not a hard target but an impossible one — exactly what
+ * CLAUDE.md #4.8 forbids. Off the slack alone it is 10 361 ms, which leaves
+ * 2 s, and the same 30% means the same thing on every level in the campaign.
+ */
+const THIRD_STAR_SLACK_FRACTION = 0.7;
 
 /** Columns a trap occupies, and the cycle a player may have to wait out, or `null` for a trap that costs no time to pass. */
 function hazardSpan(trap: TrapDef): { fromCol: number; toCol: number; cycleMs: number } | null {
@@ -160,10 +185,12 @@ function transferColumns(from: Segment, to: Segment, at: number): { departCol: n
 export interface ParBreakdown {
   /** Time the physics alone take along the solved route. No player beats this. */
   floorMs: number;
-  /** Allowance for waiting out the timed hazards that route crosses. */
+  /** Allowance for waiting out the timed hazards the route actually meets. */
   hazardMs: number;
-  /** The target a third star is measured against. */
+  /** The target a SECOND star is measured against. */
   parMs: number;
+  /** The target a THIRD star is measured against — see `THIRD_STAR_SLACK_FRACTION`. */
+  thirdStarMs: number;
 }
 
 /**
@@ -227,18 +254,34 @@ export function parBreakdown(def: LevelDef): ParBreakdown | null {
 
   const floorMs = Math.round(seconds * 1000);
 
-  const routeFrom = Math.min(def.playerStartCol, def.exitCol, ...path.map((s) => s.fromCol));
-  const routeTo = Math.max(def.playerStartCol, def.exitCol + 1, ...path.map((s) => s.toCol));
+  // PAID FOR ONLY WHERE THE PLAYER CAN ACTUALLY BE HELD UP. This used to
+  // test the trap's columns against the route's column span, which sounds
+  // like the same question and is not: on 44 of the 60 levels that span is
+  // the whole board, 0-47, so the filter excluded nothing anywhere in the
+  // campaign. Traps the project's own detector reports as unreachable were
+  // still buying the player waiting time — on PISTON ROW, 1.7 s of a 14.2 s
+  // target for two pistons the proved route passes 8 px underneath, so
+  // deleting them would have made the level HARDER to three-star.
+  // `routeTrace` answers the real question, and it is the same answer
+  // `pnpm levels` prints.
+  const unreachable = new Set(trapsTheRouteNeverMeets(def));
   let hazardMs = 0;
   for (const trap of def.traps ?? []) {
     const span = hazardSpan(trap);
     if (span === null) continue;
-    if (span.toCol < routeFrom || span.fromCol > routeTo) continue;
+    if (unreachable.has(trap.id)) continue;
     hazardMs += span.cycleMs * HAZARD_WAIT_FRACTION;
   }
   hazardMs = Math.round(hazardMs);
 
-  return { floorMs, hazardMs, parMs: Math.round(floorMs * FLOOR_SLACK + hazardMs) };
+  const slackMs = floorMs * (FLOOR_SLACK - 1);
+  const parMs = Math.round(floorMs + slackMs + hazardMs);
+  return {
+    floorMs,
+    hazardMs,
+    parMs,
+    thirdStarMs: Math.round(parMs - slackMs * (1 - THIRD_STAR_SLACK_FRACTION)),
+  };
 }
 
 /**
@@ -249,6 +292,22 @@ export function parBreakdown(def: LevelDef): ParBreakdown | null {
 export function parTimeMs(def: LevelDef): number | null {
   if (def.starTimeMs !== undefined) return def.starTimeMs;
   return parBreakdown(def)?.parMs ?? null;
+}
+
+/**
+ * The target a third star is measured against — `parTimeMs` minus the share
+ * of the human slack `THIRD_STAR_SLACK_FRACTION` takes away.
+ *
+ * Derived from the second star's target rather than computed beside it, so a
+ * hand-set `starTimeMs` moves both rungs of the ladder together instead of
+ * silently leaving the top one where the calculation had put it.
+ */
+export function thirdStarTimeMs(def: LevelDef): number | null {
+  const breakdown = parBreakdown(def);
+  if (breakdown === null) return null;
+  const target = def.starTimeMs ?? breakdown.parMs;
+  const slackMs = breakdown.floorMs * (FLOOR_SLACK - 1);
+  return Math.round(target - slackMs * (1 - THIRD_STAR_SLACK_FRACTION));
 }
 
 /** Kept for the tests: the floor a hand-set `starTimeMs` must never fall below. */

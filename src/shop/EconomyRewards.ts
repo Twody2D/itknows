@@ -3,7 +3,7 @@ import { CurrencyService } from '@/services/CurrencyService';
 import { SaveService } from '@/services/SaveService';
 import { EARN_AMOUNTS } from '@/data/shop/economy';
 import { getLevel } from '@/gameplay/LevelFactory';
-import { parTimeMs } from '@/gameplay/parTime';
+import { parTimeMs, thirdStarTimeMs } from '@/gameplay/parTime';
 import { STAR_CREDITS, starsFor } from '@/gameplay/stars';
 
 /**
@@ -23,7 +23,8 @@ EventBus.on('level:completed', ({ levelId, timeMs, deaths }) => {
   // (`gameplay/stars.ts`). Only the stars this run ADDS are paid for —
   // otherwise replaying a three-star level would be a CREDITS faucet, which
   // is the same mistake the daily branch in `GameplayScene` already avoids.
-  const earned = starsFor({ timeMs, deaths, parMs: parTimeMs(getLevel(levelId)) });
+  const def = getLevel(levelId);
+  const earned = starsFor({ timeMs, parMs: parTimeMs(def), thirdStarMs: thirdStarTimeMs(def) });
   const before = SaveService.getLevelStars(levelId);
   if (earned > before) {
     SaveService.saveLevelStarsIfBetter(levelId, earned);
